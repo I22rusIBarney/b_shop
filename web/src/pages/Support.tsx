@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { get, post, type SupportConfig, type Ticket } from '../lib/api'
 import { useApp } from '../lib/app'
@@ -13,6 +13,13 @@ export default function Support() {
   const nav = useNavigate()
   const cfg = useLoad(() => get<SupportConfig>('/api/support/config'))
   const list = useLoad(() => get<Ticket[]>('/api/tickets'))
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') list.reload()
+    }, 10000)
+    return () => clearInterval(timer)
+  }, [list.reload])
   const [tab, setTab] = useState<'open' | 'history'>('open')
   const [creating, setCreating] = useState(false)
   const [subject, setSubject] = useState('')

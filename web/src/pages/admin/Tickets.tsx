@@ -75,9 +75,10 @@ export function TicketList() {
                     </div>
                   )}
                   <div className="meta">
-                    <span>{t.customer_name}{t.username ? ` · @${t.username}` : ''}</span>
+                    <span>{t.customer_name}{t.username ? ` · @${t.username}` : t.telegram_id ? ` · ${t.telegram_id}` : ''}</span>
                     <span>· {relative(t.updated_at)}</span>
                     {t.pending_draft && <span className="badge warn">черновик ИИ</span>}
+                    {t.ai_enabled && t.status !== 'closed' && <span className="badge">ИИ</span>}
                     {t.rating ? <span>· {'★'.repeat(t.rating)}</span> : null}
                   </div>
                 </button>
