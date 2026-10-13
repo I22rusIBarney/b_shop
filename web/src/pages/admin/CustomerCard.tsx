@@ -496,8 +496,15 @@ function DevicesSheet({ sub, onClose }: { sub: Subscription | null; onClose: () 
   const { busy, run } = useAction()
   useEffect(() => {
     if (!sub) return
+    let active = true
     setList(null)
-    get<Device[]>(`/api/subscriptions/${sub.id}/devices`).then(setList, () => setList([]))
+    get<Device[]>(`/api/subscriptions/${sub.id}/devices`).then(
+      (v) => active && setList(v),
+      () => active && setList([]),
+    )
+    return () => {
+      active = false
+    }
   }, [sub])
   return (
     <Sheet open={!!sub} onClose={onClose} title="Устройства">

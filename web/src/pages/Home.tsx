@@ -275,9 +275,16 @@ function Devices({ sub, open, onClose, onChanged }: { sub: Subscription; open: b
   const { busy, run } = useAction()
   useEffect(() => {
     if (!open) return
+    let active = true
     setList(null)
     setEditing(null)
-    get<Device[]>(`/api/subscriptions/${sub.id}/devices`).then(setList, () => setList([]))
+    get<Device[]>(`/api/subscriptions/${sub.id}/devices`).then(
+      (v) => active && setList(v),
+      () => active && setList([]),
+    )
+    return () => {
+      active = false
+    }
   }, [open, sub.id])
 
   const limit = sub.device_limit > 0 ? sub.device_limit + sub.extra_devices : 0

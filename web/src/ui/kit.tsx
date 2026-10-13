@@ -116,6 +116,19 @@ export function useAction() {
 }
 
 /** Loads data once (and on deps change) with loading/error state. */
+/** Props for a clickable non-button element (table row, card): focusable and opened with Enter or Space. */
+export function pressable(action: () => void) {
+  return {
+    tabIndex: 0,
+    onClick: action,
+    onKeyDown: (e: { key: string; target: unknown; currentTarget: unknown; preventDefault: () => void }) => {
+      if (e.target !== e.currentTarget || (e.key !== 'Enter' && e.key !== ' ')) return
+      e.preventDefault()
+      action()
+    },
+  }
+}
+
 export function useLoad<T>(fn: () => Promise<T>, deps: unknown[] = []) {
   const [data, setData] = useState<T | undefined>()
   const [error, setError] = useState<string>('')
@@ -150,6 +163,10 @@ export function useLoad<T>(fn: () => Promise<T>, deps: unknown[] = []) {
   }, deps)
   useEffect(() => {
     reload()
+    // Leaving the page (or changing deps) drops answers that are still in flight.
+    return () => {
+      gen.current++
+    }
   }, [reload])
   return { data, setData, error, loading, reload, refresh }
 }

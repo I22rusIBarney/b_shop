@@ -243,8 +243,17 @@ export default function Install() {
   const b = config.branding
 
   useEffect(() => {
-    if (!url) return
-    QRCode.toDataURL(url, { margin: 1, width: 480, errorCorrectionLevel: b.logo ? 'H' : 'M', color: { dark: '#141414', light: '#ffffff' } }).then(setQr, () => setQr(''))
+    // A slow render for the previous subscription must not overwrite the QR of the current one.
+    let active = true
+    setQr('')
+    if (url)
+      QRCode.toDataURL(url, { margin: 1, width: 480, errorCorrectionLevel: b.logo ? 'H' : 'M', color: { dark: '#141414', light: '#ffffff' } }).then(
+        (v) => active && setQr(v),
+        () => active && setQr(''),
+      )
+    return () => {
+      active = false
+    }
   }, [url, b.logo])
   useEffect(() => setAppIdx(0), [platform])
   useEffect(() => window.scrollTo(0, 0), [view])

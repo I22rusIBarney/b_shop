@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { api, del, get, post, type Broadcast, type Plan } from '../../lib/api'
 import { dateTime } from '../../lib/format'
 import { Close, Plus, Trash } from '../../ui/icons'
-import { ErrorBox, Field, Spinner, Toggle, useAction, useLoad } from '../../ui/kit'
+import { ErrorBox, Field, Spinner, Toggle, useAction, useLoad, pressable } from '../../ui/kit'
 import { safeHTML } from '../News'
 
 const statusLabel: Record<string, [string, string]> = {
@@ -252,7 +252,7 @@ export default function Broadcasts() {
                 const [label, cls] = statusLabel[x.status]
                 const editable = x.status === 'draft' || x.status === 'scheduled'
                 return (
-                  <tr key={x.id} className={editable ? 'click' : undefined} onClick={() => editable && setB(x)}>
+                  <tr key={x.id} className={editable ? 'click' : undefined} {...(editable ? pressable(() => setB(x)) : {})}>
                     <td className="wide" style={{ maxWidth: 360 }}>
                       <div className="ellipsis cell-title">{x.title || '(без заголовка)'}</div>
                       <div className="tiny muted">{segments[x.audience.segment]} · {x.channel === 'telegram' ? 'Telegram' : x.channel === 'email' ? 'почта' : 'Telegram/почта'}</div>

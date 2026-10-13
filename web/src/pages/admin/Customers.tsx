@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { get, type CustomerRow, type Paged, type Plan } from '../../lib/api'
 import { relative, rub, shortDate } from '../../lib/format'
-import { ErrorBox, Spinner, useLoad } from '../../ui/kit'
+import { ErrorBox, Spinner, useLoad, pressable } from '../../ui/kit'
 import PanelSync from './PanelSync'
 
 const PAGE = 50
@@ -107,7 +107,7 @@ export default function Customers() {
               </thead>
               <tbody>
                 {data.data.items.map((c) => (
-                  <tr key={c.id} className="click" onClick={() => nav(`/admin/customers/${c.id}`)}>
+                  <tr key={c.id} className="click" {...pressable(() => nav(`/admin/customers/${c.id}`))}>
                     <td className="wide">
                       <div className="row wrap" style={{ gap: 6 }}>
                         <span className="cell-title">{name(c)}</span>

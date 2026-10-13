@@ -3,7 +3,7 @@ import { NavLink, useNavigate, useParams, useSearchParams } from 'react-router-d
 import { get, post } from '../../lib/api'
 import { relative, rubRound, shortDate } from '../../lib/format'
 import { HBars, Kpi, TimeChart, bucketLabel, type Point } from '../../ui/charts'
-import { ErrorBox, Spinner, useAction, useLoad } from '../../ui/kit'
+import { ErrorBox, Spinner, useAction, useLoad, pressable } from '../../ui/kit'
 
 interface Named {
   key: string
@@ -187,9 +187,9 @@ function Overview() {
                       <thead>
                         <tr>
                           <th>Сегмент</th>
-                          <th>Все</th>
-                          <th>Заблокировали бота</th>
-                          <th>Заблокированы</th>
+                          <th>Всего</th>
+                          <th title="Заблокировали бота в Telegram">Блок бота</th>
+                          <th title="Заблокированы администратором">Блок</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -654,7 +654,7 @@ function Referrals() {
                       </thead>
                       <tbody>
                         {s.top.map((t) => (
-                          <tr key={t.id} className="click" onClick={() => nav(`/admin/customers/${t.id}`)}>
+                          <tr key={t.id} className="click" {...pressable(() => nav(`/admin/customers/${t.id}`))}>
                             <td>{t.name}</td>
                             <td className="num">{n(t.invited)}</td>
                             <td className="num">{n(t.paid)}</td>
@@ -684,7 +684,7 @@ function Referrals() {
                       </thead>
                       <tbody>
                         {s.recent.map((r, i) => (
-                          <tr key={i} className="click" onClick={() => nav(`/admin/customers/${r.recipient_id}`)}>
+                          <tr key={i} className="click" {...pressable(() => nav(`/admin/customers/${r.recipient_id}`))}>
                             <td>{relative(r.at)}</td>
                             <td>{r.kind}</td>
                             <td className="num">{n(r.days)}</td>
@@ -920,7 +920,7 @@ function Analytics() {
                       </thead>
                       <tbody>
                         {leads.data.items.map((l) => (
-                          <tr key={l.id} className="click" onClick={() => nav(`/admin/customers/${l.id}`)}>
+                          <tr key={l.id} className="click" {...pressable(() => nav(`/admin/customers/${l.id}`))}>
                             <td>{l.name}</td>
                             <td className="num">
                               <b>{l.score}</b>

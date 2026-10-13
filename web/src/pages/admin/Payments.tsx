@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { get, type Paged, type Payment } from '../../lib/api'
 import { dateTime, operationName, paymentStatus, rub } from '../../lib/format'
-import { ErrorBox, Sheet, Spinner, useLoad } from '../../ui/kit'
+import { ErrorBox, Sheet, Spinner, useLoad, pressable } from '../../ui/kit'
 
 const PAGE = 50
 const receiptName: Record<string, string> = { none: '—', pending: 'в очереди', done: 'отправлен', failed: 'ошибка', cancel_pending: 'аннулируется', canceled: 'аннулирован' }
@@ -85,7 +85,7 @@ export default function Payments() {
               </thead>
               <tbody>
                 {data.data.items.map((p) => (
-                  <tr key={p.id} className="click" onClick={() => setOpen(p)}>
+                  <tr key={p.id} className="click" {...pressable(() => setOpen(p))}>
                     <td className="num muted wide small">{dateTime(p.created_at)}</td>
                     <td className="wide lead cell-title">{p.customer_name || `#${p.customer_id}`}</td>
                     <td className="wide">

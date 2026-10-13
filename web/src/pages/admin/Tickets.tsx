@@ -5,7 +5,7 @@ import { refreshBadges } from '../../lib/badges'
 import { date, relative } from '../../lib/format'
 import { Back } from '../../ui/icons'
 import { Composer, Messages, ticketStatus } from '../../ui/chat'
-import { ErrorBox, Spinner, Toggle, useAction, useLoad, usePolling } from '../../ui/kit'
+import { ErrorBox, Spinner, Toggle, useAction, useLoad, usePolling, pressable } from '../../ui/kit'
 
 const tabs = [
   ['active', 'Активные'],
@@ -98,7 +98,7 @@ export function TicketList() {
                 {data.data.items.map((t) => {
                   const [label, cls] = ticketStatus[t.status]
                   return (
-                    <tr key={t.id} className="click" onClick={() => nav(`/admin/tickets/${t.id}`)} style={t.unread_admin ? { fontWeight: 700 } : undefined}>
+                    <tr key={t.id} className="click" {...pressable(() => nav(`/admin/tickets/${t.id}`))} style={t.unread_admin ? { fontWeight: 700 } : undefined}>
                       <td className="num">#{t.id}</td>
                       <td style={{ maxWidth: 380 }}>
                         <div className="ellipsis">{t.subject}</div>

@@ -429,12 +429,12 @@ function Tiers({ value, onChange }: { value: { min_invited: number; days: number
       <label>Уровни</label>
       <span className="hint">Бонус уровня заменяет основной бонус пригласившего, когда у него столько оплативших приглашённых.</span>
       {value.map((t, i) => (
-        <div className="row" key={i}>
+        <div className="row tier-row" key={i}>
           <span className="small muted">от</span>
-          <input className="input num" type="number" min={1} style={{ width: 90 }} value={t.min_invited} onChange={(e) => onChange(value.map((x, j) => (j === i ? { ...x, min_invited: Number(e.target.value) } : x)))} aria-label="Приглашённых" />
-          <span className="small muted">приглашённых →</span>
-          <input className="input num" type="number" min={0} style={{ width: 90 }} value={t.days} onChange={(e) => onChange(value.map((x, j) => (j === i ? { ...x, days: Number(e.target.value) } : x)))} aria-label="Дней" />
-          <span className="small muted">дней</span>
+          <input className="input num" type="number" min={1} value={t.min_invited} onChange={(e) => onChange(value.map((x, j) => (j === i ? { ...x, min_invited: Number(e.target.value) } : x)))} aria-label="Приглашённых" />
+          <span className="small muted">друзей →</span>
+          <input className="input num" type="number" min={0} value={t.days} onChange={(e) => onChange(value.map((x, j) => (j === i ? { ...x, days: Number(e.target.value) } : x)))} aria-label="Дней" />
+          <span className="small muted">дн.</span>
           <button className="icon-btn" onClick={() => onChange(value.filter((_, j) => j !== i))} aria-label="Удалить уровень">
             <Close />
           </button>
