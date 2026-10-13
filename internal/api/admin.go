@@ -34,6 +34,99 @@ func (s *Server) adminRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/admin/customers/{id}", s.admin(s.adminCustomer))
 	mux.HandleFunc("PATCH /api/admin/customers/{id}", s.admin(s.adminCustomerPatch))
 	mux.HandleFunc("GET /api/admin/payments", s.admin(s.adminPayments))
+	mux.HandleFunc("POST /api/admin/customers/{id}/subscriptions", s.admin(s.adminGrant))
+	mux.HandleFunc("POST /api/admin/subscriptions/{id}/days", s.admin(s.adminDays))
+	mux.HandleFunc("POST /api/admin/subscriptions/{id}/reset-traffic", s.admin(s.adminResetTraffic))
+	mux.HandleFunc("POST /api/admin/subscriptions/{id}/status", s.admin(s.adminSubStatus))
+	mux.HandleFunc("DELETE /api/admin/subscriptions/{id}", s.admin(s.adminDeleteSub))
+}
+
+func (s *Server) adminGrant(w http.ResponseWriter, r *http.Request) {
+	id, err := pathID(r, "id")
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	var in struct {
+		PlanID int64  `json:"plan_id"`
+		Days   int    `json:"days"`
+		Kind   string `json:"kind"`
+	}
+	if err := decode(r, &in); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	sub, err := s.svc.AdminGrant(r.Context(), customer(r), id, in.PlanID, in.Days, in.Kind)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, sub)
+}
+
+func (s *Server) adminDays(w http.ResponseWriter, r *http.Request) {
+	id, err := pathID(r, "id")
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	var in struct {
+		Days int `json:"days"`
+	}
+	if err := decode(r, &in); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	sub, err := s.svc.AdminExtend(r.Context(), customer(r), id, in.Days)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, sub)
+}
+
+func (s *Server) adminResetTraffic(w http.ResponseWriter, r *http.Request) {
+	id, err := pathID(r, "id")
+	if err == nil {
+		err = s.svc.AdminResetTraffic(r.Context(), customer(r), id)
+	}
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (s *Server) adminSubStatus(w http.ResponseWriter, r *http.Request) {
+	id, err := pathID(r, "id")
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	var in struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := decode(r, &in); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err := s.svc.AdminSetStatus(r.Context(), customer(r), id, in.Enabled); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (s *Server) adminDeleteSub(w http.ResponseWriter, r *http.Request) {
+	id, err := pathID(r, "id")
+	if err == nil {
+		err = s.svc.AdminDeleteSubscription(r.Context(), customer(r), id)
+	}
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 func (s *Server) adminSettingsList(w http.ResponseWriter, r *http.Request) {
@@ -177,12 +270,12 @@ func (s *Server) adminPlanReorder(w http.ResponseWriter, r *http.Request) {
 func (s *Server) adminSquads(w http.ResponseWriter, r *http.Request) {
 	in, err := s.svc.Panel.InternalSquads(r.Context())
 	if err != nil {
-		s.fail(w, r, err)
+		s.fail(w, r, &service.UserError{Msg: "панель Remnawave недоступна: " + err.Error()})
 		return
 	}
 	ex, err := s.svc.Panel.ExternalSquads(r.Context())
 	if err != nil {
-		s.fail(w, r, err)
+		s.fail(w, r, &service.UserError{Msg: "панель Remnawave недоступна: " + err.Error()})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"internal": in, "external": ex})
@@ -225,7 +318,13 @@ func (s *Server) adminCustomer(w http.ResponseWriter, r *http.Request) {
 	}
 	ids, _ := store.ListIdentities(r.Context(), s.svc.Store.Pool, id)
 	pays, _, _ := store.ListPayments(r.Context(), s.svc.Store.Pool, store.PaymentFilter{CustomerID: id, Limit: 100})
-	writeJSON(w, http.StatusOK, map[string]any{"customer": c, "subscriptions": subs, "identities": ids, "payments": pays})
+	events, _ := s.svc.CustomerEvents(r.Context(), id, 100)
+	var referrer *store.Customer
+	if c.ReferrerID != nil {
+		referrer, _ = store.GetCustomer(r.Context(), s.svc.Store.Pool, *c.ReferrerID)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"customer": c, "subscriptions": subs, "identities": ids, "payments": pays,
+		"events": events, "referrer": referrer})
 }
 
 func (s *Server) adminCustomerPatch(w http.ResponseWriter, r *http.Request) {

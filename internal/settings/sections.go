@@ -18,6 +18,9 @@ type All struct {
 	MoyNalog MoyNalog `json:"moynalog"`
 	SMTP     SMTP     `json:"smtp"`
 	Referral Referral `json:"referral"`
+	Branding Branding `json:"branding"`
+	Links    Links    `json:"links"`
+	Install  Install  `json:"install"`
 }
 
 func Defaults() All {
@@ -56,6 +59,25 @@ func Defaults() All {
 			Template: "VPN {plan} на {months} мес.",
 		},
 		SMTP: SMTP{Port: 587, RatePerSecond: 5},
+		Branding: Branding{
+			Title:        "BobrGO",
+			Tagline:      "Тихо, быстро, стабильно",
+			Primary:      "#ff9f1c",
+			Background:   "#07080c",
+			Surface:      "#151210",
+			Text:         "#fff4e6",
+			Muted:        "#b8aaa0",
+			CardOpacity:  80,
+			CardBlur:     8,
+			BgFit:        "cover",
+			BgOpacity:    100,
+			LoginText:    "Быстрый и стабильный VPN. Войдите, чтобы управлять подпиской.",
+			PWAName:      "BobrGO",
+			PWAShortName: "BobrGO",
+			Effect:       "none",
+		},
+		Links:   Links{Items: []Link{}},
+		Install: Install{Apps: []InstallApp{}},
 		Referral: Referral{
 			Enabled:          false,
 			InviterDays:      3,
@@ -307,4 +329,118 @@ func (r Referral) InviterBonus(paidReferrals int) int {
 		}
 	}
 	return days
+}
+
+// Branding controls how the web app looks. File fields hold ids of uploaded files.
+type Branding struct {
+	Title         string `json:"title"`
+	Tagline       string `json:"tagline"`
+	LogoFile      string `json:"logo_file"`
+	Primary       string `json:"primary"`
+	Background    string `json:"background"`
+	Surface       string `json:"surface"`
+	Text          string `json:"text"`
+	Muted         string `json:"muted"`
+	CardOpacity   int    `json:"card_opacity"` // 0..100
+	CardBlur      int    `json:"card_blur"`    // px
+	BgMobileFile  string `json:"bg_mobile_file"`
+	BgDesktopFile string `json:"bg_desktop_file"`
+	BgFit         string `json:"bg_fit"` // cover | contain
+	BgOpacity     int    `json:"bg_opacity"`
+	BannerFile    string `json:"banner_file"`
+	BannerLink    string `json:"banner_link"`
+	LoginText     string `json:"login_text"`
+	PWAName       string `json:"pwa_name"`
+	PWAShortName  string `json:"pwa_short_name"`
+	PWAIconFile   string `json:"pwa_icon_file"`
+	Effect        string `json:"effect"` // none | snow | leaves | halloween
+}
+
+func validColor(c string) bool {
+	if len(c) != 7 || c[0] != '#' {
+		return false
+	}
+	for _, r := range c[1:] {
+		if !(r >= '0' && r <= '9' || r >= 'a' && r <= 'f' || r >= 'A' && r <= 'F') {
+			return false
+		}
+	}
+	return true
+}
+
+func (b *Branding) Validate() error {
+	for name, c := range map[string]string{"основной": b.Primary, "фон": b.Background, "карточки": b.Surface,
+		"текст": b.Text, "подсказки": b.Muted} {
+		if !validColor(c) {
+			return fmt.Errorf("цвет «%s» должен быть в формате #rrggbb", name)
+		}
+	}
+	if b.CardOpacity < 0 || b.CardOpacity > 100 || b.BgOpacity < 0 || b.BgOpacity > 100 {
+		return errors.New("прозрачность — от 0 до 100")
+	}
+	if b.CardBlur < 0 || b.CardBlur > 40 {
+		return errors.New("размытие — от 0 до 40")
+	}
+	if b.BgFit != "contain" {
+		b.BgFit = "cover"
+	}
+	switch b.Effect {
+	case "none", "snow", "leaves", "halloween":
+	default:
+		b.Effect = "none"
+	}
+	return nil
+}
+
+// Link is a custom button in the bot menu and the cabinet (channel, rules, support...).
+type Link struct {
+	Title   string `json:"title"`
+	URL     string `json:"url"`
+	Enabled bool   `json:"enabled"`
+	// Kind marks special links: rules (оферта), privacy, support, channel; empty for others.
+	Kind string `json:"kind"`
+}
+
+type Links struct {
+	Items []Link `json:"items"`
+}
+
+func (l *Links) Validate() error {
+	for _, it := range l.Items {
+		if strings.TrimSpace(it.Title) == "" {
+			return errors.New("у ссылки должно быть название")
+		}
+		if it.Enabled && !strings.HasPrefix(it.URL, "https://") && !strings.HasPrefix(it.URL, "http://") && !strings.HasPrefix(it.URL, "tg://") {
+			return fmt.Errorf("ссылка «%s» должна начинаться с https://", it.Title)
+		}
+	}
+	return nil
+}
+
+// InstallApp is a VPN client offered on the installation screen.
+type InstallApp struct {
+	Platform string `json:"platform"` // ios | android | windows | macos | linux | tv
+	Name     string `json:"name"`
+	StoreURL string `json:"store_url"`
+	// DeepLink adds the subscription to the app; {url} is replaced with the subscription link,
+	// {url_b64} with its base64. Empty = only "copy link".
+	DeepLink string `json:"deep_link"`
+}
+
+type Install struct {
+	Apps []InstallApp `json:"apps"`
+	Note string       `json:"note"`
+}
+
+func (in *Install) Validate() error {
+	ok := map[string]bool{"ios": true, "android": true, "windows": true, "macos": true, "linux": true, "tv": true}
+	for _, a := range in.Apps {
+		if !ok[a.Platform] {
+			return fmt.Errorf("неизвестная платформа %q", a.Platform)
+		}
+		if strings.TrimSpace(a.Name) == "" {
+			return errors.New("у приложения должно быть название")
+		}
+	}
+	return nil
 }

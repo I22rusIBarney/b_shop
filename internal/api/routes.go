@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"io/fs"
@@ -52,6 +53,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/payment-methods/{id}", s.authed(s.deletePaymentMethod))
 
 	s.adminRoutes(mux)
+	s.fileRoutes(mux)
 
 	// frontend
 	mux.HandleFunc("/", s.spa)
@@ -81,6 +83,9 @@ func (s *Server) publicConfig(w http.ResponseWriter, r *http.Request) {
 		"maintenance":     st.General.MaintenanceMode,
 		"payment_methods": paymentMethods(st.YooKassa),
 		"save_card":       st.YooKassa.SaveCard && st.Payments.ShowSaveCard,
+		"branding":        s.publicBranding(r.Context(), st.Branding),
+		"links":           enabledLinks(st.Links),
+		"install":         st.Install,
 	})
 }
 
@@ -474,4 +479,27 @@ func (s *Server) spa(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = w.Write(idx)
+}
+
+func (s *Server) publicBranding(ctx context.Context, b settings.Branding) map[string]any {
+	return map[string]any{
+		"title": b.Title, "tagline": b.Tagline, "logo": fileURL(b.LogoFile),
+		"colors": map[string]string{"primary": b.Primary, "background": b.Background, "surface": b.Surface,
+			"text": b.Text, "muted": b.Muted},
+		"card_opacity": b.CardOpacity, "card_blur": b.CardBlur,
+		"bg_mobile": s.mediaURL(ctx, b.BgMobileFile), "bg_desktop": s.mediaURL(ctx, b.BgDesktopFile),
+		"bg_fit": b.BgFit, "bg_opacity": b.BgOpacity,
+		"banner": s.mediaURL(ctx, b.BannerFile), "banner_link": b.BannerLink,
+		"login_text": b.LoginText, "effect": b.Effect,
+	}
+}
+
+func enabledLinks(l settings.Links) []settings.Link {
+	out := []settings.Link{}
+	for _, it := range l.Items {
+		if it.Enabled && it.URL != "" {
+			out = append(out, it)
+		}
+	}
+	return out
 }
