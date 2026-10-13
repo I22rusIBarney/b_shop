@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/url"
 	"sort"
 	"strconv"
@@ -30,6 +31,13 @@ type Profile struct {
 }
 
 var ErrInvalid = errors.New("auth: invalid or expired login data")
+
+// Reasons for a rejected launch, so the cabinet and the log can tell them apart.
+var (
+	ErrSignature = fmt.Errorf("%w: signature does not match the bot token", ErrInvalid)
+	ErrExpired   = fmt.Errorf("%w: auth_date is too old", ErrInvalid)
+	ErrClock     = fmt.Errorf("%w: auth_date is in the future (server clock is behind)", ErrInvalid)
+)
 
 type tgUser struct {
 	ID           int64  `json:"id"`
@@ -61,10 +69,10 @@ func VerifyWebAppInitData(initData, botToken string, maxAge time.Duration) (*Pro
 	}
 	secret := hmacSHA256([]byte("WebAppData"), []byte(botToken))
 	if !hmac.Equal([]byte(hex.EncodeToString(hmacSHA256(secret, []byte(checkString(vals))))), []byte(hash)) {
-		return nil, ErrInvalid
+		return nil, ErrSignature
 	}
-	if !fresh(vals.Get("auth_date"), maxAge) {
-		return nil, ErrInvalid
+	if err := freshErr(vals.Get("auth_date"), maxAge); err != nil {
+		return nil, err
 	}
 	var u tgUser
 	if err := json.Unmarshal([]byte(vals.Get("user")), &u); err != nil || u.ID == 0 {
@@ -114,6 +122,21 @@ func checkString(vals url.Values) string {
 		parts[i] = k + "=" + vals.Get(k)
 	}
 	return strings.Join(parts, "\n")
+}
+
+func freshErr(authDate string, maxAge time.Duration) error {
+	ts, err := strconv.ParseInt(authDate, 10, 64)
+	if err != nil {
+		return ErrInvalid
+	}
+	age := time.Since(time.Unix(ts, 0))
+	switch {
+	case age < -time.Hour:
+		return ErrClock
+	case age >= maxAge:
+		return ErrExpired
+	}
+	return nil
 }
 
 func fresh(authDate string, maxAge time.Duration) bool {

@@ -9,6 +9,8 @@ interface AppState {
   refreshMe: () => Promise<void>
   signIn: (s: Session) => Promise<void>
   signOut: () => Promise<void>
+  /** Why the automatic Telegram sign-in didn't work (shown on the login screen). */
+  tgError: string
 }
 
 const Ctx = createContext<AppState | null>(null)
@@ -24,6 +26,7 @@ type Boot = { state: 'loading' } | { state: 'error'; message: string } | { state
 export function AppProvider({ children, fallback, failed }: { children: ReactNode; fallback: ReactNode; failed: (msg: string, retry: () => void) => ReactNode }) {
   const [boot, setBoot] = useState<Boot>({ state: 'loading' })
   const [me, setMe] = useState<Me | null>(null)
+  const [tgError, setTgError] = useState('')
 
   const refreshMe = useCallback(async () => {
     if (!getToken()) {
@@ -48,11 +51,28 @@ export function AppProvider({ children, fallback, failed }: { children: ReactNod
       applyBranding(config.branding)
       if (tg.inTelegram()) {
         // Inside Telegram the launch data is the source of truth for who is signed in.
-        try {
-          const s = await post<Session>('/api/auth/telegram/webapp', { init_data: tg.initData() })
-          setToken(s.token)
-        } catch {
-          /* fall back to stored token / login screen */
+        let err = ''
+        for (let i = 0; i < 2; i++) {
+          try {
+            const s = await post<Session>('/api/auth/telegram/webapp', { init_data: tg.initData() })
+            setToken(s.token)
+            tg.cloudSetToken(s.token)
+            err = ''
+            break
+          } catch (e: any) {
+            err = e?.message || 'ошибка сети'
+            // A rejected launch won't get better on retry; a network hiccup may.
+            if (e?.status && e.status < 500) break
+            await new Promise((r) => setTimeout(r, 800))
+          }
+        }
+        setTgError(err)
+      }
+      if (tg.inTelegramClient()) {
+        // No stored session (WebView storage cleared) — take the one saved in Telegram CloudStorage.
+        if (!getToken()) {
+          const saved = await tg.cloudGetToken()
+          if (saved) setToken(saved)
         }
       }
       await refreshMe()
@@ -68,7 +88,10 @@ export function AppProvider({ children, fallback, failed }: { children: ReactNod
 
   const signIn = useCallback(
     async (s: Session) => {
-      if (s.token) setToken(s.token)
+      if (s.token) {
+        setToken(s.token)
+        tg.cloudSetToken(s.token)
+      }
       await refreshMe()
     },
     [refreshMe],
@@ -81,10 +104,11 @@ export function AppProvider({ children, fallback, failed }: { children: ReactNod
       /* ignore */
     }
     setToken(null)
+    tg.cloudSetToken(null)
     setMe(null)
   }, [])
 
   if (boot.state === 'loading') return <>{fallback}</>
   if (boot.state === 'error') return <>{failed(boot.message, start)}</>
-  return <Ctx.Provider value={{ config: boot.config, me, refreshMe, signIn, signOut }}>{children}</Ctx.Provider>
+  return <Ctx.Provider value={{ config: boot.config, me, refreshMe, signIn, signOut, tgError }}>{children}</Ctx.Provider>
 }

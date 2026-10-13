@@ -66,6 +66,53 @@ export function reopen(bot: string) {
   window.location.reload()
 }
 
+// ---- session backup in Telegram CloudStorage ----
+// Telegram keeps it per user and bot on its servers, so the session survives a cleared WebView storage.
+const CLOUD_KEY = 'bshop_session'
+
+function cloud(): any | undefined {
+  const w = webApp()
+  try {
+    return w?.isVersionAtLeast?.('6.9') ? w.CloudStorage : undefined
+  } catch {
+    return undefined
+  }
+}
+
+export function cloudGetToken(ms = 1500): Promise<string> {
+  const c = cloud()
+  if (!c) return Promise.resolve('')
+  return new Promise((resolve) => {
+    const t = setTimeout(() => resolve(''), ms)
+    try {
+      c.getItem(CLOUD_KEY, (err: unknown, v?: string) => {
+        clearTimeout(t)
+        resolve(!err && v ? v : '')
+      })
+    } catch {
+      clearTimeout(t)
+      resolve('')
+    }
+  })
+}
+
+export function cloudSetToken(tok: string | null) {
+  const c = cloud()
+  if (!c) return
+  try {
+    if (tok) c.setItem(CLOUD_KEY, tok)
+    else c.removeItem(CLOUD_KEY)
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Short description of the launch for the login screen, to tell launch problems apart. */
+export function launchInfo(): string {
+  const w = webApp()
+  return [w ? `${w.platform || '?'} ${w.version || ''}`.trim() : 'без SDK', initData() ? `данные ${initData().length} б` : 'без данных запуска'].join(' · ')
+}
+
 export function inTelegram(): boolean {
   return initData() !== ''
 }

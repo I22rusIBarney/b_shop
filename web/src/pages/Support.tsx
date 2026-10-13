@@ -78,7 +78,7 @@ export default function Support() {
                   <div className="grow" style={{ minWidth: 0 }}>
                     <div className="row" style={{ gap: 8 }}>
                       <b className="ellipsis">{t.subject}</b>
-                      {t.unread_customer && <span className="badge ok">новый ответ</span>}
+                      {t.unread_customer && <span className="unread-dot" aria-label="новый ответ" />}
                     </div>
                     <div className="tiny muted">
                       #{t.id} · {relative(t.updated_at)}

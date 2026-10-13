@@ -4,7 +4,7 @@ import { post, type Session } from '../lib/api'
 import { useApp } from '../lib/app'
 import { Backdrop, Brand, HeroSpace } from '../ui/shell'
 import { Field, useAction } from '../ui/kit'
-import { inTelegramClient, reopen } from '../lib/tg'
+import { inTelegramClient, launchInfo, reopen } from '../lib/tg'
 
 declare global {
   interface Window {
@@ -32,7 +32,7 @@ function TelegramWidget({ bot, onAuth }: { bot: string; onAuth: (u: Record<strin
 }
 
 export default function Login() {
-  const { config, me, signIn } = useApp()
+  const { config, me, signIn, tgError } = useApp()
   const [params] = useSearchParams()
   const nav = useNavigate()
   const ret = params.get('return') || '/'
@@ -85,7 +85,10 @@ export default function Login() {
           {tgClient && (
             <div className="stack">
               <p className="small" style={{ margin: 0 }}>
-                Telegram не передал данные для входа — так бывает, если приложение долго было открыто в фоне.
+                {tgError ? `Не получилось войти через Telegram: ${tgError}.` : 'Telegram не передал данные для входа — закройте приложение и откройте его снова кнопкой «Открыть» в боте.'}
+              </p>
+              <p className="tiny muted" style={{ margin: 0 }}>
+                {launchInfo()}
               </p>
               <button className="btn block" onClick={() => reopen(config.bot_username)}>
                 Открыть заново

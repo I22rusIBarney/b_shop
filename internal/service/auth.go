@@ -208,8 +208,20 @@ func (s *Service) LoginTelegramWebApp(ctx context.Context, initData string, meta
 	if !s.set().Auth.TelegramEnabled && meta.LinkTo == nil {
 		return nil, userErr("вход через Telegram отключён")
 	}
-	p, err := auth.VerifyWebAppInitData(initData, s.Cfg.BotToken, 7*24*time.Hour)
+	if strings.TrimSpace(initData) == "" {
+		return nil, userErr("Telegram не передал данные запуска")
+	}
+	p, err := auth.VerifyWebAppInitData(initData, s.Cfg.BotToken, 30*24*time.Hour)
 	if err != nil {
+		s.Log.Warn("telegram mini app login rejected", "reason", err)
+		switch {
+		case errors.Is(err, auth.ErrSignature):
+			return nil, userErr("подпись Telegram не совпала: кабинет открыт из другого бота, чем указан в BOT_TOKEN")
+		case errors.Is(err, auth.ErrClock):
+			return nil, userErr("часы сервера отстают — проверьте время на сервере (timedatectl)")
+		case errors.Is(err, auth.ErrExpired):
+			return nil, userErr("данные запуска устарели, откройте приложение заново")
+		}
 		return nil, userErr("не удалось проверить данные Telegram, откройте приложение заново")
 	}
 	return s.Login(ctx, p, meta)

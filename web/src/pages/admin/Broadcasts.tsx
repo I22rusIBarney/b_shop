@@ -33,6 +33,9 @@ const blank = (): Broadcast => ({
   finished_at: null,
 })
 
+// Server-side fields stay out of the request: an empty created_at isn't a valid time for the server.
+const out = ({ created_at: _c, started_at: _s, finished_at: _f, ...rest }: Broadcast) => rest
+
 function toLocal(iso: string | null) {
   if (!iso) return ''
   const d = new Date(iso)
@@ -94,7 +97,7 @@ export default function Broadcasts() {
   const send = () =>
     run(async () => {
       if (!confirm(b!.scheduled_at ? 'Запланировать рассылку?' : `Отправить ${count ?? ''} получателям сейчас?`)) return
-      await post('/api/admin/broadcasts/send', b)
+      await post('/api/admin/broadcasts/send', out(b!))
       setB(null)
       await list.reload()
     }, 'Рассылка поставлена в очередь')
@@ -199,7 +202,7 @@ export default function Broadcasts() {
               disabled={busy}
               onClick={() =>
                 run(async () => {
-                  const saved = await post<Broadcast>('/api/admin/broadcasts/draft', b)
+                  const saved = await post<Broadcast>('/api/admin/broadcasts/draft', out(b))
                   setB(saved)
                   await list.reload()
                 }, 'Черновик сохранён')
@@ -207,7 +210,7 @@ export default function Broadcasts() {
             >
               Сохранить черновик
             </button>
-            <button className="btn secondary small" disabled={busy} onClick={() => run(() => post('/api/admin/broadcasts/test', b), 'Тест отправлен вам')}>
+            <button className="btn secondary small" disabled={busy} onClick={() => run(() => post('/api/admin/broadcasts/test', out(b)), 'Тест отправлен вам')}>
               Тест себе
             </button>
             <button className="btn small" disabled={busy || !b.body.trim()} onClick={send}>
