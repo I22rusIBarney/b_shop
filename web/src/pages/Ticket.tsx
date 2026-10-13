@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { get, post, type SupportConfig, type TicketView } from '../lib/api'
 import { haptic } from '../lib/tg'
 import { Back } from '../ui/icons'
 import { Composer, Messages, customerTicketStatus } from '../ui/chat'
-import { ErrorBox, PageLoader, useAction, useLoad } from '../ui/kit'
+import { ErrorBox, PageLoader, useAction, useLoad, usePolling } from '../ui/kit'
 
 export default function Ticket() {
   const { id } = useParams()
@@ -15,17 +15,11 @@ export default function Ticket() {
   const [stars, setStars] = useState(0)
   const [comment, setComment] = useState('')
 
-  // Pick up replies while the chat is open.
-  useEffect(() => {
-    const timer = setInterval(() => {
-      if (document.visibilityState === 'visible') get<TicketView>(`/api/tickets/${id}`).then(t.setData).catch(() => {})
-    }, 10000)
-    return () => clearInterval(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id])
+  // Pick up replies while the chat is open; the text being typed lives in the composer and is not touched.
+  usePolling(t.refresh, 8000)
 
   if (t.loading && !t.data) return <PageLoader />
-  if (t.error) return <ErrorBox text={t.error} retry={t.reload} />
+  if (t.error && !t.data) return <ErrorBox text={t.error} retry={t.reload} />
   const v = t.data!
   const [label, cls] = customerTicketStatus[v.status]
   const done = v.status === 'closed' || v.status === 'resolved'

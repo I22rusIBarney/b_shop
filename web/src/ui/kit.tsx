@@ -120,22 +120,72 @@ export function useLoad<T>(fn: () => Promise<T>, deps: unknown[] = []) {
   const [data, setData] = useState<T | undefined>()
   const [error, setError] = useState<string>('')
   const [loading, setLoading] = useState(true)
+  // Bumped when deps change, so an answer for the previous page (old ticket id) is dropped.
+  const gen = useRef(0)
   const reload = useCallback(async () => {
+    const g = ++gen.current
     setLoading(true)
     try {
-      setData(await fn())
+      const v = await fn()
+      if (g !== gen.current) return
+      setData(v)
       setError('')
     } catch (e: any) {
-      setError(e?.message || 'Ошибка загрузки')
+      if (g === gen.current) setError(e?.message || 'Ошибка загрузки')
     } finally {
-      setLoading(false)
+      if (g === gen.current) setLoading(false)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps)
+  /** Background refresh: no loader, and a failed request keeps what is on screen. */
+  const refresh = useCallback(async () => {
+    const g = gen.current
+    try {
+      const v = await fn()
+      if (g === gen.current) setData(v)
+    } catch {
+      /* keep the current data; the next tick tries again */
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps)
   useEffect(() => {
     reload()
   }, [reload])
-  return { data, setData, error, loading, reload }
+  return { data, setData, error, loading, reload, refresh }
+}
+
+/**
+ * Calls `tick` every `ms` while the page is visible, and right away when the user comes back to it.
+ * One timer per component, and a tick never starts while the previous one is still running.
+ */
+export function usePolling(tick: () => Promise<unknown>, ms: number) {
+  const fn = useRef(tick)
+  fn.current = tick
+  useEffect(() => {
+    let running = false
+    let stopped = false
+    const run = async () => {
+      if (running || stopped || document.visibilityState !== 'visible') return
+      running = true
+      try {
+        await fn.current()
+      } catch {
+        /* ignore: polling must never break the page */
+      } finally {
+        running = false
+      }
+    }
+    const timer = window.setInterval(run, ms)
+    const onShow = () => document.visibilityState === 'visible' && run()
+    document.addEventListener('visibilitychange', onShow)
+    window.addEventListener('online', onShow)
+    return () => {
+      stopped = true
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', onShow)
+      window.removeEventListener('online', onShow)
+    }
+  }, [ms])
 }
 
 export function ErrorBox({ text, retry }: { text: string; retry?: () => void }) {

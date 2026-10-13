@@ -39,9 +39,21 @@ function Attachments({ ids }: { ids: string[] }) {
 /** Message list. viewer=customer shows the customer's own messages on the right; admin sees support on the right. */
 export function Messages({ messages, viewer, renderExtra }: { messages: TicketMessage[]; viewer: 'customer' | 'admin'; renderExtra?: (m: TicketMessage) => ReactNode }) {
   const end = useRef<HTMLDivElement>(null)
+  const seen = useRef(0)
   useEffect(() => {
-    end.current?.scrollIntoView({ block: 'end' })
-  }, [messages.length])
+    const el = end.current
+    const first = seen.current === 0
+    const added = messages.length > seen.current
+    seen.current = messages.length
+    if (!el || !added) return
+    // Open the chat at the latest message. Later, follow new messages only when the reader is already
+    // near the end or just sent one; don't yank the page while they read history or type a reply.
+    const last = messages[messages.length - 1]
+    const own = viewer === 'customer' ? last?.author === 'customer' : last?.author === 'operator' || last?.author === 'note'
+    const typing = document.activeElement instanceof HTMLTextAreaElement || document.activeElement instanceof HTMLInputElement
+    const near = el.getBoundingClientRect().top < window.innerHeight + 320
+    if (first || own || (near && !typing)) el.scrollIntoView({ block: 'end', behavior: first ? 'auto' : 'smooth' })
+  }, [messages, viewer])
   return (
     <div className="chat">
       {messages.map((m) => {

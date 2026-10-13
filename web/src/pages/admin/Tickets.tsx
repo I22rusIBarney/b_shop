@@ -5,7 +5,7 @@ import { refreshBadges } from '../../lib/badges'
 import { date, relative } from '../../lib/format'
 import { Back } from '../../ui/icons'
 import { Composer, Messages, ticketStatus } from '../../ui/chat'
-import { ErrorBox, Spinner, Toggle, useAction, useLoad } from '../../ui/kit'
+import { ErrorBox, Spinner, Toggle, useAction, useLoad, usePolling } from '../../ui/kit'
 
 const tabs = [
   ['active', 'Активные'],
@@ -25,10 +25,7 @@ export function TicketList() {
   const [offset, setOffset] = useState(0)
   const data = useLoad(() => get<{ items: TicketRow[]; total: number }>(`/api/admin/tickets?status=${status}&q=${encodeURIComponent(q)}&offset=${offset}&limit=50`), [status, q, offset])
 
-  useEffect(() => {
-    const t = setInterval(() => document.visibilityState === 'visible' && data.reload(), 30000)
-    return () => clearInterval(t)
-  }, [data.reload])
+  usePolling(data.refresh, 15000)
 
   return (
     <>
@@ -159,14 +156,11 @@ export function TicketChat() {
 
   useEffect(() => {
     refreshBadges()
-    const timer = setInterval(() => {
-      if (document.visibilityState === 'visible') get<AdminTicketView>(`/api/admin/tickets/${id}`).then(t.setData).catch(() => {})
-    }, 10000)
-    return () => clearInterval(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
+  // New messages from the client and AI drafts show up without a reload; the reply box keeps its text.
+  usePolling(t.refresh, 8000)
 
-  if (t.error) return <ErrorBox text={t.error} retry={t.reload} />
+  if (t.error && !t.data) return <ErrorBox text={t.error} retry={t.reload} />
   if (!t.data)
     return (
       <div className="center" style={{ padding: 40 }}>
