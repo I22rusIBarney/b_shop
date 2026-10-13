@@ -1,9 +1,11 @@
-.env
-/bshop
-web/node_modules
-web/dist/*
 !web/dist/.gitkeep
-web/tsconfig.tsbuildinfo
+*.log
+.env
+.env.draft
 /Caddyfile
 /backups/
-.env.draft
+/bshop
+server.log
+web/dist/*
+web/node_modules
+web/tsconfig.tsbuildinfo

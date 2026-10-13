@@ -742,3 +742,31 @@ html { touch-action: pan-x pan-y; } /* no pinch-zoom: the layout fits the screen
 /* Branding preview: a 396×758 phone screen scaled into the 284 px frame. */
 .preview-screen { position: relative; width: 396px; height: 758px; zoom: 0.717; display: flex; flex-direction: column; gap: 12px; padding: 54px 16px 12px; }
 .preview-tabbar { height: 52px; flex: none; }
+
+/* ---------- geography: globe / map ---------- */
+.geomap { position: relative; margin: 4px 0 6px; }
+.geomap-bar { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+.seg { display: inline-flex; padding: 3px; border-radius: 12px; border: 1px solid var(--line-strong); background: var(--surface); }
+.seg button { border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 0.9rem; font-weight: 600; padding: 6px 14px; border-radius: 9px; cursor: pointer; }
+.seg button.on { background: color-mix(in srgb, var(--accent) 38%, var(--surface-solid)); color: var(--text); }
+.geomap-stage { position: relative; border-radius: 16px; overflow: hidden; background: color-mix(in srgb, var(--bg) 70%, var(--surface-solid)); }
+.geomap-stage svg { display: block; user-select: none; -webkit-user-select: none; }
+.geo-sea { fill: color-mix(in srgb, var(--accent) 7%, var(--bg)); }
+.geo-grat { fill: none; stroke: color-mix(in srgb, var(--text) 7%, transparent); stroke-width: .5; }
+.geo-land { stroke: color-mix(in srgb, var(--text) 24%, transparent); stroke-width: .5; }
+.geo-rim { fill: none; stroke: color-mix(in srgb, var(--accent) 35%, transparent); stroke-width: 1.2; }
+.geo-dots circle { fill: var(--accent); fill-opacity: .9; stroke: var(--text); stroke-opacity: .7; stroke-width: .6; cursor: pointer; filter: drop-shadow(0 0 5px var(--accent)); }
+.geomap-zoom { position: absolute; top: 10px; right: 10px; display: flex; flex-direction: column; border-radius: 10px; overflow: hidden; border: 1px solid var(--line-strong); background: color-mix(in srgb, var(--surface-solid) 88%, transparent); }
+.geomap-zoom button { width: 34px; height: 34px; border: 0; border-top: 1px solid var(--line); background: transparent; color: var(--text); font-size: 1.15rem; line-height: 1; cursor: pointer; }
+.geomap-zoom button:first-child { border-top: 0; }
+.geomap-legend { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 10px; font-size: .8rem; color: var(--muted); }
+.geomap-legend i { width: 150px; max-width: 40%; height: 8px; border-radius: 8px; background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 22%, var(--surface-solid)), var(--accent)); }
+.geomap-sel { margin-top: 8px; text-align: center; color: var(--muted); }
+.geomap-sel b { color: var(--text); }
+.geo-lists { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+.geo-country { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.geo-pill { display: inline-block; max-width: 100%; padding: 4px 12px; border-radius: 999px; font-size: .8rem; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; color: var(--accent); background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); overflow-wrap: anywhere; }
+.geo-pill.sub { margin-left: 14px; color: var(--text); background: color-mix(in srgb, var(--text) 8%, transparent); border-color: var(--line); font-weight: 600; }
+.geo-more { margin-left: 14px; }
+.geo-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); }
+@media (max-width: 480px) { .geo-pill.sub { margin-left: 8px; } .geo-more { margin-left: 8px; } }

@@ -7,6 +7,9 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
+    volumes:
+      # База геолокации DB-IP (≈130 МБ) скачивается сама и обновляется раз в месяц; том нужен, чтобы не качать её заново при обновлении образа.
+      - shop-data:/data
     ports:
       # Только для nginx на этом же сервере; снаружи порт закрыт.
       - "127.0.0.1:${BSHOP_PORT:-8080}:8080"
@@ -55,5 +58,6 @@ services:
 
 volumes:
   shop-db:
+  shop-data:
   caddy-data:
   caddy-config:

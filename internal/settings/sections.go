@@ -29,6 +29,7 @@ type All struct {
 	Broadcasts    Broadcasts    `json:"broadcasts"`
 
 	Webhooks Webhooks `json:"webhooks"`
+	Geo      Geo      `json:"geo"`
 }
 
 func Defaults() All {
@@ -99,6 +100,7 @@ func Defaults() All {
 		AI:            defaultAI(),
 		Automations:   defaultAutomations(),
 		Webhooks:      defaultWebhooks(),
+		Geo:           defaultGeo(),
 		Broadcasts:    Broadcasts{RatePerSecond: 20},
 	}
 }

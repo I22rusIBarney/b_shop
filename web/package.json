@@ -14,17 +14,24 @@
     "@fontsource/nunito": "5.2.7",
     "@fontsource/unbounded": "5.2.6",
     "@kastov/cryptohapp": "1.1.2",
+    "d3-geo": "^3.1.1",
     "dompurify": "3.2.6",
     "jsencrypt": "3.5.4",
     "qrcode": "1.5.4",
     "react": "19.1.0",
     "react-dom": "19.1.0",
-    "react-router-dom": "7.6.2"
+    "react-router-dom": "7.6.2",
+    "topojson-client": "^3.1.0",
+    "world-atlas": "^2.0.2"
   },
   "devDependencies": {
+    "@types/d3-geo": "^3.1.0",
+    "@types/geojson": "^7946.0.14",
     "@types/qrcode": "1.5.5",
     "@types/react": "19.1.8",
     "@types/react-dom": "19.1.6",
+    "@types/topojson-client": "^3.1.5",
+    "@types/topojson-specification": "^1.0.5",
     "@vitejs/plugin-react": "4.5.2",
     "typescript": "5.8.3",
     "vite": "6.3.5"

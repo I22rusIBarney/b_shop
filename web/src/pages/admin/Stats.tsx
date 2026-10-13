@@ -1,9 +1,10 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { NavLink, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { get, post } from '../../lib/api'
 import { relative, rubRound, shortDate } from '../../lib/format'
 import { HBars, Kpi, TimeChart, bucketLabel, type Point } from '../../ui/charts'
 import { ErrorBox, Spinner, useAction, useLoad, pressable } from '../../ui/kit'
+import { GeoSettings, GeoView, type GeoReport } from './Geo'
 
 interface Named {
   key: string
@@ -27,6 +28,7 @@ const tabs = [
   ['referrals', 'Рефералы'],
   ['support', 'Поддержка'],
   ['analytics', 'Аналитика'],
+  ['geo', 'География'],
 ] as const
 
 const periods = [
@@ -88,7 +90,7 @@ function usePeriod(def = '1m') {
       </select>
     </div>
   )
-  return { period, group, qs: `period=${period}&group=${group}`, bar }
+  return { period, group, qs: `period=${period}&group=${group}`, bar, set }
 }
 
 function Loaded<T>({ load, children }: { load: { data?: T | null; error?: string | null; reload: () => void }; children: (d: T) => ReactNode }) {
@@ -122,6 +124,7 @@ export default function Stats() {
       {tab === 'referrals' && <Referrals />}
       {tab === 'support' && <Support />}
       {tab === 'analytics' && <Analytics />}
+      {tab === 'geo' && <GeoTab />}
     </>
   )
 }
@@ -583,6 +586,39 @@ interface RefStats {
   ltv_regular: number
   top: { id: number; name: string; invited: number; paid: number; bonus_days: number; revenue: number }[] | null
   recent: { at: string; kind: string; days: number; recipient: string; recipient_id: number; referral: string }[] | null
+}
+
+function GeoTab() {
+  const p = usePeriod('1m')
+  const load = useLoad(() => get<GeoReport>(`/api/admin/stats/geo?period=${p.period}`), [p.period])
+  // While the geolocation database is still being downloaded, check again every few seconds.
+  const waiting = load.data && load.data.status.enabled && !load.data.status.ready && !load.data.status.db_error
+  useEffect(() => {
+    if (!waiting) return
+    const t = setInterval(() => load.refresh(), 8000)
+    return () => clearInterval(t)
+  }, [waiting, load.refresh])
+  return (
+    <>
+      <div className="stats-bar">
+        <div className="chips">
+          {periods.map(([k, l]) => (
+            <button key={k} className={p.period === k ? 'chip on' : 'chip'} onClick={() => p.set('period', k)}>
+              {l}
+            </button>
+          ))}
+        </div>
+      </div>
+      <Loaded load={load}>
+        {(r) => (
+          <div className="stack lg">
+            <GeoView report={r} />
+            <GeoSettings onSaved={load.reload} />
+          </div>
+        )}
+      </Loaded>
+    </>
+  )
 }
 
 function Referrals() {

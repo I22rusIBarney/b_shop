@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"bshop/internal/config"
+	"bshop/internal/geoip"
 	"bshop/internal/mailer"
 	"bshop/internal/moynalog"
 	"bshop/internal/remnawave"
@@ -93,6 +94,12 @@ type Service struct {
 	// Gateway / Receipts may be overridden in tests; otherwise built from settings on demand.
 	GatewayOverride  PaymentGateway
 	ReceiptsOverride Receipts
+
+	// Geography of subscription requests (geo.go). GeoOverride replaces the DB-IP database in tests.
+	GeoOverride geoip.Lookuper
+	geoLoad     sync.Mutex
+	geoMu       sync.Mutex
+	geo         geoState
 
 	mu         sync.Mutex
 	nalog      *moynalog.Client

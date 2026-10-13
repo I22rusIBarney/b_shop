@@ -1,4 +1,5 @@
 import CustomerExtras from './CustomerExtras'
+import { CustomerGeo } from './Geo'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { del, get, patch, post, type Customer, type Device, type Identity, type Payment, type Plan, type PlanChange, type Redemption, type ReferralBonus, type Subscription } from '../../lib/api'
@@ -345,6 +346,10 @@ export default function CustomerCard() {
         </section>
 
         <CustomerExtras customerId={c.id} />
+
+        <div style={{ gridColumn: '1 / -1' }}>
+          <CustomerGeo id={c.id} />
+        </div>
 
         <section className="card stack" style={{ gridColumn: '1 / -1' }}>
           <h3>История</h3>

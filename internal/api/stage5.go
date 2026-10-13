@@ -38,6 +38,16 @@ func (s *Server) stage5Routes(mux *http.ServeMux) {
 		p, g := pg(r)
 		return s.svc.StatsAnalytics(r.Context(), p, g)
 	})))
+	mux.HandleFunc("GET /api/admin/stats/geo", s.admin(s.handle(func(r *http.Request) (any, error) {
+		return s.svc.StatsGeo(r.Context(), r.URL.Query().Get("period"))
+	})))
+	mux.HandleFunc("GET /api/admin/customers/{id}/geo", s.admin(s.handle(func(r *http.Request) (any, error) {
+		id, err := pathID(r, "id")
+		if err != nil {
+			return nil, err
+		}
+		return s.svc.CustomerGeo(r.Context(), id)
+	})))
 	mux.HandleFunc("GET /api/admin/stats/leads", s.admin(s.handle(func(r *http.Request) (any, error) {
 		q := r.URL.Query()
 		limit, _ := strconv.Atoi(q.Get("limit"))

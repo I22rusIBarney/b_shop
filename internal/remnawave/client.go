@@ -427,3 +427,31 @@ func (c *Client) SubpageConfig(ctx context.Context, id uuid.UUID) (json.RawMessa
 	}
 	return out.Response.Config, nil
 }
+
+// SubRequest is one entry of the panel's subscription request history: somebody fetched a user's subscription link.
+type SubRequest struct {
+	ID          int64     `json:"id"`
+	UserID      int64     `json:"userId"`
+	RequestIP   *string   `json:"requestIp"`
+	UserAgent   *string   `json:"userAgent"`
+	RequestedAt time.Time `json:"requestAt"`
+}
+
+// SubscriptionRequests returns one page of the request history. The panel's list is meant for its own UI,
+// so the order is requested explicitly (newest first); if a panel version rejects that, the default order is used.
+func (c *Client) SubscriptionRequests(ctx context.Context, start, size int) (recs []SubRequest, total int, err error) {
+	var out envelope[struct {
+		Records []SubRequest `json:"records"`
+		Total   int          `json:"total"`
+	}]
+	q := fmt.Sprintf("/api/subscription-request-history?start=%d&size=%d", start, size)
+	err = c.do(ctx, http.MethodGet, q+"&sorting="+url.QueryEscape(`[{"id":"requestAt","desc":true}]`), nil, &out)
+	var ae *APIError
+	if errors.As(err, &ae) && ae.Status == http.StatusBadRequest {
+		err = c.do(ctx, http.MethodGet, q, nil, &out)
+	}
+	if err != nil {
+		return nil, 0, err
+	}
+	return out.Response.Records, out.Response.Total, nil
+}
