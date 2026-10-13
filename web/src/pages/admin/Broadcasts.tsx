@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { api, del, get, post, type Broadcast, type Plan } from '../../lib/api'
 import { dateTime } from '../../lib/format'
 import { Close, Plus, Trash } from '../../ui/icons'
@@ -42,7 +43,14 @@ function toLocal(iso: string | null) {
 export default function Broadcasts() {
   const list = useLoad(() => get<{ items: Broadcast[]; segments: Record<string, string> }>('/api/admin/broadcasts'))
   const plans = useLoad(() => get<Plan[]>('/api/admin/plans'))
-  const [b, setB] = useState<Broadcast | null>(null)
+  const [params, setParams] = useSearchParams()
+  const [b, setB] = useState<Broadcast | null>(() => {
+    const seg = params.get('segment')
+    return seg ? { ...blank(), audience: { segment: seg } } : null
+  })
+  useEffect(() => {
+    if (params.get('segment')) setParams({}, { replace: true })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const [count, setCount] = useState<number | null>(null)
   const { busy, run } = useAction()
   const file = useRef<HTMLInputElement>(null)

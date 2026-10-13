@@ -59,6 +59,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	s.adminRoutes(mux)
 	s.stage3Routes(mux)
 	s.stage4Routes(mux)
+	s.stage5Routes(mux)
 	s.fileRoutes(mux)
 
 	// frontend

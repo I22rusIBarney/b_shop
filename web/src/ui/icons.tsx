@@ -48,3 +48,4 @@ export const HomeFill = (p: P) => (
     <path d="M12 3.2 2.8 11a1 1 0 0 0 1.3 1.5L5 11.8V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-8.2l.9.7a1 1 0 0 0 1.3-1.5z" />
   </svg>
 )
+export const Chart = I(['M4 20h16', 'M7 16v-5', 'M12 16V6', 'M17 16v-8'])

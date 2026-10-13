@@ -14,6 +14,8 @@ import (
 var segments = map[string]string{
 	"all": "Все", "active": "С активной подпиской", "paid_active": "С платной подпиской", "trial": "На пробном периоде",
 	"expired": "Подписка истекла", "no_sub": "Без подписки", "never_paid": "Ни разу не платили", "plan": "На тарифе",
+	"expiring": "Подписка истекает за 7 дней", "lead_hot": "Лиды: горячие", "lead_warm": "Лиды: тёплые", "lead_cool": "Лиды: прохладные",
+	"lead_cold": "Лиды: холодные", "lead_stable": "Стабильные клиенты",
 }
 
 var allowedTagRe = regexp.MustCompile(`(?i)</?([a-z\-]+)[^>]*>`)

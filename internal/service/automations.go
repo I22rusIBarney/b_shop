@@ -339,6 +339,31 @@ func (s *Service) onPurchaseForAutomations(ctx context.Context, c *store.Custome
 	_ = store.MarkConverted(ctx, s.Store.Pool, c.ID, 7*24*time.Hour)
 }
 
+// applyLeadTemperatures recomputes lead temperatures; changes fire lead_temperature_* scenarios
+// (only when automations are on: a manual recompute from the statistics just records them).
+func (s *Service) applyLeadTemperatures(ctx context.Context, list []store.Automation) (int, error) {
+	set := s.set().Automations
+	changes, err := store.RecomputeLeadTemperatures(ctx, s.Store.Pool, store.LeadParams{HotSeenDays: set.HotSeenDays,
+		WarmSeenDays: set.WarmSeenDays, CoolSeenDays: set.CoolSeenDays, LeadMinAgeHours: set.LeadMinAgeHours,
+		StableMinPayments: set.StableMinPayments, StableMinDays: set.StableMinDays})
+	if err != nil {
+		s.Log.Error("lead temperatures", "err", err)
+		return 0, err
+	}
+	on := s.automationsOn()
+	for _, ch := range changes {
+		if !on || ch.First || ch.New == "" {
+			continue
+		}
+		for i := range list {
+			if list[i].IsActive && list[i].TriggerFactor == "lead_temperature_"+ch.New {
+				_, _ = s.startRun(ctx, &list[i], ch.CustomerID, nil)
+			}
+		}
+	}
+	return len(changes), nil
+}
+
 // ScanAutomationTriggers finds customers matching time-based triggers and starts runs.
 func (s *Service) ScanAutomationTriggers(ctx context.Context) {
 	if !s.automationsOn() {
@@ -349,23 +374,7 @@ func (s *Service) ScanAutomationTriggers(ctx context.Context) {
 	if err != nil {
 		return
 	}
-	// Lead temperatures: changes fire lead_temperature_* scenarios.
-	changes, err := store.RecomputeLeadTemperatures(ctx, s.Store.Pool, store.LeadParams{HotSeenDays: set.HotSeenDays,
-		WarmSeenDays: set.WarmSeenDays, CoolSeenDays: set.CoolSeenDays, LeadMinAgeHours: set.LeadMinAgeHours,
-		StableMinPayments: set.StableMinPayments, StableMinDays: set.StableMinDays})
-	if err != nil {
-		s.Log.Error("lead temperatures", "err", err)
-	}
-	for _, ch := range changes {
-		if ch.First || ch.New == "" {
-			continue
-		}
-		for i := range list {
-			if list[i].IsActive && list[i].TriggerFactor == "lead_temperature_"+ch.New {
-				_, _ = s.startRun(ctx, &list[i], ch.CustomerID, nil)
-			}
-		}
-	}
+	s.applyLeadTemperatures(ctx, list)
 	params := store.TriggerParams{RecentlyExpiredHours: set.RecentlyExpiredHours, AbandonedCartHours: set.AbandonedCartHours,
 		ActiveTrialHours: set.ActiveTrialHours, ExpiringSoonDays: set.ExpiringSoonDays, InactiveDays: set.InactiveDays}
 	cache := map[string][]store.TriggerCandidate{}

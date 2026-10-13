@@ -54,6 +54,9 @@ const eventName: Record<string, string> = {
   autopay_off: 'Отключено автопродление',
   autopay_failed: 'Ошибка автоплатежа',
   referral_manual: 'Начислены бонусные дни',
+  device_added: 'Новое устройство',
+  device_removed: 'Устройство удалено',
+  torrent: 'Торрент-трафик',
 }
 
 function eventText(e: Event) {
@@ -78,6 +81,11 @@ function eventText(e: Event) {
       return d.to
     case 'autopay_failed':
       return d.reason
+    case 'device_added':
+    case 'device_removed':
+      return d.device
+    case 'torrent':
+      return `${d.server}, IP ${d.ip}`
     case 'login':
     case 'registered':
     case 'login_linked':

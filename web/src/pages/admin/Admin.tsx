@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { useApp } from '../../lib/app'
 import { Brand } from '../../ui/shell'
-import { Card, Chat, Gift, Help, Home, List, Menu, News, Palette, Renew, Settings as SettingsIcon, Shield, Tag, Users, Wallet } from '../../ui/icons'
+import { Card, Chart, Chat, Gift, Help, Home, Link, List, Menu, News, Palette, Renew, Settings as SettingsIcon, Shield, Tag, Users, Wallet } from '../../ui/icons'
 import Customers from './Customers'
 import CustomerCard from './CustomerCard'
 import Payments from './Payments'
@@ -16,9 +16,12 @@ import Knowledge from './Knowledge'
 import Broadcasts from './Broadcasts'
 import Automations from './Automations'
 import Notifications from './Notifications'
+import Stats from './Stats'
+import Webhooks from './Webhooks'
 import { useBadges } from '../../lib/badges'
 
 const nav = [
+  { to: '/admin/stats', label: 'Статистика', icon: Chart },
   { to: '/admin/customers', label: 'Клиенты', icon: Users },
   { to: '/admin/payments', label: 'Платежи', icon: Wallet },
   { to: '/admin/plans', label: 'Тарифы', icon: Tag },
@@ -38,6 +41,7 @@ const settingsNav = [
   { to: '/admin/settings/links', label: 'Ссылки и установка', icon: List },
   { to: '/admin/settings/support', label: 'Поддержка и ИИ', icon: Help },
   { to: '/admin/notifications', label: 'Уведомления', icon: Shield },
+  { to: '/admin/webhooks', label: 'Вебхуки Remnawave', icon: Link },
   { to: '/admin/settings/automations', label: 'Триггеры и рассылки', icon: Renew },
 ]
 
@@ -83,7 +87,9 @@ export default function Admin() {
       </nav>
       <main className="admin-main">
         <Routes>
-          <Route index element={<Navigate to="customers" replace />} />
+          <Route index element={<Navigate to="stats" replace />} />
+          <Route path="stats" element={<Navigate to="overview" replace />} />
+          <Route path="stats/:tab" element={<Stats />} />
           <Route path="customers" element={<Customers />} />
           <Route path="customers/:id" element={<CustomerCard />} />
           <Route path="payments" element={<Payments />} />
@@ -97,6 +103,7 @@ export default function Admin() {
           <Route path="broadcasts" element={<Broadcasts />} />
           <Route path="automations" element={<Automations />} />
           <Route path="notifications" element={<Notifications />} />
+          <Route path="webhooks" element={<Webhooks />} />
           <Route path="settings/:section" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="customers" replace />} />
         </Routes>

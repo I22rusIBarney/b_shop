@@ -54,6 +54,16 @@ var AdminEvents = []EventInfo{
 	{"ai_draft", "Черновик ассистента", "Поддержка", "📝 Черновик ответа к #{ticket} (уверенность {confidence})\n👤 {user}\n{text}", []string{"ticket", "confidence", "text"}},
 	{"ticket_rating", "Оценка поддержки", "Поддержка", "⭐ Оценка {rating}/5 по обращению #{ticket}\n👤 {user}{comment}", []string{"ticket", "rating", "comment"}},
 	{"system_error", "Системные ошибки", "Система", "🛠 {error}", []string{"error"}},
+	{"rw_node_down", "Нода недоступна", "Remnawave", "🔴 Нода <b>{node}</b> недоступна\n🌐 {address}", []string{"node", "address", "country"}},
+	{"rw_node_up", "Нода снова в сети", "Remnawave", "🟢 Нода <b>{node}</b> снова в сети", []string{"node", "address", "country"}},
+	{"rw_node_changed", "Изменения нод", "Remnawave", "⚙️ Нода <b>{node}</b> {action}", []string{"node", "address", "action"}},
+	{"rw_node_traffic", "Трафик ноды", "Remnawave", "📶 Нода <b>{node}</b>: израсходовано {used} из {limit}", []string{"node", "used", "limit"}},
+	{"rw_torrent", "Торрент-трафик", "Remnawave", "🧲 Торрент ({action}) на <b>{node}</b>\n👤 {user}\n🌐 {ip} · на {duration}\n🎯 {destination}", []string{"node", "ip", "duration", "action", "destination", "rw_user"}},
+	{"rw_login", "Вход в панель", "Remnawave", "🔐 Вход в панель: {username}\n🌐 {ip}\n💻 {agent}", []string{"username", "ip", "agent"}},
+	{"rw_login_failed", "Неудачный вход в панель", "Remnawave", "🚫 Неудачная попытка входа в панель: {username}\n🌐 {ip}\n❓ {reason}", []string{"username", "ip", "agent", "reason"}},
+	{"rw_panel_started", "Панель запущена", "Remnawave", "🚀 Панель Remnawave запущена, версия {version}", []string{"version"}},
+	{"rw_billing", "Оплата серверов", "Remnawave", "💳 {provider} · {node}: {when} ({date})", []string{"provider", "node", "when", "date", "url"}},
+	{"rw_error", "Ошибки панели", "Remnawave", "⚠️ Remnawave: {error}", []string{"error"}},
 }
 
 func eventInfo(key string) (EventInfo, bool) {

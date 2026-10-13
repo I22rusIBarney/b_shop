@@ -6,7 +6,7 @@ import (
 )
 
 type BroadcastAudience struct {
-	// all | active | expired | trial | no_sub | never_paid | plan
+	// all | active | expired | trial | no_sub | never_paid | plan | expiring | lead_<temperature>
 	Segment string `json:"segment"`
 	PlanID  int64  `json:"plan_id,omitempty"`
 }
@@ -98,7 +98,9 @@ func audienceWhere() string {
 			AND NOT EXISTS (SELECT 1 FROM subscriptions s WHERE s.customer_id=c.id AND s.status='active' AND s.expires_at > now())) OR
 		($2 = 'no_sub' AND NOT EXISTS (SELECT 1 FROM subscriptions s WHERE s.customer_id=c.id)) OR
 		($2 = 'never_paid' AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.customer_id=c.id AND p.status='succeeded')) OR
-		($2 = 'plan' AND EXISTS (SELECT 1 FROM subscriptions s WHERE s.customer_id=c.id AND s.plan_id=$3 AND s.status='active' AND s.expires_at > now()))
+		($2 = 'plan' AND EXISTS (SELECT 1 FROM subscriptions s WHERE s.customer_id=c.id AND s.plan_id=$3 AND s.status='active' AND s.expires_at > now())) OR
+		($2 = 'expiring' AND EXISTS (SELECT 1 FROM subscriptions s WHERE s.customer_id=c.id AND s.status='active' AND s.expires_at > now() AND s.expires_at <= now() + interval '7 days')) OR
+		($2 LIKE 'lead\_%' AND c.lead_temperature = substr($2, 6))
 	) AND (
 		($4 = 'telegram' AND c.telegram_id IS NOT NULL AND NOT c.bot_blocked) OR
 		($4 = 'email' AND c.email IS NOT NULL) OR

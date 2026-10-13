@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -14,6 +16,7 @@ import (
 	"bshop/internal/bot"
 	"bshop/internal/config"
 	"bshop/internal/db"
+	"bshop/internal/importer"
 	"bshop/internal/mailer"
 	"bshop/internal/remnawave"
 	"bshop/internal/secrets"
@@ -21,6 +24,8 @@ import (
 	"bshop/internal/settings"
 	"bshop/internal/store"
 	"bshop/web"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 var Version = "dev"
@@ -70,6 +75,10 @@ func run(log *slog.Logger) error {
 		Log:      log,
 	}
 
+	if len(os.Args) > 1 && os.Args[1] == "import-rwp" {
+		return importRWP(ctx, svc, pool, os.Args[2:])
+	}
+
 	api.Version = Version
 	srv := api.New(svc, web.FS(), log)
 
@@ -110,4 +119,47 @@ func run(log *slog.Logger) error {
 	shutdown, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	return httpSrv.Shutdown(shutdown)
+}
+
+// importRWP: bshop import-rwp --from postgres://… [--dry-run] [--bot N] [--force] [--no-sync]
+func importRWP(ctx context.Context, svc *service.Service, dst *pgxpool.Pool, args []string) error {
+	fs := flag.NewFlagSet("import-rwp", flag.ContinueOnError)
+	from := fs.String("from", "", "адрес базы RWP, postgres://user:pass@host:5432/db")
+	dry := fs.Bool("dry-run", false, "только показать, что будет перенесено (ничего не записывается)")
+	bot := fs.Int64("bot", 0, "перенести только один бот RWP (id из таблицы bot), 0 — все")
+	force := fs.Bool("force", false, "разрешить импорт в базу, где уже есть клиенты")
+	noSync := fs.Bool("no-sync", false, "не обновлять подписки из панели Remnawave после импорта")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *from == "" {
+		return errors.New("укажите --from postgres://…")
+	}
+	src, err := db.Open(ctx, *from)
+	if err != nil {
+		return fmt.Errorf("база RWP: %w", err)
+	}
+	defer src.Close()
+	rep, err := importer.Run(ctx, src, dst, importer.Options{DryRun: *dry, BotID: *bot, Force: *force})
+	if rep != nil {
+		fmt.Print(rep.String())
+	}
+	if err != nil {
+		return err
+	}
+	if *dry {
+		fmt.Println("\nПробный прогон: ничего не записано. Уберите --dry-run, чтобы перенести.")
+		return nil
+	}
+	fmt.Println("\nДанные перенесены.")
+	if *noSync || svc.Cfg.RemnawaveURL == "" {
+		return nil
+	}
+	fmt.Println("Обновляю подписки из панели Remnawave…")
+	n, problems, err := svc.SyncFromPanel(ctx, func(done, total int) { fmt.Printf("  %d / %d\n", done, total) })
+	fmt.Printf("Обновлено подписок: %d\n", n)
+	for _, p := range problems {
+		fmt.Println("  - " + p)
+	}
+	return err
 }

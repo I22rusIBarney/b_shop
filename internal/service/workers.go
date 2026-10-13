@@ -154,7 +154,10 @@ func (s *Service) RunWorkers(ctx context.Context) {
 	every(time.Minute, "payments", s.ReconcilePayments)
 	every(30*time.Second, "receipts", s.ProcessReceipts)
 	every(10*time.Minute, "autopay", s.RunAutopay)
-	every(time.Hour, "purge", func(ctx context.Context) { _ = store.PurgeExpired(ctx, s.Store.Pool) })
+	every(time.Hour, "purge", func(ctx context.Context) {
+		_ = store.PurgeExpired(ctx, s.Store.Pool)
+		s.CleanWebhookLog(ctx)
+	})
 	every(10*time.Second, "ai", s.ProcessAI)
 	every(15*time.Second, "reply-notices", s.ProcessReplyNotices)
 	every(5*time.Minute, "ticket-timers", s.ProcessTicketTimers)

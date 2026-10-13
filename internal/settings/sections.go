@@ -27,6 +27,8 @@ type All struct {
 	AI            AI            `json:"ai"`
 	Automations   Automations   `json:"automations"`
 	Broadcasts    Broadcasts    `json:"broadcasts"`
+
+	Webhooks Webhooks `json:"webhooks"`
 }
 
 func Defaults() All {
@@ -96,6 +98,7 @@ func Defaults() All {
 		Support:       defaultSupport(),
 		AI:            defaultAI(),
 		Automations:   defaultAutomations(),
+		Webhooks:      defaultWebhooks(),
 		Broadcasts:    Broadcasts{RatePerSecond: 20},
 	}
 }
