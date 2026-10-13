@@ -61,6 +61,10 @@
   update/backup/restore/logs…), cron-бэкап. Образ собирает GitHub Actions (.github/workflows/image.yml) → ghcr.io/i22rusibarney/b_shop.
   Кнопка меню бота ставится сама (SetChatMenuButton в bot.Run).
 
+- 14.10.2026: главная на один экран (.app:has(> .home) — flex по --tg-viewport-stable-height), установка: обзор с
+  автоопределением устройства → шаги (Install.tsx нормализует конфиг Remnawave и ручной список в GPlatform/GStep),
+  ссылки happ:// и т.п. из Telegram идут через GET /open?to=… (internal/api/openapp.go).
+
 ## Дальше
 - Боевой переезд по docs/MIGRATION.md на тестовом стенде Алексея; проверить на реальных ЮKassa/Remnawave.
 - Не сделано: тексты бота из translations RWP, предложения статей БЗ из тикетов, abuse-детектор (много IP).
