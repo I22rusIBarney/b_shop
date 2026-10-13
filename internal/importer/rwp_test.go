@@ -19,11 +19,13 @@ INSERT INTO bot (id, type, tg_username) VALUES (1, 'main', 'bobrevpn_bot');
 INSERT INTO plan (id, name, type, traffic_limit, device_limit, is_active, is_default, internal_squads, remnawave_tag, sort_order, traffic_limit_strategy, allow_extra_devices, max_total_devices)
 VALUES (1, '🟤 Бобрёнок', 'subscription', 0, 3, true, true, '["11111111-1111-1111-1111-111111111111"]', 'BOBR', 1, 'MONTH', true, 6),
        (2, '🟣 Бобр Мастер', 'subscription', 75, 3, true, false, '', '', 2, 'NO_RESET', false, 0),
-       (8, 'Трафик', 'traffic', 0, 1, true, false, '', '', 9, 'MONTH', false, 0);
+       (8, 'Трафик', 'traffic', 0, 1, true, false, '', '', 9, 'MONTH', false, 0),
+       (9, '🔵 Для своих', 'subscription', 0, 5, true, false, '', '', 3, 'MONTH', false, 0);
+UPDATE plan SET is_hidden = (id = 9);
 INSERT INTO plan_prices (plan_id, price, currency, period_value, period_unit, is_active, price_type, is_highlighted) VALUES
  (1, 299.00, 'RUB', 1, 'months', true, 'base', false), (1, 840.00, 'RUB', 3, 'months', true, 'base', true),
  (1, 50.00, 'RUB', 1, 'months', true, 'extra_device', false),
- (2, 180.00, 'RUB', 1, 'months', true, 'base', false), (8, 60.00, 'RUB', NULL, NULL, true, NULL, false);
+ (2, 180.00, 'RUB', 1, 'months', true, 'base', false), (9, 150.00, 'RUB', 1, 'months', true, 'base', false), (8, 60.00, 'RUB', NULL, NULL, true, NULL, false);
 INSERT INTO customer (id, telegram_id, email, tg_username, tg_first_name, language, is_blocked, is_blocked_by_user, trial_used, created_at,
   referral_code, lead_temperature, yandex_id, discount_percent, admin_tag, bot_id) VALUES
  ('aaaaaaaa-0000-0000-0000-000000000001', 1001, 'A@Mail.ru', 'alex', 'Алексей', 'ru', false, false, true, now() - interval '200 days', 'ALEX1', 'stable', 'y-1', 10, 'VIP', 1),
@@ -50,7 +52,10 @@ INSERT INTO referral_bonus_history (id, referral_id, purchase_id, bonus_days, is
 INSERT INTO promo (id, code, bonus_days, max_uses, used_count, active, created_at, promo_type, discount_percent, allowed_plans, bot_id) VALUES
  (1, 'BOBR10', 0, 100, 1, true, now() - interval '170 days', 'discount', 10, '[1]', 1),
  (2, 'GIFT7', 7, 0, 0, true, now(), 'bonus', 0, NULL, 1),
- (3, 'OPEN', 0, 0, 0, true, now(), 'unlock_plan', 0, NULL, 1);
+ (3, 'OPEN', 0, 0, 0, true, now(), 'unlock_plan', 0, NULL, 1),
+ (4, 'TRAFFIC5', 0, 0, 0, true, now(), 'traffic', 0, NULL, 1);
+UPDATE promo SET unlocked_plan_id = 9 WHERE id = 3;
+INSERT INTO customer_unlocked_plans (id, plan_id, unlocked_at, promo_id, customer_id) VALUES (1, 9, now() - interval '20 days', 3, 'aaaaaaaa-0000-0000-0000-000000000002');
 INSERT INTO promo_usage (id, promo_id, customer_id, subscription_id, used_at) VALUES (1, 1, 'aaaaaaaa-0000-0000-0000-000000000001', 10, now() - interval '160 days');
 INSERT INTO device_names (subscription_id, hwid, readable_name) VALUES (10, 'hw-1', 'Мой айфон');
 INSERT INTO faq_sections (id, title, sort_order, is_active, bot_id) VALUES (1, 'Подключение', 1, true, 1);
@@ -142,7 +147,8 @@ func TestImportRWP(t *testing.T) {
 		{"referrer", `SELECT count(*) FROM customers c JOIN customers r ON r.id=c.referrer_id WHERE c.username='bob' AND r.username='alex'`, 1},
 		{"bot blocked", `SELECT count(*) FROM customers WHERE username='bob' AND bot_blocked`, 1},
 		{"lead none → empty", `SELECT count(*) FROM customers WHERE username='bob' AND lead_temperature=''`, 1},
-		{"plans", `SELECT count(*) FROM plans`, 3},
+		{"plans", `SELECT count(*) FROM plans`, 4},
+		{"hidden plan", `SELECT count(*) FROM plans WHERE is_hidden`, 1},
 		{"periods in kopecks", `SELECT count(*) FROM plan_periods WHERE price=84000 AND amount=3 AND unit='month' AND is_best`, 1},
 		{"extra device price", `SELECT extra_device_price FROM plans WHERE name='🟤 Бобрёнок'`, 5000},
 		{"squads", `SELECT cardinality(rw_internal_squads) FROM plans WHERE name='🟤 Бобрёнок'`, 1},
@@ -157,7 +163,9 @@ func TestImportRWP(t *testing.T) {
 		{"canceled", `SELECT count(*) FROM payments WHERE status='canceled'`, 1},
 		{"traffic op", `SELECT count(*) FROM payments WHERE operation='traffic' AND months=0`, 1},
 		{"receipt", `SELECT count(*) FROM payments WHERE receipt_status='done' AND receipt_uuid='r1'`, 1},
-		{"promos (unlock skipped)", `SELECT count(*) FROM promo_codes`, 2},
+		{"promos (traffic skipped)", `SELECT count(*) FROM promo_codes`, 3},
+		{"unlock promo", `SELECT count(*) FROM promo_codes c JOIN plans p ON p.id = c.plan_ids[1] WHERE c.code='OPEN' AND c.kind='unlock' AND p.is_hidden`, 1},
+		{"unlocked for bob", `SELECT count(*) FROM unlocked_plans u JOIN customers c ON c.id=u.customer_id WHERE c.username='bob' AND u.promo_id IS NOT NULL`, 1},
 		{"promo plans", `SELECT count(*) FROM promo_codes WHERE code='BOBR10' AND kind='discount' AND value=10 AND cardinality(plan_ids)=1`, 1},
 		{"redemptions", `SELECT count(*) FROM promo_redemptions`, 1},
 		{"bonuses", `SELECT count(*) FROM referral_bonuses`, 3},

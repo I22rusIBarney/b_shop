@@ -17,8 +17,9 @@ ARG VERSION=dev
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.Version=${VERSION}" -o /out/bshop ./cmd/bshop
 
 # --- runtime ---
-FROM alpine:3.20
-RUN apk add --no-cache ca-certificates tzdata && adduser -D -u 1000 app
+FROM alpine:3.21
+# postgresql17-client: pg_restore/psql for importing an RWP database from the admin
+RUN apk add --no-cache ca-certificates tzdata postgresql17-client && adduser -D -u 1000 app
 COPY --from=build /out/bshop /app/bshop
 USER app
 EXPOSE 8080

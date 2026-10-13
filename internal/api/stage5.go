@@ -77,4 +77,29 @@ func (s *Server) stage5Routes(mux *http.ServeMux) {
 	}) (any, error) {
 		return nil, s.svc.TestCustomerWebhook(r.Context(), in.Event, customer(r))
 	}))))
+
+	// ---- admin: import from RWP (chunked upload → restore → dry run → apply) ----
+	mux.HandleFunc("GET /api/admin/import/rwp", s.admin(s.handle(func(r *http.Request) (any, error) {
+		return s.svc.ImportStatus(r.Context()), nil
+	})))
+	mux.HandleFunc("POST /api/admin/import/rwp/chunk", s.admin(s.handle(func(r *http.Request) (any, error) {
+		q := r.URL.Query()
+		size, _ := strconv.ParseInt(q.Get("size"), 10, 64)
+		offset, _ := strconv.ParseInt(q.Get("offset"), 10, 64)
+		return s.svc.ImportChunk(q.Get("name"), size, offset, http.MaxBytesReader(nil, r.Body, 8<<20))
+	})))
+	mux.HandleFunc("POST /api/admin/import/rwp/bot", s.admin(s.handle(withBody(func(r *http.Request, in struct {
+		BotID int64 `json:"bot_id"`
+	}) (any, error) {
+		return s.svc.ImportRecheck(r.Context(), in.BotID)
+	}))))
+	mux.HandleFunc("POST /api/admin/import/rwp/apply", s.admin(s.handle(withBody(func(r *http.Request, in struct {
+		Wipe bool `json:"wipe"`
+	}) (any, error) {
+		return s.svc.ImportApply(r.Context(), in.Wipe)
+	}))))
+	mux.HandleFunc("POST /api/admin/import/rwp/cancel", s.admin(s.handle(func(r *http.Request) (any, error) {
+		s.svc.ImportCancel(r.Context())
+		return s.svc.ImportStatus(r.Context()), nil
+	})))
 }

@@ -26,6 +26,9 @@ type Options struct {
 	BotID int64
 	// Force allows importing into a database that already has customers.
 	Force bool
+	// Wipe deletes customers (with everything that belongs to them), plans, promo codes and FAQ first,
+	// in the same transaction. Settings, branding, automations and broadcasts stay.
+	Wipe bool
 }
 
 // Report says what was imported and what needs a look.
@@ -112,7 +115,7 @@ func (r *run) botFilter(alias string) string {
 // Run imports src into dst.
 func Run(ctx context.Context, src, dst *pgxpool.Pool, opt Options) (*Report, error) {
 	rep := &Report{Counts: map[string]int{}, Unknown: map[string]map[string]int{}}
-	if !opt.Force {
+	if !opt.Force && !opt.Wipe {
 		var n int
 		if err := dst.QueryRow(ctx, `SELECT count(*) FROM customers`).Scan(&n); err != nil {
 			return nil, err
@@ -128,6 +131,13 @@ func Run(ctx context.Context, src, dst *pgxpool.Pool, opt Options) (*Report, err
 	defer tx.Rollback(ctx) //nolint:errcheck
 	r := &run{ctx: ctx, src: src, tx: tx, opt: opt, rep: rep, cust: map[uuid.UUID]int64{}, plan: map[int64]int64{},
 		sub: map[int64]int64{}, pay: map[int64]uuid.UUID{}, promo: map[int64]int64{}, method: map[string]int64{}}
+	if opt.Wipe {
+		for _, q := range []string{`DELETE FROM customers`, `DELETE FROM promo_codes`, `DELETE FROM plans`, `DELETE FROM faq_items`} {
+			if _, err := tx.Exec(ctx, q); err != nil {
+				return nil, fmt.Errorf("очистка: %w", err)
+			}
+		}
+	}
 	steps := []struct {
 		name string
 		fn   func() error
@@ -140,6 +150,7 @@ func Run(ctx context.Context, src, dst *pgxpool.Pool, opt Options) (*Report, err
 		{"платежи", r.purchases},
 		{"смены тарифа", r.planChanges},
 		{"промокоды", r.promos},
+		{"открытые тарифы", r.unlockedPlans},
 		{"реферальные бонусы", r.referralBonuses},
 		{"имена устройств", r.deviceNames},
 		{"FAQ", r.faq},
@@ -941,7 +952,7 @@ func (r *run) planChanges() error {
 
 func (r *run) promos() error {
 	rows, ok := r.query("промокоды", `SELECT id, code, COALESCE(bonus_days,0), COALESCE(max_uses,0), expires_at, COALESCE(active,true), created_at,
-			COALESCE(promo_type,''), COALESCE(discount_percent,0), owner_customer_id, allowed_plans
+			COALESCE(promo_type,''), COALESCE(discount_percent,0), owner_customer_id, allowed_plans, unlocked_plan_id
 		FROM promo pr WHERE `+r.botFilter("pr")+` ORDER BY id`)
 	if !ok {
 		return nil
@@ -958,11 +969,12 @@ func (r *run) promos() error {
 		discount      int
 		owner         *uuid.UUID
 		allowed       []byte
+		unlock        *int64
 	}
 	var list []pr
 	for rows.Next() {
 		var x pr
-		if err := rows.Scan(&x.id, &x.code, &x.days, &x.maxUses, &x.expires, &x.active, &x.created, &x.typ, &x.discount, &x.owner, &x.allowed); err != nil {
+		if err := rows.Scan(&x.id, &x.code, &x.days, &x.maxUses, &x.expires, &x.active, &x.created, &x.typ, &x.discount, &x.owner, &x.allowed, &x.unlock); err != nil {
 			return err
 		}
 		list = append(list, x)
@@ -970,13 +982,20 @@ func (r *run) promos() error {
 	rows.Close()
 	for _, x := range list {
 		kind, value := "", 0
+		var unlockPlans []int64
 		switch {
+		case strings.EqualFold(x.typ, "unlock_plan") || x.unlock != nil:
+			if x.unlock == nil || r.plan[*x.unlock] == 0 {
+				r.rep.warn("промокод %s открывает тариф, которого нет среди перенесённых — не перенесён", x.code)
+				continue
+			}
+			kind, value, unlockPlans = "unlock", 1, []int64{r.plan[*x.unlock]}
 		case x.discount > 0 && x.days == 0:
 			kind, value = "discount", min(x.discount, 100)
 		case x.days > 0:
 			kind, value = "days", x.days
 		default:
-			r.rep.warn("промокод %s (%s) не перенесён: ни скидки, ни дней (трафик/открытие тарифа у нас не поддерживаются)", x.code, x.typ)
+			r.rep.warn("промокод %s (%s) не перенесён: ни скидки, ни дней (промокоды на трафик у нас не поддерживаются)", x.code, x.typ)
 			continue
 		}
 		var plans []int64
@@ -989,6 +1008,9 @@ func (r *run) promos() error {
 					}
 				}
 			}
+		}
+		if unlockPlans != nil {
+			plans = unlockPlans
 		}
 		if plans == nil {
 			plans = []int64{}
@@ -1295,4 +1317,86 @@ func values(m map[int64]int64) []int64 {
 		out = append(out, v)
 	}
 	return out
+}
+
+// unlockedPlans: hidden plans customers opened with promo codes.
+func (r *run) unlockedPlans() error {
+	rows, ok := r.query("открытые тарифы", `SELECT customer_id, plan_id, promo_id, COALESCE(unlocked_at, now()) FROM customer_unlocked_plans`)
+	if !ok {
+		return nil
+	}
+	defer rows.Close()
+	type u struct {
+		cust  uuid.UUID
+		plan  int64
+		promo *int64
+		at    time.Time
+	}
+	var list []u
+	for rows.Next() {
+		var x u
+		if err := rows.Scan(&x.cust, &x.plan, &x.promo, &x.at); err != nil {
+			return err
+		}
+		list = append(list, x)
+	}
+	rows.Close()
+	for _, x := range list {
+		cid, pid := r.cust[x.cust], r.plan[x.plan]
+		if cid == 0 || pid == 0 {
+			continue
+		}
+		var promo *int64
+		if x.promo != nil && r.promo[*x.promo] != 0 {
+			v := r.promo[*x.promo]
+			promo = &v
+		}
+		tag, err := r.tx.Exec(r.ctx, `INSERT INTO unlocked_plans (customer_id, plan_id, promo_id, created_at) VALUES ($1,$2,$3,$4)
+			ON CONFLICT DO NOTHING`, cid, pid, promo, x.at)
+		if err != nil {
+			return err
+		}
+		r.rep.add("открытые скрытые тарифы", int(tag.RowsAffected()))
+	}
+	return nil
+}
+
+// Bot is one bot of an RWP install (partner bots share the database).
+type Bot struct {
+	ID        int64  `json:"id"`
+	Type      string `json:"type"`
+	Username  string `json:"username"`
+	Customers int64  `json:"customers"`
+}
+
+// ListBots returns the bots in an RWP database, with how many customers each has.
+func ListBots(ctx context.Context, src *pgxpool.Pool) ([]Bot, error) {
+	rows, err := src.Query(ctx, `SELECT b.id, COALESCE(b.type,''), COALESCE(b.tg_username,''),
+		(SELECT count(*) FROM customer c WHERE c.bot_id = b.id) FROM bot b ORDER BY b.id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Bot{}
+	for rows.Next() {
+		var b Bot
+		if err := rows.Scan(&b.ID, &b.Type, &b.Username, &b.Customers); err != nil {
+			return nil, err
+		}
+		out = append(out, b)
+	}
+	return out, rows.Err()
+}
+
+// LooksLikeRWP checks that the restored database has RWP's core tables.
+func LooksLikeRWP(ctx context.Context, src *pgxpool.Pool) error {
+	var n int
+	if err := src.QueryRow(ctx, `SELECT count(*) FROM information_schema.tables WHERE table_schema='public'
+		AND table_name IN ('customer','subscription','purchase','plan')`).Scan(&n); err != nil {
+		return err
+	}
+	if n < 4 {
+		return errors.New("в файле нет таблиц RWP Shop (customer, subscription, purchase, plan) — похоже, это не та база")
+	}
+	return nil
 }

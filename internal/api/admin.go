@@ -338,9 +338,10 @@ func (s *Server) adminCustomer(w http.ResponseWriter, r *http.Request) {
 	bonuses, _ := store.ListReferralBonuses(r.Context(), s.svc.Store.Pool, id, 100)
 	changes, _ := store.ListPlanChanges(r.Context(), s.svc.Store.Pool, id)
 	refStats, _ := store.GetReferralStats(r.Context(), s.svc.Store.Pool, id)
+	unlocked, _ := store.UnlockedPlanNames(r.Context(), s.svc.Store.Pool, id)
 	writeJSON(w, http.StatusOK, map[string]any{"customer": c, "subscriptions": subs, "identities": ids, "payments": pays,
 		"events": events, "referrer": referrer, "promos": promos, "bonuses": bonuses, "plan_changes": changes,
-		"referral": refStats})
+		"referral": refStats, "unlocked_plans": unlocked})
 }
 
 func (s *Server) adminCustomerPatch(w http.ResponseWriter, r *http.Request) {

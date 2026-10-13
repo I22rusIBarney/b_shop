@@ -37,6 +37,11 @@ func ValidatePromo(p *store.Promo) error {
 		if p.Value < 1 || p.Value > 3650 {
 			return userErr("бонусные дни от 1 до 3650")
 		}
+	case "unlock":
+		if len(p.PlanIDs) == 0 {
+			return userErr("выберите тарифы, которые откроет промокод")
+		}
+		p.Value = 1
 	default:
 		return userErr("неизвестный тип промокода")
 	}
@@ -62,7 +67,8 @@ type RedeemResult struct {
 	Code           string     `json:"code"`
 	SubscriptionID *int64     `json:"subscription_id,omitempty"`
 	ExpiresAt      *time.Time `json:"expires_at,omitempty"`
-	Pending        bool       `json:"pending"` // days went to the balance (no subscription yet)
+	Pending        bool       `json:"pending"`            // days went to the balance (no subscription yet)
+	PlanIDs        []int64    `json:"plan_ids,omitempty"` // unlock: plans opened
 	Message        string     `json:"message"`
 }
 
@@ -130,6 +136,36 @@ func (s *Service) RedeemPromo(ctx context.Context, c *store.Customer, code strin
 		}
 		res = &RedeemResult{Kind: p.Kind, Value: p.Value, Code: p.Code}
 		r := &store.Redemption{PromoID: p.ID, CustomerID: cust.ID}
+		if p.Kind == "unlock" {
+			if _, err := store.UnlockPlans(ctx, tx, cust.ID, p.PlanIDs, &p.ID); err != nil {
+				return err
+			}
+			names := []string{}
+			rows, err := tx.Query(ctx, `SELECT name FROM plans WHERE id = ANY($1) ORDER BY sort, id`, p.PlanIDs)
+			if err != nil {
+				return err
+			}
+			for rows.Next() {
+				var n string
+				if err := rows.Scan(&n); err != nil {
+					rows.Close()
+					return err
+				}
+				names = append(names, "«"+n+"»")
+			}
+			rows.Close()
+			r.Status = "used"
+			if err := store.InsertRedemption(ctx, tx, r); err != nil {
+				return err
+			}
+			res.PlanIDs = p.PlanIDs
+			if len(names) == 1 {
+				res.Message = "Вам открыт тариф " + names[0] + " — он появился в списке тарифов"
+			} else {
+				res.Message = "Вам открыты тарифы " + strings.Join(names, ", ") + " — они появились в списке тарифов"
+			}
+			return store.AddEvent(ctx, tx, cust.ID, "promo", map[string]any{"code": p.Code, "kind": p.Kind, "value": p.Value, "plans": names}, nil)
+		}
 		if p.Kind == "discount" {
 			r.Status = "reserved"
 			if err := store.InsertRedemption(ctx, tx, r); err != nil {
@@ -172,8 +208,11 @@ func (s *Service) RedeemPromo(ctx context.Context, c *store.Customer, code strin
 		return nil, err
 	}
 	what := fmt.Sprintf("скидка %d%%", res.Value)
-	if res.Kind == "days" {
+	switch res.Kind {
+	case "days":
 		what = "+" + plural(res.Value, "день", "дня", "дней")
+	case "unlock":
+		what = "открытие тарифа"
 	}
 	s.event(ctx, "promo", c, map[string]any{"code": res.Code, "what": what})
 	return res, nil

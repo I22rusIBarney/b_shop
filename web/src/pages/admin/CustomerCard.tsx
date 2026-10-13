@@ -25,6 +25,7 @@ interface Detail {
   bonuses: ReferralBonus[] | null
   plan_changes: PlanChange[] | null
   referral: { invited: number; paid: number; days: number }
+  unlocked_plans: string[] | null
 }
 
 const bonusKind: Record<string, string> = { first: 'за первую оплату реферала', recurring: 'за продление реферала', invitee: 'приглашённому', manual: 'вручную' }
@@ -74,7 +75,7 @@ function eventText(e: Event) {
     case 'referral_manual':
       return `${d.days} дн.`
     case 'promo':
-      return `${d.code} (${d.kind === 'days' ? `+${d.value} дн.` : `−${d.value}%`})`
+      return `${d.code} (${d.kind === 'days' ? `+${d.value} дн.` : d.kind === 'unlock' ? `открыт ${(d.plans || []).join(', ')}` : `−${d.value}%`})`
     case 'plan_change':
       return `${d.from} → ${d.to}, ${modeLabel[d.mode] || d.mode}, ${d.days_before} → ${d.days_after} дн.`
     case 'admin_plan_change':
@@ -306,12 +307,13 @@ export default function CustomerCard() {
               Применить за клиента
             </button>
           </form>
+          {!!data.data.unlocked_plans?.length && <p className="small" style={{ margin: 0 }}>🔓 Открыты скрытые тарифы: {data.data.unlocked_plans.join(', ')}</p>}
           {(promos.length > 0 || bonuses.length > 0 || changes.length > 0) && (
             <div className="list small">
               {promos.map((r) => (
                 <div className="item" key={'p' + r.id}>
                   <span className="grow">
-                    🎟 {r.code} <span className="muted">{r.kind === 'days' ? `+${r.value} дн.` : `−${r.value}%`}</span>
+                    🎟 {r.code} <span className="muted">{r.kind === 'days' ? `+${r.value} дн.` : r.kind === 'unlock' ? 'открытие тарифа' : `−${r.value}%`}</span>
                   </span>
                   <span className={r.status === 'used' ? 'badge ok' : 'badge warn'}>{r.status === 'used' ? 'использован' : 'ждёт оплаты'}</span>
                   <span className="tiny muted">{date(r.created_at)}</span>

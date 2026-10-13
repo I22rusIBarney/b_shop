@@ -129,7 +129,7 @@ func (s *Service) targetProblem(ctx context.Context, c *store.Customer, cur, p *
 	if p.ID == cur.ID || !p.IsActive || p.IsTrial || p.ChangeToDisabled || len(p.Periods) == 0 || p.Kind != "period" {
 		return "-"
 	}
-	if p.IsHidden {
+	if s.planHidden(ctx, c, p) {
 		return "-"
 	}
 	if p.MaxPerCustomer > 0 {

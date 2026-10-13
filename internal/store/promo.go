@@ -277,3 +277,49 @@ func ListPlanChanges(ctx context.Context, db DB, customerID int64) ([]PlanChange
 		FROM plan_changes pc LEFT JOIN plans f ON f.id=pc.from_plan_id LEFT JOIN plans t ON t.id=pc.to_plan_id
 		WHERE pc.customer_id=$1 ORDER BY pc.created_at DESC LIMIT 100`, customerID))
 }
+
+// UnlockedPlans returns the hidden plans a customer has opened with a promo code.
+func UnlockedPlans(ctx context.Context, db DB, customerID int64) (map[int64]bool, error) {
+	rows, err := db.Query(ctx, `SELECT plan_id FROM unlocked_plans WHERE customer_id=$1`, customerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int64]bool{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out[id] = true
+	}
+	return out, rows.Err()
+}
+
+// UnlockPlans opens plans for a customer; returns how many were not open before.
+func UnlockPlans(ctx context.Context, db DB, customerID int64, planIDs []int64, promoID *int64) (int, error) {
+	tag, err := db.Exec(ctx, `INSERT INTO unlocked_plans (customer_id, plan_id, promo_id)
+		SELECT $1, id, $3 FROM plans WHERE id = ANY($2) ON CONFLICT DO NOTHING`, customerID, planIDs, promoID)
+	if err != nil {
+		return 0, err
+	}
+	return int(tag.RowsAffected()), nil
+}
+
+// UnlockedPlanNames lists the customer's opened plans for the admin card.
+func UnlockedPlanNames(ctx context.Context, db DB, customerID int64) ([]string, error) {
+	rows, err := db.Query(ctx, `SELECT p.name FROM unlocked_plans u JOIN plans p ON p.id=u.plan_id WHERE u.customer_id=$1 ORDER BY u.created_at`, customerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []string{}
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			return nil, err
+		}
+		out = append(out, n)
+	}
+	return out, rows.Err()
+}

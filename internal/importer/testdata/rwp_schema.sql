@@ -321,3 +321,10 @@ CREATE TABLE "bot" (
   "total_earned" numeric,
   "total_withdrawn" numeric
 );
+CREATE TABLE "customer_unlocked_plans" (
+  "id" bigint,
+  "plan_id" bigint,
+  "unlocked_at" timestamp with time zone,
+  "promo_id" bigint,
+  "customer_id" uuid
+);

@@ -45,6 +45,15 @@ func applyDiscount(price int64, percent int) int64 {
 	return price * int64(100-percent) / 100
 }
 
+// planHidden: a hidden plan is closed unless the customer opened it with a promo code.
+func (s *Service) planHidden(ctx context.Context, c *store.Customer, p *store.Plan) bool {
+	if !p.IsHidden {
+		return false
+	}
+	open, err := store.UnlockedPlans(ctx, s.Store.Pool, c.ID)
+	return err != nil || !open[p.ID]
+}
+
 // Catalog lists plans the customer can buy now.
 func (s *Service) Catalog(ctx context.Context, c *store.Customer) ([]CatalogPlan, error) {
 	plans, err := store.ListPlans(ctx, s.Store.Pool)
@@ -55,7 +64,10 @@ func (s *Service) Catalog(ctx context.Context, c *store.Customer) ([]CatalogPlan
 	if err != nil {
 		return nil, err
 	}
-	owned := map[int64]bool{}
+	owned, err := store.UnlockedPlans(ctx, s.Store.Pool, c.ID)
+	if err != nil {
+		return nil, err
+	}
 	for _, sb := range subs {
 		if sb.PlanID != nil {
 			owned[*sb.PlanID] = true
@@ -146,12 +158,12 @@ func (s *Service) Buy(ctx context.Context, c *store.Customer, req BuyRequest) (*
 		if samePlan && plan.RenewalDisabled && sub.Kind == "paid" {
 			return nil, userErr("продление этого тарифа отключено")
 		}
-		if !samePlan && plan.IsHidden {
+		if !samePlan && s.planHidden(ctx, c, plan) {
 			return nil, userErr("этот тариф сейчас недоступен")
 		}
 		op = "renew"
 	} else {
-		if plan.IsHidden {
+		if s.planHidden(ctx, c, plan) {
 			return nil, userErr("этот тариф сейчас недоступен")
 		}
 		if err := s.checkNewSubscriptionAllowed(ctx, c, plan); err != nil {

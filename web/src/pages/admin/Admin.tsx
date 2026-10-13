@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { useApp } from '../../lib/app'
 import { Brand } from '../../ui/shell'
-import { Card, Chart, Chat, Gift, Help, Home, Link, List, Menu, News, Palette, Renew, Settings as SettingsIcon, Shield, Tag, Users, Wallet } from '../../ui/icons'
+import { Card, Chart, Chat, Download, Gift, Help, Home, Link, List, Menu, News, Palette, Renew, Settings as SettingsIcon, Shield, Tag, Users, Wallet } from '../../ui/icons'
 import Customers from './Customers'
 import CustomerCard from './CustomerCard'
 import Payments from './Payments'
@@ -18,6 +18,7 @@ import Automations from './Automations'
 import Notifications from './Notifications'
 import Stats from './Stats'
 import Webhooks from './Webhooks'
+import ImportRWP from './ImportRWP'
 import { useBadges } from '../../lib/badges'
 
 const nav = [
@@ -42,6 +43,7 @@ const settingsNav = [
   { to: '/admin/settings/support', label: 'Поддержка и ИИ', icon: Help },
   { to: '/admin/notifications', label: 'Уведомления', icon: Shield },
   { to: '/admin/webhooks', label: 'Вебхуки Remnawave', icon: Link },
+  { to: '/admin/import', label: 'Перенос из RWP', icon: Download },
   { to: '/admin/settings/automations', label: 'Триггеры и рассылки', icon: Renew },
 ]
 
@@ -104,6 +106,7 @@ export default function Admin() {
           <Route path="automations" element={<Automations />} />
           <Route path="notifications" element={<Notifications />} />
           <Route path="webhooks" element={<Webhooks />} />
+          <Route path="import" element={<ImportRWP />} />
           <Route path="settings/:section" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="customers" replace />} />
         </Routes>

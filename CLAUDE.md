@@ -51,6 +51,11 @@
   internal/importer (команда `bshop import-rwp --from DSN [--dry-run]`, одна транзакция, потом SyncFromPanel),
   тест на схеме RWP из testdata; инструкция переезда — docs/MIGRATION.md. Web Push не делали (VAPID не нужен).
 
+- Промокоды kind=unlock открывают скрытые тарифы (plan_ids → таблица unlocked_plans; planHidden в purchase.go).
+  Импорт из админки: Настройки → Перенос из RWP (service/dataimport.go: загрузка частями по 900 КБ, распаковка
+  .dump/.sql/.gz/.tar, pg_restore/psql во временную БД bshop_rwp_import, пробный прогон с Wipe, применение,
+  сессии админа переносятся). В образе нужен postgresql17-client (Dockerfile, alpine 3.21).
+
 ## Дальше
 - Боевой переезд по docs/MIGRATION.md на тестовом стенде Алексея; проверить на реальных ЮKassa/Remnawave.
 - Не сделано: тексты бота из translations RWP, предложения статей БЗ из тикетов, abuse-детектор (много IP).

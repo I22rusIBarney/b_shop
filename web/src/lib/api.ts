@@ -385,20 +385,21 @@ export interface Redemption {
   created_at: string
   used_at: string | null
   code: string
-  kind: 'discount' | 'days'
+  kind: 'discount' | 'days' | 'unlock'
   value: number
   customer?: string
   plan_ids: number[] | null
 }
 
 export interface RedeemResult {
-  kind: 'discount' | 'days'
+  kind: 'discount' | 'days' | 'unlock'
   value: number
   code: string
   subscription_id?: number
   expires_at?: string
   pending: boolean
   message: string
+  plan_ids?: number[]
 }
 
 export interface ReferralBonus {
@@ -432,7 +433,7 @@ export interface ReferralInfo {
 export interface Promo {
   id: number
   code: string
-  kind: 'discount' | 'days'
+  kind: 'discount' | 'days' | 'unlock'
   value: number
   folder: string
   description: string

@@ -38,7 +38,7 @@ const empty: Promo = {
   reserve_hours: 0,
 }
 
-const valueText = (p: Pick<Promo, 'kind' | 'value'>) => (p.kind === 'discount' ? `−${p.value}%` : `+${p.value} дн.`)
+const valueText = (p: Pick<Promo, 'kind' | 'value'>) => (p.kind === 'discount' ? `−${p.value}%` : p.kind === 'unlock' ? 'открывает тариф' : `+${p.value} дн.`)
 
 export default function Promos() {
   const [tab, setTab] = useState<(typeof tabs)[number]['id']>('all')
@@ -79,6 +79,7 @@ export default function Promos() {
           <option value="">Все типы</option>
           <option value="discount">Скидка</option>
           <option value="days">Бонусные дни</option>
+          <option value="unlock">Открытие тарифа</option>
         </select>
       </div>
       <div className="chips">
@@ -227,11 +228,14 @@ function PromoEditor({ promo, plans, folders, onClose, onSaved }: { promo: Promo
             <select className="input" value={p.kind} onChange={(e) => set('kind', e.target.value as Promo['kind'])}>
               <option value="discount">Скидка, %</option>
               <option value="days">Бонусные дни</option>
+              <option value="unlock">Открывает скрытый тариф</option>
             </select>
           </Field>
-          <Field label={p.kind === 'discount' ? 'Скидка, %' : 'Дней'}>
-            <input className="input num" type="number" min={1} max={p.kind === 'discount' ? 100 : 3650} value={p.value} onChange={(e) => set('value', Number(e.target.value))} />
-          </Field>
+          {p.kind !== 'unlock' && (
+            <Field label={p.kind === 'discount' ? 'Скидка, %' : 'Дней'}>
+              <input className="input num" type="number" min={1} max={p.kind === 'discount' ? 100 : 3650} value={p.value} onChange={(e) => set('value', Number(e.target.value))} />
+            </Field>
+          )}
           <Field label="Лимит использований" hint="0 — без лимита">
             <input className="input num" type="number" min={0} value={p.max_uses} onChange={(e) => set('max_uses', Number(e.target.value))} />
           </Field>
@@ -255,15 +259,19 @@ function PromoEditor({ promo, plans, folders, onClose, onSaved }: { promo: Promo
             <input className="input num" type="number" min={0} value={p.reserve_hours} onChange={(e) => set('reserve_hours', Number(e.target.value))} />
           </Field>
         )}
-        <Field label="Тарифы" hint="Не выбрано — любой тариф">
+        <Field
+          label={p.kind === 'unlock' ? 'Какие тарифы откроет' : 'Тарифы'}
+          hint={p.kind === 'unlock' ? 'Клиент, который ввёл код, увидит эти тарифы в списке и сможет их купить. Остальным они не видны, если в тарифе включено «Скрытый».' : 'Не выбрано — любой тариф'}
+        >
           <div className="chips" style={{ flexWrap: 'wrap', marginBottom: 0 }}>
             {plans
-              .filter((x) => !x.is_trial)
+              .filter((x) => !x.is_trial && (p.kind !== 'unlock' || x.is_hidden || p.plan_ids.includes(x.id)))
               .map((x) => {
                 const on = p.plan_ids.includes(x.id)
                 return (
                   <button key={x.id} type="button" className={on ? 'chip on' : 'chip'} onClick={() => set('plan_ids', on ? p.plan_ids.filter((i) => i !== x.id) : [...p.plan_ids, x.id])}>
                     {x.name}
+                    {x.is_hidden && p.kind !== 'unlock' ? ' · скрытый' : ''}
                   </button>
                 )
               })}

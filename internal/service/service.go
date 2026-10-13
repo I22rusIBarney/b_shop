@@ -102,6 +102,9 @@ type Service struct {
 	guideKey   string
 	guideAt    time.Time
 	guideCache json.RawMessage
+
+	importOnce sync.Once
+	imp        *importJob
 }
 
 func (s *Service) set() *settings.All { return s.Settings.Get() }

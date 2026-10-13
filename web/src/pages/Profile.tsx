@@ -304,12 +304,15 @@ function PromoSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const active = useLoad(() => (open ? get<{ active: Redemption[] }>('/api/promo') : Promise.resolve(undefined)), [open])
   const [code, setCode] = useState('')
   const [done, setDone] = useState('')
+  const [unlocked, setUnlocked] = useState(false)
+  const nav = useNavigate()
   const { busy, run } = useAction()
   const apply = () =>
     run(async () => {
       const r = await post<RedeemResult>('/api/promo', { code })
       haptic('success')
       setDone(r.message)
+      setUnlocked(r.kind === 'unlock')
       setCode('')
       active.reload()
     })
@@ -329,6 +332,11 @@ function PromoSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
           </button>
         </div>
         {done && <p className="ok-text">✓ {done}</p>}
+        {unlocked && (
+          <button type="button" className="btn" onClick={() => nav('/buy')}>
+            Посмотреть тариф
+          </button>
+        )}
       </form>
       {active.data && active.data.active.length > 0 && (
         <div className="stack" style={{ marginTop: 18 }}>
