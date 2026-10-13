@@ -2,5 +2,5 @@
 /bshop
 web/node_modules
 web/dist/*
-!web/dist/index.html
+!web/dist/.gitkeep
 web/tsconfig.tsbuildinfo
