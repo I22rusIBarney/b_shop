@@ -1,0 +1,596 @@
+{
+  "kind": "rwp-automations",
+  "version": 1,
+  "exported_at": "2026-10-13T06:21:16.144Z",
+  "sequences": [
+    {
+      "name": "Недавно истёк",
+      "trigger_type": "event",
+      "trigger_factor": "recently_expired",
+      "is_active": true,
+      "cooldown_hours": 168,
+      "skip_if_active_in": [],
+      "schedule_mode": "relative",
+      "loop_count": 1,
+      "shuffle_steps": false,
+      "steps": [
+        {
+          "step_order": 1,
+          "delay_duration": "00:00:00",
+          "template_id": null,
+          "message_content": "Снова приходится ждать загрузки Reels и искать рабочие сервера для Discord? Ваш премиум-доступ отключён. Верните мгновенную загрузку страниц и стабильный пинг в один клик, {first_name}.",
+          "stop_on_purchase": true,
+          "buttons": [],
+          "repeat_count": 1,
+          "repeat_interval": null,
+          "slots": [],
+          "webhook_url": null,
+          "webhook_method": null
+        },
+        {
+          "step_order": 2,
+          "delay_duration": "7 days",
+          "template_id": null,
+          "message_content": "{first_name}, вы остались без премиум-комфорта. Возвращайтесь! Только на 48 часов дарим промокод COMEBACK на скидку 20%.",
+          "stop_on_purchase": true,
+          "buttons": [],
+          "repeat_count": 1,
+          "repeat_interval": null,
+          "slots": [],
+          "webhook_url": null,
+          "webhook_method": null
+        },
+        {
+          "step_order": 3,
+          "delay_duration": "7 days",
+          "template_id": null,
+          "message_content": "Обычный интернет опять тупит, а сервисы не открываются? В такие моменты премиум-VPN спасает ситуацию, направляя трафик в обход проблем провайдера. Ваша высокоскоростная линия ждёт вас, {first_name}.",
+          "stop_on_purchase": true,
+          "buttons": [],
+          "repeat_count": 1,
+          "repeat_interval": null,
+          "slots": [],
+          "webhook_url": null,
+          "webhook_method": null
+        },
+        {
+          "step_order": 4,
+          "delay_duration": "7 days",
+          "template_id": null,
+          "message_content": "{first_name}, ваш доступ истёк. Нашли сервис лучше или просто забыли продлить? Если забыли — восстановите честный безлимит прямо сейчас.",
+          "stop_on_purchase": true,
+          "buttons": [],
+          "repeat_count": 1,
+          "repeat_interval": null,
+          "slots": [],
+          "webhook_url": null,
+          "webhook_method": null
+        }
+      ]
+    },
+    {
+      "name": "Корзина",
+      "trigger_type": "event",
+      "trigger_factor": "abandoned_cart",
+      "is_active": true,
+      "cooldown_hours": 72,
+      "skip_if_active_in": [],
+      "schedule_mode": "relative",
+      "loop_count": 1,
+      "shuffle_steps": false,
+      "steps": [
+        {
+          "step_order": 1,
+          "delay_duration": "00:00:00",
+          "template_id": null,
+          "message_content": "{first_name}, ваш счёт на {plan_name} сформирован, но оплата не прошла. Если банк отклонил карту — нажмите на кнопку поддержки, мы онлайн и быстро поможем.",
+          "stop_on_purchase": true,
+          "buttons": [],
+          "repeat_count": 1,
+          "repeat_interval": null,
+          "slots": [],
+          "webhook_url": null,
+          "webhook_method": null
+        },
+        {
+          "step_order": 2,
+          "delay_duration": "7 days",
+          "template_id": null,
+          "message_content": "{first_name}, вы в одном шаге от премиум-интернета. Чтобы сделать этот шаг приятнее, дарим промокод CART10 на скидку 10%. Он сработает только сегодня при оплате тарифа {plan_name}.",
+          "stop_on_purchase": true,
+          "buttons": [],
+          "repeat_count": 1,
+          "repeat_interval": null,
+          "slots": [],
+          "webhook_url": null,
+          "webhook_method": null
+        },
+        {
+          "step_order": 3,
+          "delay_duration": "7 days",
+          "template_id": null,
+          "message_content": "{first_name}, ваша заявка на тариф {plan_name} скоро будет аннулирована. Завершите оформление сейчас, чтобы закрепить за собой доступ к высокоскоростным серверам без лимитов.",
+          "stop_on_purchase": true,
+          "buttons": [],
+          "repeat_count": 1,
+          "repeat_interval": null,
+          "slots": [],
+          "webhook_url": null,
+          "webhook_method": null
+        },
+        {
+          "step_order": 4,
+          "delay_duration": "7 days",
+          "template_id": null,
+          "message_content": "Оставили покупку на потом, {first_name}? Напоминаем: тариф {plan_name} — это не только YouTube без лагов, но и низкий пинг в играх и быстрый Telegram. Оплатите сейчас и забудьте о зависаниях.",
+          "stop_on_purchase": true,
+          "buttons": [],
+          "repeat_count": 1,
+          "repeat_interval": null,
+          "slots": [],
+          "webhook_url": null,
+          "webhook_method": null
+        }
+      ]
+    },
+    {
+      "name": "Стабильный клиент",
+      "trigger_type": "event",
+      "trigger_factor": "lead_temperature_stable",
+      "is_active": true,
+      "cooldown_hours": 336,
+      "skip_if_active_in": [],
+      "schedule_mode": "relative",
+      "loop_count": 1,
+      "shuffle_steps": false,
+      "steps": [
+        {
+          "step_order": 1,
+          "delay_duration": "00:00:00",
+          "template_id": null,
+          "message_content": "{first_name}, спасибо, что остаётесь с нами! Ваш премиум-доступ работает на полную: безлимит, выделенные каналы и стабильная скорость на всех устройствах.",
+          "stop_on_purchase": false,
+          "buttons": [],
+          "repeat_count": 1,
+          "repeat_interval": null,
+          "slots": [],
+          "webhook_url": null,
+          "webhook_method": null
+        },
+        {
+          "step_order": 2,
+          "delay_duration": "4 days",
+          "template_id": null,
+          "message_content": "{first_name}, пользуетесь на всех устройствах? Премиум работает одновременно на телефоне, компьютере и ТВ. Нужна помощь с настройкой — поддержка всегда на связи.",
+          "stop_on_purchase": false,
+          "buttons": [],
+          "repeat_count": 1,
+          "repeat_interval": null,
+          "slots": [],
+          "webhook_url": null,
+          "webhook_method": null
+        },
+        {
+          "step_order": 3,
+          "delay_duration": "4 days",
+          "template_id": null,
+          "message_content": "{first_name}, нравится сервис? Поделитесь с друзьями по вашей ссылке — за каждого приглашённого получите бонусные дни: {referral_link}",
+          "stop_on_purchase": false,
+          "buttons": [
+            {
+              "text": "Пригласить друзей",
+              "url": "https://t.me/bobrevpn_bot?startapp=referrals"
+            }
+          ],
+          "repeat_count": 1,
+          "repeat_interval": null,
+          "slots": [],
+          "webhook_url": null,
+          "webhook_method": null
+        }
+      ]
+    },
+    {
+      "name": "Холодный лид",
+      "trigger_type": "event",
+      "trigger_factor": "lead_temperature_cold",
+      "is_active": true,
+      "cooldown_hours": 120,
+      "skip_if_active_in": [],
+      "schedule_mode": "relative",
+      "loop_count": 1,
+      "shuffle_steps": false,
+      "steps": [
+        {
+          "step_order": 1,
+          "delay_duration": "00:00:00",
+          "template_id": null,
+          "message_content": "{first_name}, мы держим для вас быстрые серверы без лимитов. Если устали от тормозов и блокировок — премиум-доступ решает это за пару минут.",
+          "stop_on_purchase": false,
+          "buttons": [],
+          "repeat_count": 1,
+          "repeat_interval": null,
+          "slots": [],
+          "webhook_url": null,
+          "webhook_method": null
+        },
+        {
+          "step_order": 2,
+          "delay_duration": "3 days",
+          "template_id": null,
+          "message_content": "{first_name}, премиум-интернет без ограничений всегда под рукой. Когда обычная сеть подведёт — вы знаете, где взять стабильную скорость.",
+          "stop_on_purchase": true,
+          "buttons": [
+            {
+              "text": "Открыть тарифы",
+              "url": "https://t.me/bobrevpn_bot?startapp=plans"
+            }
+          ],
+          "repeat_count": 1,
+          "repeat_interval": null,
+          "slots": [],
+          "webhook_url": null,
+          "webhook_method": null
+        }
+      ]
+    },
+    {
+      "name": "Тёплый лид",
+      "trigger_type": "event",
+      "trigger_factor": "lead_temperature_warm",
+      "is_active": true,
+      "cooldown_hours": 168,
+      "skip_if_active_in": [],
+      "schedule_mode": "relative",
+      "loop_count": 1,
+      "shuffle_steps": false,
+      "steps": [
+        {
+          "step_order": 1,
+          "delay_duration": "00:00:00",
+          "template_id": null,
+          "message_content": "{first_name}, обычный интернет режет скорость и блокирует сервисы. Премиум-VPN ведёт ваш трафик по выделенным каналам — без лимитов и провайдерских ограничений. Расскажем, почему это удобно.",
+          "stop_on_purchase": false,
+          "buttons": [],
+          "repeat_count": 1,
+          "repeat_interval": null,
+          "slots": [],
+          "webhook_url": null,
+          "webhook_method": null
+        },
+        {
+          "step_order": 2,
+          "delay_duration": "3 days",
+          "template_id": null,
+          "message_content": "{first_name}, с премиум-доступом ничего не нужно отключать: банки, маркетплейсы и оплата работают как обычно, а YouTube и Discord — без тормозов. Один сервис на все задачи.",
+          "stop_on_purchase": false,
+          "buttons": [],
+          "repeat_count": 1,
+          "repeat_interval": null,
+          "slots": [],
+          "webhook_url": null,
+          "webhook_method": null
+        },
+        {
+          "step_order": 3,
+          "delay_duration": "3 days",
+          "template_id": null,
+          "message_content": "{first_name}, готовы попробовать интернет без границ? Выберите тариф и подключайтесь — премиум-скорость на всех устройствах уже сегодня.",
+          "stop_on_purchase": true,
+          "buttons": [
+            {
+              "text": "Выбрать тариф",
+              "url": "https://t.me/bobrevpn_bot?startapp=plans"
+            }
+          ],
+          "repeat_count": 1,
+          "repeat_interval": null,
+          "slots": [],
+          "webhook_url": null,
+          "webhook_method": null
+        }
+      ]
+    },
+    {
+      "name": "Реактивация",
+      "trigger_type": "cron",
+      "trigger_factor": "inactive_30d",
+      "is_active": true,
+      "cooldown_hours": 720,
+      "skip_if_active_in": [],
+      "schedule_mode": "relative",
+      "loop_count": 1,
+      "shuffle_steps": false,
+      "steps": [
+        {
+          "step_order": 1,
+          "delay_duration": "00:00:00",
+          "template_id": null,
+          "message_content": "🚀 Многое изменилось. {first_name}, возвращайтесь со скидкой 50% на первый месяц. Оцените, как должен работать настоящий VPN в 2026 году.",
+          "stop_on_purchase": true,
+          "buttons": [],
+          "repeat_count": 1,
+          "repeat_interval": null,
+          "slots": [],
+          "webhook_url": null,
+          "webhook_method": null
+        },
+        {
+          "step_order": 2,
+          "delay_duration": "7 days",
+          "template_id": null,
+          "message_content": "⚡️ {first_name}, мы мощно обновили серверы! Теперь видео в 4K грузятся ещё быстрее, а пинг в онлайн-играх стал стабильнее. Зайдите проверить — всё летает.",
+          "stop_on_purchase": true,
+          "buttons": [],
+          "repeat_count": 1,
+          "repeat_interval": null,
+          "slots": [],
+          "webhook_url": null,
+          "webhook_method": null
+        },
+        {
+          "step_order": 3,
+          "delay_duration": "7 days",
+          "template_id": null,
+          "message_content": "💳 Когда интернет подводит — мы на связи. Заметили, что провайдеры часто сбоят: висят банковские переводы, лагают игры? Наш VPN — это ваша страховка. Верните стабильный интернет со скидкой 20%, {first_name}.",
+          "stop_on_purchase": true,
+          "buttons": [],
+          "repeat_count": 1,
+          "repeat_interval": null,
+          "slots": [],
+          "webhook_url": null,
+          "webhook_method": null
+        },
+        {
+          "step_order": 4,
+          "delay_duration": "7 days",
+          "template_id": null,
+          "message_content": "{first_name}, вы давно не заходили. Если вам больше не нужен стабильный интернет без ограничений, просто проигнорируйте это сообщение. Если нужен — вот промокод MISSYOU на 30% скидку.",
+          "stop_on_purchase": true,
+          "buttons": [],
+          "repeat_count": 1,
+          "repeat_interval": null,
+          "slots": [],
+          "webhook_url": null,
+          "webhook_method": null
+        }
+      ]
+    },
+    {
+      "name": "Скоро истекает",
+      "trigger_type": "cron",
+      "trigger_factor": "expiring_soon",
+      "is_active": true,
+      "cooldown_hours": 168,
+      "skip_if_active_in": [],
+      "schedule_mode": "relative",
+      "loop_count": 1,
+      "shuffle_steps": false,
+      "steps": [
+        {
+          "step_order": 1,
+          "delay_duration": "00:00:00",
+          "template_id": null,
+          "message_content": "{first_name}, через {days_left} дня ваш премиум отключится. Без VPN вернутся зависающие видео, недоступный Telegram и высокий пинг. Продлите тариф {plan_name} прямо сейчас.",
+          "stop_on_purchase": true,
+          "buttons": [],
+          "repeat_count": 1,
+          "repeat_interval": null,
+          "slots": [],
+          "webhook_url": null,
+          "webhook_method": null
+        },
+        {
+          "step_order": 2,
+          "delay_duration": "7 days",
+          "template_id": null,
+          "message_content": "{first_name}, ваш доступ подходит к концу. Чтобы интернет продолжил работать стабильно и без обрывов, выберите удобный тариф для продления.",
+          "stop_on_purchase": true,
+          "buttons": [],
+          "repeat_count": 1,
+          "repeat_interval": null,
+          "slots": [],
+          "webhook_url": null,
+          "webhook_method": null
+        },
+        {
+          "step_order": 3,
+          "delay_duration": "7 days",
+          "template_id": null,
+          "message_content": "{first_name}, до конца вашего доступа осталось {days_left} дня. Тем, кто продлевает подписку заранее, мы даём промокод EARLY15 на скидку. Забирайте и пользуйтесь без пауз!",
+          "stop_on_purchase": true,
+          "buttons": [],
+          "repeat_count": 1,
+          "repeat_interval": null,
+          "slots": [],
+          "webhook_url": null,
+          "webhook_method": null
+        },
+        {
+          "step_order": 4,
+          "delay_duration": "7 days",
+          "template_id": null,
+          "message_content": "К хорошему привыкаешь быстро, верно? С нами у вас всё под рукой: и кино посмотреть, и в игры поиграть без лагов. Через {days_left} дня доступ отключится. Оставьте себе этот комфорт, {first_name}.",
+          "stop_on_purchase": true,
+          "buttons": [],
+          "repeat_count": 1,
+          "repeat_interval": null,
+          "slots": [],
+          "webhook_url": null,
+          "webhook_method": null
+        }
+      ]
+    },
+    {
+      "name": "Триал",
+      "trigger_type": "event",
+      "trigger_factor": "active_trial",
+      "is_active": true,
+      "cooldown_hours": 720,
+      "skip_if_active_in": [],
+      "schedule_mode": "relative",
+      "loop_count": 1,
+      "shuffle_steps": false,
+      "steps": [
+        {
+          "step_order": 1,
+          "delay_duration": "00:00:00",
+          "template_id": null,
+          "message_content": "{first_name}, как вам скорость? Ваш трафик сейчас идёт через премиум-каналы. Заметили, что видео грузятся моментально, а лента не виснет? Мы не режем скорость по вечерам. Оцените этот комфорт по максимуму!",
+          "stop_on_purchase": false,
+          "buttons": [],
+          "repeat_count": 1,
+          "repeat_interval": null,
+          "slots": [],
+          "webhook_url": null,
+          "webhook_method": null
+        },
+        {
+          "step_order": 2,
+          "delay_duration": "7 days",
+          "template_id": null,
+          "message_content": "{first_name}, знаете, что наш VPN не нужно отключать для входа в Сбер или оплаты на маркетплейсах? Привыкайте к удобству — интернет должен быть бесшовным.",
+          "stop_on_purchase": false,
+          "buttons": [],
+          "repeat_count": 1,
+          "repeat_interval": null,
+          "slots": [],
+          "webhook_url": null,
+          "webhook_method": null
+        },
+        {
+          "step_order": 3,
+          "delay_duration": "7 days",
+          "template_id": null,
+          "message_content": "{first_name}, наш VPN идеален для любых задач. Работаете в Figma или ChatGPT? Соединение не оборвётся. Играете по сети? Наши серверы держат стабильно низкий пинг. Пользуйтесь интернетом без границ.",
+          "stop_on_purchase": false,
+          "buttons": [],
+          "repeat_count": 1,
+          "repeat_interval": null,
+          "slots": [],
+          "webhook_url": null,
+          "webhook_method": null
+        },
+        {
+          "step_order": 4,
+          "delay_duration": "7 days",
+          "template_id": null,
+          "message_content": "Бесплатные VPN продают ваши данные и сажают 1000 человек на один сервер. Вы сейчас тестируете премиум: приватность, выделенные каналы и честный безлимит на всё. Почувствуйте разницу, {first_name}.",
+          "stop_on_purchase": true,
+          "buttons": [],
+          "repeat_count": 1,
+          "repeat_interval": null,
+          "slots": [],
+          "webhook_url": null,
+          "webhook_method": null
+        }
+      ]
+    },
+    {
+      "name": "Прохладный лид",
+      "trigger_type": "event",
+      "trigger_factor": "lead_temperature_cool",
+      "is_active": true,
+      "cooldown_hours": 168,
+      "skip_if_active_in": [],
+      "schedule_mode": "relative",
+      "loop_count": 1,
+      "shuffle_steps": false,
+      "steps": [
+        {
+          "step_order": 1,
+          "delay_duration": "00:00:00",
+          "template_id": null,
+          "message_content": "{first_name}, тысячи пользователей уже смотрят 4K, играют без лагов и заходят на любые сервисы через наш VPN. Присоединяйтесь — это проще, чем кажется.",
+          "stop_on_purchase": false,
+          "buttons": [],
+          "repeat_count": 1,
+          "repeat_interval": null,
+          "slots": [],
+          "webhook_url": null,
+          "webhook_method": null
+        },
+        {
+          "step_order": 2,
+          "delay_duration": "3 days",
+          "template_id": null,
+          "message_content": "{first_name}, премиум-VPN — это не про сложные настройки. Установка в пару кликов, и интернет начинает работать так, как должен: быстро и без ограничений.",
+          "stop_on_purchase": false,
+          "buttons": [],
+          "repeat_count": 1,
+          "repeat_interval": null,
+          "slots": [],
+          "webhook_url": null,
+          "webhook_method": null
+        },
+        {
+          "step_order": 3,
+          "delay_duration": "3 days",
+          "template_id": null,
+          "message_content": "{first_name}, дайте себе быстрый и свободный интернет. Откройте тарифы и выберите подходящий — отключиться можно в любой момент.",
+          "stop_on_purchase": true,
+          "buttons": [
+            {
+              "text": "Открыть тарифы",
+              "url": "https://t.me/bobrevpn_bot?startapp=plans"
+            }
+          ],
+          "repeat_count": 1,
+          "repeat_interval": null,
+          "slots": [],
+          "webhook_url": null,
+          "webhook_method": null
+        }
+      ]
+    },
+    {
+      "name": "Горячий лид",
+      "trigger_type": "event",
+      "trigger_factor": "lead_temperature_hot",
+      "is_active": true,
+      "cooldown_hours": 72,
+      "skip_if_active_in": [],
+      "schedule_mode": "relative",
+      "loop_count": 1,
+      "shuffle_steps": false,
+      "steps": [
+        {
+          "step_order": 1,
+          "delay_duration": "00:00:00",
+          "template_id": null,
+          "message_content": "{first_name}, вы в шаге от премиум-интернета без лимитов и тормозов. Самое время оформить доступ — видео, игры и Telegram будут летать. Откройте тарифы и выберите свой.",
+          "stop_on_purchase": true,
+          "buttons": [
+            {
+              "text": "Выбрать тариф",
+              "url": "https://t.me/bobrevpn_bot?startapp=plans"
+            }
+          ],
+          "repeat_count": 1,
+          "repeat_interval": null,
+          "slots": [],
+          "webhook_url": null,
+          "webhook_method": null
+        },
+        {
+          "step_order": 2,
+          "delay_duration": "2 days",
+          "template_id": null,
+          "message_content": "{first_name}, премиум-скорость всё ещё ждёт вас. Один платёж — и забываете о буферизации, обрывах и заблокированных сервисах. Не откладывайте, оформите доступ сейчас.",
+          "stop_on_purchase": true,
+          "buttons": [
+            {
+              "text": "Выбрать тариф",
+              "url": "https://t.me/bobrevpn_bot?startapp=plans"
+            }
+          ],
+          "repeat_count": 1,
+          "repeat_interval": null,
+          "slots": [],
+          "webhook_url": null,
+          "webhook_method": null
+        }
+      ]
+    }
+  ]
+}
