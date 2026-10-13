@@ -15,6 +15,7 @@
     "@fontsource/unbounded": "5.2.6",
     "@kastov/cryptohapp": "1.1.2",
     "dompurify": "3.2.6",
+    "jsencrypt": "3.5.4",
     "qrcode": "1.5.4",
     "react": "19.1.0",
     "react-dom": "19.1.0",

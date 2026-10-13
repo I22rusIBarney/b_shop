@@ -71,8 +71,8 @@ export default function Payments() {
         </div>
       ) : (
         <>
-          <div className="table-wrap">
-            <table className="t">
+          <div className="table-wrap stack-sm">
+            <table className="t stack-sm">
               <thead>
                 <tr>
                   <th>Дата</th>
@@ -86,17 +86,17 @@ export default function Payments() {
               <tbody>
                 {data.data.items.map((p) => (
                   <tr key={p.id} className="click" onClick={() => setOpen(p)}>
-                    <td className="num muted">{dateTime(p.created_at)}</td>
-                    <td>{p.customer_name || `#${p.customer_id}`}</td>
-                    <td>
+                    <td className="num muted wide small">{dateTime(p.created_at)}</td>
+                    <td className="wide lead cell-title">{p.customer_name || `#${p.customer_id}`}</td>
+                    <td className="wide">
                       {operationName[p.operation] || p.operation}: {p.title}
                       <div className="tiny muted">{p.days} дн. · {p.method || p.provider}</div>
                     </td>
-                    <td className="num">{rub(p.amount)}</td>
-                    <td>
+                    <td className="num" data-label="Сумма">{rub(p.amount)}</td>
+                    <td data-label="Статус">
                       <span className={p.status === 'succeeded' ? 'badge ok' : p.status === 'pending' ? 'badge warn' : p.status === 'refunded' ? 'badge bad' : 'badge'}>{paymentStatus[p.status]}</span>
                     </td>
-                    <td className={p.receipt_status === 'failed' ? 'err' : 'muted'}>{receiptName[p.receipt_status] || p.receipt_status}</td>
+                    <td className={p.receipt_status === 'failed' ? 'err' : 'muted'} data-label="Чек">{receiptName[p.receipt_status] || p.receipt_status}</td>
                   </tr>
                 ))}
               </tbody>

@@ -174,8 +174,8 @@ export default function Webhooks() {
         {!log.data.items.length ? (
           <p className="muted small">Пусто. Когда панель пришлёт первое событие, оно появится здесь.</p>
         ) : (
-          <div className="table-wrap">
-            <table className="t">
+          <div className="table-wrap stack-sm">
+            <table className="t stack-sm">
               <thead>
                 <tr>
                   <th>Когда</th>
@@ -187,10 +187,10 @@ export default function Webhooks() {
               <tbody>
                 {log.data.items.map((x) => (
                   <tr key={x.id}>
-                    <td style={{ whiteSpace: "nowrap" }}>{dateTime(x.created_at)}</td>
-                    <td className="tiny" style={{ fontFamily: "var(--mono)" }}>{x.event}</td>
-                    <td>{x.customer_id ? <Link to={`/admin/customers/${x.customer_id}`}>{x.summary || `#${x.customer_id}`}</Link> : x.summary || '—'}</td>
-                    <td>
+                    <td className="muted" style={{ whiteSpace: "nowrap" }} data-label="Когда">{dateTime(x.created_at)}</td>
+                    <td className="tiny wide lead" style={{ fontFamily: "var(--mono)" }}>{x.event}</td>
+                    <td className="wide" data-label="Кто">{x.customer_id ? <Link to={`/admin/customers/${x.customer_id}`}>{x.summary || `#${x.customer_id}`}</Link> : x.summary || '—'}</td>
+                    <td data-label="Что сделали">
                       <span className={x.result === 'клиенту' || x.result.endsWith('админам') ? 'badge ok' : x.result.startsWith('ошибка') ? 'badge bad' : 'badge'}>{x.result}</span>
                     </td>
                   </tr>

@@ -149,8 +149,8 @@ export default function Automations() {
           <p className="small">Импортируйте экспорт из RWP или создайте сценарий вручную.</p>
         </div>
       ) : (
-        <div className="table-wrap">
-          <table className="t">
+        <div className="table-wrap stack-sm">
+          <table className="t stack-sm">
             <thead>
               <tr>
                 <th>Сценарий</th>
@@ -166,22 +166,22 @@ export default function Automations() {
             <tbody>
               {d.items.map((a) => (
                 <tr key={a.id}>
-                  <td>
-                    <b>{a.name}</b>
+                  <td className="wide">
+                    <b className="cell-title">{a.name}</b>
                     <div className="tiny muted">повтор не чаще чем раз в {a.cooldown_hours} ч</div>
                   </td>
-                  <td>
+                  <td className="wide" data-label="Триггер">
                     {trig(a.trigger_factor)?.title || a.trigger_factor}
                     <div className="tiny muted">{a.trigger_type === 'cron' ? 'по расписанию' : 'по событию'}</div>
                   </td>
-                  <td className="num">{a.steps.length}</td>
-                  <td className="num">{a.stats?.active || 0}</td>
-                  <td className="num">{a.stats?.sent || 0}</td>
-                  <td className="num">{a.stats?.runs ? Math.round(((a.stats.converted || 0) / a.stats.runs) * 100) : 0}%</td>
-                  <td>
+                  <td className="num" data-label="Шагов">{a.steps.length}</td>
+                  <td className="num" data-label="В цепочке">{a.stats?.active || 0}</td>
+                  <td className="num" data-label="Отправлено">{a.stats?.sent || 0}</td>
+                  <td className="num" data-label="Конверсия">{a.stats?.runs ? Math.round(((a.stats.converted || 0) / a.stats.runs) * 100) : 0}%</td>
+                  <td data-label="Включён">
                     <Toggle checked={a.is_active} onChange={(v) => run(async () => (await post(`/api/admin/automations/${a.id}/active`, { on: v }), await data.reload()))} label="" />
                   </td>
-                  <td>
+                  <td className="actions">
                     <div className="row" style={{ gap: 4 }}>
                       <button className="icon-btn" onClick={() => setEdit(structuredClone(a))} aria-label="Изменить">
                         <Pencil />

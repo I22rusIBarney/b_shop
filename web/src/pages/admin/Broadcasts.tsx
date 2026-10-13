@@ -235,8 +235,8 @@ export default function Broadcasts() {
           <p className="small">Отправленные рассылки появляются у клиентов в ленте «Новости».</p>
         </div>
       ) : (
-        <div className="table-wrap">
-          <table className="t">
+        <div className="table-wrap stack-sm">
+          <table className="t stack-sm">
             <thead>
               <tr>
                 <th>Рассылка</th>
@@ -253,22 +253,22 @@ export default function Broadcasts() {
                 const editable = x.status === 'draft' || x.status === 'scheduled'
                 return (
                   <tr key={x.id} className={editable ? 'click' : undefined} onClick={() => editable && setB(x)}>
-                    <td style={{ maxWidth: 360 }}>
-                      <div className="ellipsis">{x.title || '(без заголовка)'}</div>
+                    <td className="wide" style={{ maxWidth: 360 }}>
+                      <div className="ellipsis cell-title">{x.title || '(без заголовка)'}</div>
                       <div className="tiny muted">{segments[x.audience.segment]} · {x.channel === 'telegram' ? 'Telegram' : x.channel === 'email' ? 'почта' : 'Telegram/почта'}</div>
                     </td>
-                    <td>
+                    <td data-label="Статус">
                       <span className={cls}>{label}</span>
                     </td>
-                    <td className="num">
+                    <td className="num" data-label="Доставлено">
                       {x.sent}/{x.total}
                       {x.failed > 0 && <span className="tiny muted"> · ошибок {x.failed}</span>}
                     </td>
-                    <td className="muted">{dateTime(x.finished_at || x.scheduled_at || x.created_at)}</td>
-                    <td onClick={(e) => e.stopPropagation()}>
+                    <td className="muted" data-label="Когда">{dateTime(x.finished_at || x.scheduled_at || x.created_at)}</td>
+                    <td data-label="В новостях" onClick={(e) => e.stopPropagation()}>
                       <Toggle checked={x.show_in_news} onChange={(v) => run(async () => (await post(`/api/admin/broadcasts/${x.id}/news`, { on: v }), await list.reload()))} label="" />
                     </td>
-                    <td onClick={(e) => e.stopPropagation()}>
+                    <td className="actions" onClick={(e) => e.stopPropagation()}>
                       {x.status === 'sending' || x.status === 'scheduled' ? (
                         <button className="btn ghost small" disabled={busy} onClick={() => run(async () => (await post(`/api/admin/broadcasts/${x.id}/cancel`), await list.reload()), 'Остановлено')}>
                           Остановить

@@ -52,7 +52,7 @@ export default function Support() {
 
   return (
     <div className="stack lg">
-      <div className="spread">
+      <div className="spread wrap">
         <h1>Поддержка</h1>
         <button className="btn small" onClick={() => setCreating(true)}>
           <Plus /> Новое обращение
@@ -81,19 +81,19 @@ export default function Support() {
             {shown.map((t) => {
               const [label, cls] = customerTicketStatus[t.status]
               return (
-                <div key={t.id} className="item item-link" onClick={() => nav(`/support/${t.id}`)}>
+                <Link key={t.id} className="item item-link" to={`/support/${t.id}`}>
                   <div className="grow" style={{ minWidth: 0 }}>
-                    <div className="row" style={{ gap: 8 }}>
-                      <b className="ellipsis">{t.subject}</b>
+                    <b className="item-title">{t.subject}</b>
+                    <div className="item-meta tiny muted">
+                      <span className="num">
+                        #{t.id} · {relative(t.updated_at)}
+                      </span>
+                      <span className={cls}>{label}</span>
                       {t.unread_customer && <span className="unread-dot" aria-label="новый ответ" />}
                     </div>
-                    <div className="tiny muted">
-                      #{t.id} · {relative(t.updated_at)}
-                    </div>
                   </div>
-                  <span className={cls}>{label}</span>
                   <Chevron className="chev" />
-                </div>
+                </Link>
               )
             })}
           </div>

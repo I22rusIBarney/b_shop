@@ -93,8 +93,8 @@ export default function Customers() {
         </div>
       ) : (
         <>
-          <div className="table-wrap">
-            <table className="t">
+          <div className="table-wrap stack-sm">
+            <table className="t stack-sm">
               <thead>
                 <tr>
                   <th>Клиент</th>
@@ -108,9 +108,9 @@ export default function Customers() {
               <tbody>
                 {data.data.items.map((c) => (
                   <tr key={c.id} className="click" onClick={() => nav(`/admin/customers/${c.id}`)}>
-                    <td>
-                      <div className="row" style={{ gap: 8 }}>
-                        <span>{name(c)}</span>
+                    <td className="wide">
+                      <div className="row wrap" style={{ gap: 6 }}>
+                        <span className="cell-title">{name(c)}</span>
                         {c.is_admin && <span className="badge accent">админ</span>}
                         {c.bot_blocked && <span className="badge warn">бот заблокирован</span>}
                         {c.is_blocked && <span className="badge bad">заблокирован</span>}
@@ -118,15 +118,15 @@ export default function Customers() {
                       </div>
                       <div className="tiny muted">{[c.telegram_id, c.username && `@${c.username}`, c.email].filter(Boolean).join(' · ')}</div>
                     </td>
-                    <td className="num">
+                    <td className="num" data-label="Подписка до">
                       {c.expires_at ? <span style={{ color: new Date(c.expires_at) < new Date() ? 'var(--danger)' : undefined }}>{shortDate(c.expires_at)}</span> : <span className="muted">—</span>}
                     </td>
-                    <td className="num">
+                    <td className="num" data-label="Оплачено">
                       {rub(c.paid_total)} <span className="tiny muted">({c.payments_count})</span>
                     </td>
-                    <td className="num">{c.ref_count || <span className="muted">—</span>}</td>
-                    <td className="muted">{relative(c.last_seen_at)}</td>
-                    <td className="muted num">{shortDate(c.created_at)}</td>
+                    <td className="num" data-label="Рефералы">{c.ref_count || <span className="muted">—</span>}</td>
+                    <td className="muted" data-label="Активность">{relative(c.last_seen_at)}</td>
+                    <td className="muted num" data-label="Создан">{shortDate(c.created_at)}</td>
                   </tr>
                 ))}
               </tbody>
