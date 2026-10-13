@@ -75,6 +75,8 @@ func Defaults() All {
 			PWAName:      "BobrGO",
 			PWAShortName: "BobrGO",
 			Effect:       "none",
+			HeroSpace:    290,
+			BgDim:        25,
 		},
 		Links:   Links{Items: []Link{}},
 		Install: Install{Source: "remnawave", Apps: []InstallApp{}},
@@ -354,6 +356,12 @@ type Branding struct {
 	PWAShortName  string `json:"pwa_short_name"`
 	PWAIconFile   string `json:"pwa_icon_file"`
 	Effect        string `json:"effect"` // none | snow | leaves | halloween
+	// ShowHeader shows logo + name above the content; off when the background already carries the brand.
+	ShowHeader bool `json:"show_header"`
+	// HeroSpace leaves this many px empty at the top of the home and login screens so the background art shows.
+	HeroSpace int `json:"hero_space"`
+	// BgDim darkens the background (0..90 %) to keep text readable.
+	BgDim int `json:"bg_dim"`
 }
 
 func validColor(c string) bool {
@@ -380,6 +388,12 @@ func (b *Branding) Validate() error {
 	}
 	if b.CardBlur < 0 || b.CardBlur > 40 {
 		return errors.New("размытие — от 0 до 40")
+	}
+	if b.HeroSpace < 0 || b.HeroSpace > 600 {
+		return errors.New("отступ сверху — от 0 до 600 px")
+	}
+	if b.BgDim < 0 || b.BgDim > 90 {
+		return errors.New("затемнение фона — от 0 до 90%")
 	}
 	if b.BgFit != "contain" {
 		b.BgFit = "cover"

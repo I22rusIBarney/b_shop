@@ -45,7 +45,7 @@ export default function Admin() {
         <strong>Админка</strong>
       </header>
       <nav className={open ? 'admin-nav open' : 'admin-nav'} aria-label="Админка" onClick={(e) => e.target === e.currentTarget && setOpen(false)}>
-        <Brand />
+        <Brand always />
         {nav.map((n) => (
           <NavLink key={n.to} to={n.to}>
             <n.icon />

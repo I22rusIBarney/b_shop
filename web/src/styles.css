@@ -75,7 +75,7 @@ p { margin: 0; }
 /* ---------- background ---------- */
 .backdrop { position: fixed; inset: 0; z-index: -1; overflow: hidden; background: var(--bg); }
 .backdrop img, .backdrop video { width: 100%; height: 100%; object-fit: var(--bg-fit, cover); }
-.backdrop::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, color-mix(in srgb, var(--bg) 62%, transparent) 0%, color-mix(in srgb, var(--bg) 30%, transparent) 45%, var(--bg) 100%); }
+.backdrop::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, color-mix(in srgb, var(--bg) var(--bg-dim, 25%), transparent) 0%, color-mix(in srgb, var(--bg) var(--bg-dim, 25%), transparent) 45%, var(--bg) 100%); }
 .backdrop .desktop { display: none; }
 @media (min-width: 900px) {
   .backdrop .desktop { display: block; }
@@ -84,6 +84,7 @@ p { margin: 0; }
 
 /* ---------- client shell ---------- */
 .app { max-width: 560px; margin: 0 auto; padding: calc(16px + var(--safe-top)) 16px calc(96px + var(--safe-bottom)); }
+.hero-space { pointer-events: none; }
 .brand { display: flex; align-items: center; gap: 12px; margin: 4px 0 20px; }
 .brand img { width: 44px; height: 44px; border-radius: 14px; object-fit: cover; }
 .brand-name { font-family: var(--display); font-weight: 700; font-size: 1.25rem; letter-spacing: -0.02em; }

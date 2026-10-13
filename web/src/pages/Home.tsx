@@ -6,6 +6,7 @@ import { bytes, date, plural, relative, timeLeft } from '../lib/format'
 import { haptic, openLink } from '../lib/tg'
 import { Copy, Download, Phone, Plus, Renew, Trash } from '../ui/icons'
 import { ErrorBox, PageLoader, Sheet, copy, useAction, useLoad, useToast } from '../ui/kit'
+import { HeroSpace } from '../ui/shell'
 
 export default function Home() {
   const { me, config, refreshMe } = useApp()
@@ -44,6 +45,7 @@ export default function Home() {
   if (list.length === 0)
     return (
       <div className="stack lg">
+        <HeroSpace />
         {banner}
         <div className="card stack lg">
           <div className="stack">
@@ -65,6 +67,7 @@ export default function Home() {
   const current = list.find((s) => s.id === sel) || list.find((s) => s.is_primary) || list[0]
   return (
     <div className="stack lg">
+      <HeroSpace />
       {banner}
       {list.length > 1 || current ? (
         <div className="chips" role="tablist">

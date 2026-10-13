@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { api, get, put } from '../../lib/api'
 import { useApp } from '../../lib/app'
 import { applyBranding } from '../../lib/theme'
-import { ErrorBox, Field, Spinner, useAction, useLoad, useToast } from '../../ui/kit'
+import { ErrorBox, Field, Spinner, Toggle, useAction, useLoad, useToast } from '../../ui/kit'
 
 interface B {
   title: string
@@ -26,6 +26,9 @@ interface B {
   pwa_short_name: string
   pwa_icon_file: string
   effect: string
+  show_header: boolean
+  hero_space: number
+  bg_dim: number
 }
 
 const colorFields: [keyof B, string][] = [
@@ -82,8 +85,10 @@ function Preview({ b }: { b: B }) {
   return (
     <div className="preview-phone" style={style} aria-label="Предпросмотр">
       {<img src={b.bg_mobile_file ? `/files/${b.bg_mobile_file}` : '/bg-default.webp'} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: b.bg_fit as any, opacity: b.bg_opacity / 100 }} />}
+      <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(180deg, color-mix(in srgb, ${b.background} ${b.bg_dim}%, transparent), color-mix(in srgb, ${b.background} ${b.bg_dim}%, transparent) 45%, ${b.background})` }} />
       <div style={{ position: 'relative', padding: 14, fontSize: 13 }}>
-        <div className="brand" style={{ marginBottom: 12 }}>
+        {!b.show_header && <div style={{ height: Math.round(b.hero_space * 0.72) }} />}
+        <div className="brand" style={{ marginBottom: 12, display: b.show_header ? 'flex' : 'none' }}>
           <img src={b.logo_file ? `/files/${b.logo_file}` : '/logo-default.png'} alt="" style={{ width: 34, height: 34, borderRadius: 10 }} />
           <div>
             <div className="brand-name" style={{ fontSize: 15 }}>{b.title}</div>
@@ -204,6 +209,7 @@ export default function BrandingPage() {
                 <input className="input" value={b.tagline} onChange={(e) => set('tagline', e.target.value)} />
               </Field>
             </div>
+            <Toggle checked={b.show_header} onChange={(v) => set('show_header', v)} label="Показывать логотип и название над содержимым" hint="Выключите, если бренд уже есть на фоновой картинке" />
             <FilePick label="Логотип" hint="Квадратный PNG, SVG или WebP. Не задан — щит BobrGO" value={b.logo_file} accept="image/*" onChange={(v) => set('logo_file', v)} />
           </section>
 
@@ -239,6 +245,12 @@ export default function BrandingPage() {
               </Field>
               <Field label={`Видимость фона: ${b.bg_opacity}%`}>
                 <input type="range" min={0} max={100} value={b.bg_opacity} onChange={(e) => set('bg_opacity', Number(e.target.value))} />
+              </Field>
+              <Field label={`Затемнение фона: ${b.bg_dim}%`}>
+                <input type="range" min={0} max={90} value={b.bg_dim} onChange={(e) => set('bg_dim', Number(e.target.value))} />
+              </Field>
+              <Field label={`Отступ сверху: ${b.hero_space}px`} hint="Чтобы логотип на фоне был виден над карточкой подписки">
+                <input type="range" min={0} max={600} step={10} value={b.hero_space} onChange={(e) => set('hero_space', Number(e.target.value))} disabled={b.show_header} />
               </Field>
               <Field label="Сезонный эффект">
                 <select className="input" value={b.effect} onChange={(e) => set('effect', e.target.value)}>

@@ -17,7 +17,7 @@ function Media({ src, className }: { src: string; className: string }) {
 export function Backdrop({ b }: { b: Branding }) {
   if (!b.bg_mobile && !b.bg_desktop) return <div className="backdrop" />
   return (
-    <div className="backdrop" style={{ opacity: b.bg_opacity / 100, ['--bg-fit' as any]: b.bg_fit }}>
+    <div className="backdrop" style={{ opacity: b.bg_opacity / 100, ['--bg-fit' as any]: b.bg_fit, ['--bg-dim' as any]: `${b.bg_dim}%` }}>
       {b.bg_desktop && <Media src={b.bg_desktop} className="desktop" />}
       <Media src={b.bg_mobile || b.bg_desktop} className="mobile" />
     </div>
@@ -54,9 +54,19 @@ export function Effect({ kind }: { kind: string }) {
   )
 }
 
-export function Brand() {
+/** Space at the top of home/login so the brand in the background art stays visible. */
+export function HeroSpace() {
   const { config } = useApp()
   const b = config.branding
+  if (b.show_header || !b.hero_space) return null
+  return <div className="hero-space" style={{ height: b.hero_space }} aria-hidden="true" />
+}
+
+/** Logo + name. In the client shell it is shown only when enabled in branding. */
+export function Brand({ always }: { always?: boolean }) {
+  const { config } = useApp()
+  const b = config.branding
+  if (!always && !b.show_header) return null
   return (
     <div className="brand">
       <img src={b.logo || '/logo-default.png'} alt="" />

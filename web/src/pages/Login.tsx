@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { post, type Session } from '../lib/api'
 import { useApp } from '../lib/app'
-import { Backdrop, Brand } from '../ui/shell'
+import { Backdrop, Brand, HeroSpace } from '../ui/shell'
 import { Field, useAction } from '../ui/kit'
 
 declare global {
@@ -71,7 +71,10 @@ export default function Login() {
       <Backdrop b={b} />
       <main className="app" style={{ paddingBottom: 40 }}>
         <Brand />
-        <div className="card stack lg" style={{ marginTop: 24 }}>
+        <div style={{ marginBottom: 20 }}>
+          <HeroSpace />
+        </div>
+        <div className="card stack lg">
           <div className="stack">
             <h1>Вход в кабинет</h1>
             {b.login_text && <p className="muted">{b.login_text}</p>}

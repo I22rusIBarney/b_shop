@@ -81,6 +81,9 @@ export interface Branding {
   banner_link: string
   login_text: string
   effect: string
+  show_header: boolean
+  hero_space: number
+  bg_dim: number
 }
 
 export interface LinkItem {

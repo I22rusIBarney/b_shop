@@ -494,6 +494,7 @@ func (s *Server) publicBranding(ctx context.Context, b settings.Branding) map[st
 		"bg_fit": b.BgFit, "bg_opacity": b.BgOpacity,
 		"banner": s.mediaURL(ctx, b.BannerFile), "banner_link": b.BannerLink,
 		"login_text": b.LoginText, "effect": b.Effect,
+		"show_header": b.ShowHeader, "hero_space": b.HeroSpace, "bg_dim": b.BgDim,
 	}
 }
 
