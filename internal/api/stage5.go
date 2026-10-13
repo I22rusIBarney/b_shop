@@ -10,6 +10,7 @@ import (
 )
 
 func (s *Server) stage5Routes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /open", s.openApp)
 	pg := func(r *http.Request) (string, string) { return r.URL.Query().Get("period"), r.URL.Query().Get("group") }
 
 	// ---- admin: statistics ----

@@ -249,7 +249,7 @@ export default function BrandingPage() {
               <Field label={`Затемнение фона: ${b.bg_dim}%`}>
                 <input type="range" min={0} max={90} value={b.bg_dim} onChange={(e) => set('bg_dim', Number(e.target.value))} />
               </Field>
-              <Field label={`Отступ сверху: ${b.hero_space}px`} hint="Чтобы логотип на фоне был виден над карточкой подписки">
+              <Field label={`Отступ сверху: ${b.hero_space}px`} hint="Для страницы входа. На главной карточка подписки сама прижимается к низу экрана, логотип на фоне остаётся виден">
                 <input type="range" min={0} max={600} step={10} value={b.hero_space} onChange={(e) => set('hero_space', Number(e.target.value))} disabled={b.show_header} />
               </Field>
               <Field label="Сезонный эффект">

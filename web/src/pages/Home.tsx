@@ -7,7 +7,6 @@ import { bytes, dateTimeFull, plural, relative, rub, rubRound, shortDate } from 
 import { haptic, openLink } from '../lib/tg'
 import { Calendar, Check, Chevron, ChevronDown, Close, Copy, Devices as DevicesIcon, Gear, Link as LinkIcon, News as NewsIcon, Pencil, Plug, Plus, Swap, Trash } from '../ui/icons'
 import { ErrorBox, PageLoader, Sheet, copy, useAction, useLoad, useToast } from '../ui/kit'
-import { HeroSpace } from '../ui/shell'
 import { MethodPicker, followPayment, usePayMethod } from '../ui/pay'
 
 function subTitle(_s: Subscription, i: number) {
@@ -79,7 +78,7 @@ export default function Home() {
   if (list.length === 0)
     return (
       <div className="home">
-        <HeroSpace />
+        <div className="home-fill" />
         {banner}
         <div className="glass sub-card stack lg">
           <div className="stack">
@@ -111,7 +110,7 @@ export default function Home() {
           </button>
         )}
       </div>
-      <HeroSpace />
+      <div className="home-fill" />
       {banner}
       <div className="carousel-wrap">
         <div className="carousel" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
@@ -262,7 +261,7 @@ function SubCard({ sub, onChanged }: { sub: Subscription; onChanged: () => void 
           </button>
         )}
       </div>
-      {sub.online_at && <p className="tiny muted center" style={{ marginTop: 10 }}>Подключение {relative(sub.online_at)}</p>}
+      {sub.online_at && <p className="tiny muted center sub-online">Подключение {relative(sub.online_at)}</p>}
 
       <Devices sub={sub} open={devicesOpen} onClose={() => setDevicesOpen(false)} onChanged={onChanged} />
     </section>

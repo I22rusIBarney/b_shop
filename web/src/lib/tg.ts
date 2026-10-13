@@ -103,6 +103,17 @@ export function openLink(url: string) {
   window.location.href = url
 }
 
+/** Opens an app link (happ://, v2raytun://…). Telegram only opens http(s) links, so inside Telegram
+ *  the link goes through the shop's /open page in the browser, which forwards it to the app. */
+export function openAppLink(url: string) {
+  if (/^https?:/i.test(url)) return openLink(url)
+  if (webApp() && inTelegram()) {
+    openLink(`${location.origin}/open?to=${encodeURIComponent(url)}`)
+    return
+  }
+  window.location.href = url
+}
+
 export function haptic(kind: 'success' | 'error' | 'light' = 'light') {
   const h = webApp()?.HapticFeedback
   if (!h) return
