@@ -26,6 +26,12 @@ type Subscription struct {
 	Status            string     `db:"status" json:"status"`
 	CreatedAt         time.Time  `db:"created_at" json:"created_at"`
 	UpdatedAt         time.Time  `db:"updated_at" json:"updated_at"`
+
+	Autopay            bool       `db:"autopay" json:"autopay"`
+	AutopayMethodID    *int64     `db:"autopay_method_id" json:"autopay_method_id"`
+	AutopayPeriodID    *int64     `db:"autopay_period_id" json:"autopay_period_id"`
+	AutopayNotifiedFor *time.Time `db:"autopay_notified_for" json:"-"`
+	AutopayLastTry     *time.Time `db:"autopay_last_try" json:"-"`
 }
 
 func (s *Subscription) Active() bool { return s.ExpiresAt.After(time.Now()) && s.Status == "active" }
@@ -87,5 +93,37 @@ func SetPrimarySubscription(ctx context.Context, db DB, customerID, id int64) er
 
 func DeleteSubscription(ctx context.Context, db DB, id int64) error {
 	_, err := db.Exec(ctx, `DELETE FROM subscriptions WHERE id=$1`, id)
+	return err
+}
+
+// SetAutopay turns autopay on (with a method and renewal period) or off.
+func SetAutopay(ctx context.Context, db DB, id int64, on bool, methodID, periodID *int64) error {
+	_, err := db.Exec(ctx, `UPDATE subscriptions SET autopay=$2,
+		autopay_method_id=COALESCE($3, autopay_method_id), autopay_period_id=COALESCE($4, autopay_period_id) WHERE id=$1`,
+		id, on, methodID, periodID)
+	return err
+}
+
+// AutopayDue lists paid subscriptions with autopay on that expire before the given time.
+func AutopayDue(ctx context.Context, db DB, before time.Time) ([]Subscription, error) {
+	return many[Subscription](db.Query(ctx, `SELECT * FROM subscriptions WHERE autopay AND kind='paid'
+		AND autopay_method_id IS NOT NULL AND expires_at < $1 AND expires_at > now() - interval '3 days'
+		AND (autopay_last_try IS NULL OR autopay_last_try < now() - interval '20 hours') ORDER BY expires_at LIMIT 50`, before))
+}
+
+// AutopayToNotify lists autopay subscriptions expiring before the given time that were not warned for this expiry yet.
+func AutopayToNotify(ctx context.Context, db DB, before time.Time) ([]Subscription, error) {
+	return many[Subscription](db.Query(ctx, `SELECT * FROM subscriptions WHERE autopay AND kind='paid'
+		AND autopay_method_id IS NOT NULL AND expires_at < $1 AND expires_at > now()
+		AND (autopay_notified_for IS NULL OR autopay_notified_for <> expires_at) LIMIT 100`, before))
+}
+
+func MarkAutopayNotified(ctx context.Context, db DB, id int64, expires time.Time) error {
+	_, err := db.Exec(ctx, `UPDATE subscriptions SET autopay_notified_for=$2 WHERE id=$1`, id, expires)
+	return err
+}
+
+func MarkAutopayTry(ctx context.Context, db DB, id int64) error {
+	_, err := db.Exec(ctx, `UPDATE subscriptions SET autopay_last_try=now() WHERE id=$1`, id)
 	return err
 }

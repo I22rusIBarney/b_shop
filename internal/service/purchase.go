@@ -17,8 +17,10 @@ import (
 // CatalogPlan is a plan as shown to a specific customer (prices after personal discount).
 type CatalogPlan struct {
 	store.Plan
-	PricePerMonth int64         `json:"price_per_month"`
-	Offers        []PeriodOffer `json:"offers"`
+	PricePerMonth   int64         `json:"price_per_month"`
+	Offers          []PeriodOffer `json:"offers"`
+	DiscountPercent int           `json:"discount_percent"`
+	PromoCode       string        `json:"promo_code"` // set when the discount comes from a promo code
 }
 
 type PeriodOffer struct {
@@ -68,13 +70,16 @@ func (s *Service) Catalog(ctx context.Context, c *store.Customer) ([]CatalogPlan
 		if p.IsHidden && !owned[p.ID] {
 			continue
 		}
-		out = append(out, s.catalogPlan(p, c.PersonalDiscount, dim))
+		disc, code := s.discountFor(ctx, s.Store.Pool, c, p.ID)
+		cp := s.catalogPlan(p, disc, dim)
+		cp.PromoCode = code
+		out = append(out, cp)
 	}
 	return out, nil
 }
 
 func (s *Service) catalogPlan(p store.Plan, discount, dim int) CatalogPlan {
-	cp := CatalogPlan{Plan: p}
+	cp := CatalogPlan{Plan: p, DiscountPercent: discount}
 	monthly := p.MonthlyPrice(dim)
 	for _, per := range p.Periods {
 		d := per.Days(dim)
@@ -110,6 +115,7 @@ type BuyResult struct {
 	ConfirmationURL string    `json:"confirmation_url"`
 	Amount          int64     `json:"amount"`
 	Applied         bool      `json:"applied"` // free (100% discount) purchases complete immediately
+	SubscriptionID  int64     `json:"subscription_id,omitempty"`
 }
 
 // Buy validates a purchase, creates a local payment and a YooKassa payment.
@@ -132,11 +138,16 @@ func (s *Service) Buy(ctx context.Context, c *store.Customer, req BuyRequest) (*
 		if err != nil || sub.CustomerID != c.ID {
 			return nil, userErr("подписка не найдена")
 		}
-		if sub.PlanID == nil || *sub.PlanID != plan.ID {
+		samePlan := sub.PlanID != nil && *sub.PlanID == plan.ID
+		// A trial or free subscription can be turned into any plan by paying for it; paid ones use plan change.
+		if !samePlan && sub.Kind == "paid" {
 			return nil, userErr("для другого тарифа используйте смену тарифа")
 		}
-		if plan.RenewalDisabled {
+		if samePlan && plan.RenewalDisabled && sub.Kind == "paid" {
 			return nil, userErr("продление этого тарифа отключено")
+		}
+		if !samePlan && plan.IsHidden {
+			return nil, userErr("этот тариф сейчас недоступен")
 		}
 		op = "renew"
 	} else {
@@ -149,16 +160,23 @@ func (s *Service) Buy(ctx context.Context, c *store.Customer, req BuyRequest) (*
 	}
 
 	dim := s.set().General.DaysInMonth
-	amount := applyDiscount(per.Price, c.PersonalDiscount)
+	disc, code := s.discountFor(ctx, s.Store.Pool, c, plan.ID)
+	days := per.Days(dim)
+	base := per.Price
+	// Extra device slots already bought stay on renewal and are paid for the new period too.
+	if sub != nil && sub.ExtraDevices > 0 && plan.ExtraDevicesAllowed && sub.PlanID != nil && *sub.PlanID == plan.ID {
+		base += plan.ExtraDevicePrice * int64(sub.ExtraDevices) * int64(days) / int64(dim)
+	}
 	p := &store.Payment{
 		CustomerID: c.ID, PlanID: &plan.ID, PeriodID: &per.ID, Operation: op,
-		Title: plan.Name, Days: per.Days(dim), Months: per.Months(dim),
-		Amount: amount, BaseAmount: per.Price, DiscountPercent: c.PersonalDiscount,
+		Title: plan.Name, Days: days, Months: per.Months(dim),
+		Amount: applyDiscount(base, disc), BaseAmount: base, DiscountPercent: disc, PromoCode: code,
 		Provider: "yookassa", Method: req.Method,
 		SaveMethod: req.SaveCard && s.set().YooKassa.SaveCard,
 	}
 	if sub != nil {
 		p.SubscriptionID = &sub.ID
+		p.FromPlanID = sub.PlanID
 	}
 	return s.startPayment(ctx, c, p, req.ReturnURL)
 }
@@ -250,9 +268,15 @@ func (s *Service) startPayment(ctx context.Context, c *store.Customer, p *store.
 		Description:       s.paymentDescription(p),
 		Metadata:          map[string]string{"payment_id": p.ID.String(), "customer_id": strconv.FormatInt(c.ID, 10)},
 		PaymentMethodData: &yookassa.MethodData{Type: p.Method},
-		SavePaymentMethod: p.SaveMethod && p.Method == "bank_card",
+		SavePaymentMethod: p.SaveMethod,
 	}
 	yp, err := gw.CreatePayment(ctx, p.ID.String(), in)
+	if err != nil && in.SavePaymentMethod {
+		// Not every shop/method allows saving: retry once as a plain payment.
+		s.Log.Warn("yookassa create with save failed, retrying without", "payment", p.ID, "err", err)
+		in.SavePaymentMethod = false
+		yp, err = gw.CreatePayment(ctx, p.ID.String()+"-nosave", in)
+	}
 	if err != nil {
 		s.Log.Error("yookassa create", "payment", p.ID, "err", err)
 		_ = store.MarkCanceled(ctx, s.Store.Pool, p.ID, "provider_error")
@@ -366,7 +390,12 @@ func (s *Service) syncProviderPayment(ctx context.Context, yp *yookassa.Payment)
 				if title == "" && yp.PaymentMethod.Card != nil {
 					title = yp.PaymentMethod.Card.CardType + " *" + yp.PaymentMethod.Card.Last4
 				}
-				_ = store.SavePaymentMethod(ctx, s.Store.Pool, p.CustomerID, "yookassa", yp.PaymentMethod.ID, title)
+				if title == "" {
+					title = methodTitle(yp.PaymentMethod.Type)
+				}
+				if mid, err := store.SavePaymentMethod(ctx, s.Store.Pool, p.CustomerID, "yookassa", yp.PaymentMethod.ID, title); err == nil {
+					_ = store.SetPaymentMethodID(ctx, s.Store.Pool, p.ID, mid)
+				}
 			}
 		}
 		if _, err := store.MarkPaid(ctx, s.Store.Pool, p.ID, method); err != nil {
@@ -378,9 +407,33 @@ func (s *Service) syncProviderPayment(ctx context.Context, yp *yookassa.Payment)
 		if yp.CancellationDetails != nil {
 			reason = yp.CancellationDetails.Reason
 		}
-		return store.MarkCanceled(ctx, s.Store.Pool, p.ID, reason)
+		if p.Status != "pending" {
+			return nil
+		}
+		if err := store.MarkCanceled(ctx, s.Store.Pool, p.ID, reason); err != nil {
+			return err
+		}
+		if p.Autopay {
+			s.autopayFailed(ctx, p, reason)
+		}
 	}
 	return nil
+}
+
+func methodTitle(t string) string {
+	switch t {
+	case "sbp":
+		return "СБП"
+	case "bank_card":
+		return "Банковская карта"
+	case "sberbank":
+		return "SberPay"
+	case "tinkoff_bank":
+		return "T-Pay"
+	case "yoo_money":
+		return "ЮMoney"
+	}
+	return t
 }
 
 // CheckPayment lets the cabinet poll a payment; it asks YooKassa directly if still pending.
@@ -443,16 +496,56 @@ func (s *Service) ApplyPayment(ctx context.Context, id uuid.UUID) error {
 			}
 			sub, err = store.GetSubscriptionForUpdate(ctx, tx, *pay.SubscriptionID)
 			if err == nil {
+				if sub.PlanID == nil || *sub.PlanID != plan.ID {
+					sub.ExtraDevices = 0 // trial/free turned into another plan
+				}
 				err = s.provisionExtend(ctx, tx, cust, sub, g)
 			}
+		case "change":
+			if pay.SubscriptionID == nil {
+				return errors.New("plan change without subscription")
+			}
+			sub, err = store.GetSubscriptionForUpdate(ctx, tx, *pay.SubscriptionID)
+			if err == nil {
+				before := daysLeft(sub.ExpiresAt)
+				err = s.switchPlan(ctx, tx, cust, sub, plan, sub.ExpiresAt, g.Username)
+				if err == nil {
+					pid := pay.ID
+					err = store.InsertPlanChange(ctx, tx, &store.PlanChange{CustomerID: cust.ID, SubscriptionID: &sub.ID,
+						FromPlanID: pay.FromPlanID, ToPlanID: &plan.ID, Mode: "upgrade", DaysBefore: before, DaysAfter: before, PaymentID: &pid})
+				}
+			}
+		case "devices":
+			if pay.SubscriptionID == nil {
+				return errors.New("devices without subscription")
+			}
+			sub, err = store.GetSubscriptionForUpdate(ctx, tx, *pay.SubscriptionID)
+			if err == nil {
+				err = s.addExtraDevices(ctx, tx, sub, pay.ExtraDevices)
+			}
 		default:
-			err = fmt.Errorf("operation %s not supported yet", pay.Operation)
+			err = fmt.Errorf("operation %s not supported", pay.Operation)
 		}
 		if err != nil {
 			return err
 		}
 		if err := store.MarkApplied(ctx, tx, pay.ID, sub.ID); err != nil {
 			return err
+		}
+		if pay.PromoCode != "" {
+			if err := store.UseReservedDiscount(ctx, tx, cust.ID, pay.PromoCode, pay.ID, sub.ID); err != nil {
+				return err
+			}
+		}
+		// A method saved with this payment turns autopay on for the subscription.
+		if pay.PaymentMethodID != nil && s.set().Payments.AutopayEnabled && sub.Kind == "paid" {
+			switch pay.Operation {
+			case "buy", "renew", "autopay":
+				if err := store.SetAutopay(ctx, tx, sub.ID, true, pay.PaymentMethodID, pay.PeriodID); err != nil {
+					return err
+				}
+				sub.Autopay = true
+			}
 		}
 		if s.set().MoyNalog.Enabled && pay.Provider != "free" {
 			if err := store.QueueReceipt(ctx, tx, pay.ID); err != nil {
@@ -471,6 +564,9 @@ func (s *Service) ApplyPayment(ctx context.Context, id uuid.UUID) error {
 		return nil
 	}
 	s.afterPurchase(ctx, cust, pay, sub)
+	if err := s.ProcessReferral(ctx, pay.ID); err != nil {
+		s.Log.Warn("referral bonus", "payment", pay.ID, "err", err)
+	}
 	return nil
 }
 
@@ -483,24 +579,65 @@ func rub(k int64) string {
 
 func (s *Service) afterPurchase(ctx context.Context, c *store.Customer, p *store.Payment, sub *store.Subscription) {
 	loc := s.set().General.Location()
-	verb := "оформлена"
-	if p.Operation != "buy" {
-		verb = "продлена"
+	until := sub.ExpiresAt.In(loc).Format("02.01.2006")
+	var text string
+	switch p.Operation {
+	case "buy":
+		text = fmt.Sprintf("Подписка <b>%s</b> оформлена до <b>%s</b>.", escape(sub.Title), until)
+	case "change":
+		text = fmt.Sprintf("Тариф изменён на <b>%s</b>. Подписка действует до <b>%s</b>.", escape(sub.Title), until)
+	case "devices":
+		text = fmt.Sprintf("Добавлено устройств: <b>%d</b>. Теперь в подписке <b>%s</b> до %d устройств.", p.ExtraDevices,
+			escape(sub.Title), sub.TotalDevices())
+	default:
+		text = fmt.Sprintf("Подписка <b>%s</b> продлена до <b>%s</b>.", escape(sub.Title), until)
 	}
 	s.Notify.Customer(ctx, c, Message{
-		Text: fmt.Sprintf("✅ Оплата получена!\n\nПодписка <b>%s</b> %s до <b>%s</b>.", escape(sub.Title), verb,
-			sub.ExpiresAt.In(loc).Format("02.01.2006")),
+		Text:         "✅ Оплата получена!\n\n" + text,
 		ButtonText:   "Открыть кабинет",
 		ButtonURL:    s.Cfg.PublicURL + "/",
 		EmailSubject: "Оплата получена",
 	})
+	opName := map[string]string{"buy": "Покупка", "renew": "Продление", "autopay": "Автопродление",
+		"change": "Смена тарифа", "devices": "Доп. устройства"}[p.Operation]
+	detail := periodLabel(p.Days, p.Months)
+	switch p.Operation {
+	case "change":
+		detail = s.planName(ctx, p.FromPlanID) + " → " + p.Title + " · " + plural(p.Days, "день", "дня", "дней")
+	case "devices":
+		detail = fmt.Sprintf("+%d устр. на %s", p.ExtraDevices, plural(p.Days, "день", "дня", "дней"))
+	}
+	event := "purchase"
+	if p.Operation == "change" {
+		event = "plan_change"
+	} else if p.Operation == "autopay" {
+		event = "autopay"
+	}
+	extra := ""
+	if p.PromoCode != "" {
+		extra = fmt.Sprintf("\n🎟 %s (−%d%%)", escape(p.PromoCode), p.DiscountPercent)
+	}
+	s.Notify.Admin(ctx, event, fmt.Sprintf("🛒 %s\n👤 %s\n📦 %s · %s\n💰 %s%s", opName, escape(whoLine(c)), escape(p.Title),
+		escape(detail), rub(p.Amount), extra), c.ID)
+}
+
+func whoLine(c *store.Customer) string {
 	who := c.DisplayName()
 	if c.TelegramID != nil {
 		who += fmt.Sprintf(" (%d)", *c.TelegramID)
 	}
-	opName := map[string]string{"buy": "Покупка", "renew": "Продление", "autopay": "Автопродление"}[p.Operation]
-	s.Notify.Admin(ctx, "purchase", fmt.Sprintf("🛒 %s\n👤 %s\n📦 %s · %s\n💰 %s", opName, escape(who), escape(p.Title),
-		periodLabel(p.Days, p.Months), rub(p.Amount)), c.ID)
+	return who
+}
+
+func (s *Service) planName(ctx context.Context, id *int64) string {
+	if id == nil {
+		return "—"
+	}
+	p, err := store.GetPlan(ctx, s.Store.Pool, *id)
+	if err != nil {
+		return "—"
+	}
+	return p.Name
 }
 
 func (s *Service) onRefund(ctx context.Context, p *store.Payment, amount int64) error {

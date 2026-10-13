@@ -117,6 +117,15 @@ func (s *Service) ReconcilePayments(ctx context.Context) {
 	for _, p := range stuck {
 		_ = s.ApplyPayment(ctx, p.ID)
 	}
+	refs, err := store.ReferralPending(ctx, s.Store.Pool)
+	if err != nil {
+		return
+	}
+	for _, p := range refs {
+		if err := s.ProcessReferral(ctx, p.ID); err != nil {
+			s.Log.Warn("referral retry", "payment", p.ID, "err", err)
+		}
+	}
 }
 
 // RunWorkers starts periodic background jobs until ctx is done.
@@ -146,5 +155,6 @@ func (s *Service) RunWorkers(ctx context.Context) {
 	}
 	every(time.Minute, "payments", s.ReconcilePayments)
 	every(30*time.Second, "receipts", s.ProcessReceipts)
+	every(10*time.Minute, "autopay", s.RunAutopay)
 	every(time.Hour, "purge", func(ctx context.Context) { _ = store.PurgeExpired(ctx, s.Store.Pool) })
 }

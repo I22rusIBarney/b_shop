@@ -38,14 +38,34 @@ type Payment struct {
 	ReceiptError    string     `db:"receipt_error" json:"receipt_error"`
 	ReceiptAttempts int        `db:"receipt_attempts" json:"receipt_attempts"`
 	ReceiptNextTry  *time.Time `db:"receipt_next_try" json:"-"`
+	ReferralDone    bool       `db:"referral_done" json:"-"`
+	FromPlanID      *int64     `db:"from_plan_id" json:"from_plan_id"`
+	Autopay         bool       `db:"autopay" json:"autopay"`
+	PaymentMethodID *int64     `db:"payment_method_id" json:"-"`
+}
+
+func SetPaymentMethodID(ctx context.Context, db DB, id uuid.UUID, methodID int64) error {
+	_, err := db.Exec(ctx, `UPDATE payments SET payment_method_id=$2 WHERE id=$1`, id, methodID)
+	return err
+}
+
+// LastPaidPeriod returns the period of the latest paid buy/renew for a subscription (for autopay).
+func LastPaidPeriod(ctx context.Context, db DB, subID int64) (*int64, error) {
+	var id *int64
+	err := db.QueryRow(ctx, `SELECT period_id FROM payments WHERE subscription_id=$1 AND status='succeeded'
+		AND operation IN ('buy','renew','autopay') AND period_id IS NOT NULL ORDER BY paid_at DESC LIMIT 1`, subID).Scan(&id)
+	if err != nil {
+		return nil, nil
+	}
+	return id, nil
 }
 
 func InsertPayment(ctx context.Context, db DB, p *Payment) error {
 	return db.QueryRow(ctx, `INSERT INTO payments (customer_id, subscription_id, plan_id, period_id, operation, title, days,
-		months, extra_devices, amount, base_amount, discount_percent, promo_code, provider, method, save_method)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING id, status, created_at`,
+		months, extra_devices, amount, base_amount, discount_percent, promo_code, provider, method, save_method, from_plan_id, autopay)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING id, status, created_at`,
 		p.CustomerID, p.SubscriptionID, p.PlanID, p.PeriodID, p.Operation, p.Title, p.Days, p.Months, p.ExtraDevices,
-		p.Amount, p.BaseAmount, p.DiscountPercent, p.PromoCode, p.Provider, p.Method, p.SaveMethod).
+		p.Amount, p.BaseAmount, p.DiscountPercent, p.PromoCode, p.Provider, p.Method, p.SaveMethod, p.FromPlanID, p.Autopay).
 		Scan(&p.ID, &p.Status, &p.CreatedAt)
 }
 
@@ -159,11 +179,28 @@ type PaymentMethod struct {
 	CreatedAt   time.Time `db:"created_at" json:"created_at"`
 }
 
-func SavePaymentMethod(ctx context.Context, db DB, customerID int64, provider, ref, title string) error {
-	_, err := db.Exec(ctx, `INSERT INTO payment_methods (customer_id, provider, provider_ref, title) VALUES ($1,$2,$3,$4)
-		ON CONFLICT (provider, provider_ref) DO UPDATE SET title=EXCLUDED.title, customer_id=EXCLUDED.customer_id`,
-		customerID, provider, ref, title)
+func SavePaymentMethod(ctx context.Context, db DB, customerID int64, provider, ref, title string) (int64, error) {
+	var id int64
+	err := db.QueryRow(ctx, `INSERT INTO payment_methods (customer_id, provider, provider_ref, title) VALUES ($1,$2,$3,$4)
+		ON CONFLICT (provider, provider_ref) DO UPDATE SET title=EXCLUDED.title, customer_id=EXCLUDED.customer_id
+		RETURNING id`, customerID, provider, ref, title).Scan(&id)
+	return id, err
+}
+
+func GetPaymentMethod(ctx context.Context, db DB, id int64) (*PaymentMethod, error) {
+	return one[PaymentMethod](db.Query(ctx, `SELECT * FROM payment_methods WHERE id=$1`, id))
+}
+
+// MarkReferralDone flags a payment's referral bonuses as processed.
+func MarkReferralDone(ctx context.Context, db DB, id uuid.UUID) error {
+	_, err := db.Exec(ctx, `UPDATE payments SET referral_done=true WHERE id=$1`, id)
 	return err
+}
+
+// ReferralPending lists applied payments whose referral bonuses are not processed yet.
+func ReferralPending(ctx context.Context, db DB) ([]Payment, error) {
+	return many[Payment](db.Query(ctx, `SELECT * FROM payments WHERE referral_done=false AND applied_at IS NOT NULL
+		AND applied_at < now() - interval '30 seconds' ORDER BY applied_at LIMIT 20`))
 }
 
 func ListPaymentMethods(ctx context.Context, db DB, customerID int64) ([]PaymentMethod, error) {

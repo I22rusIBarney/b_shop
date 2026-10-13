@@ -131,6 +131,15 @@ func fillFromPanel(sub *store.Subscription, u *remnawave.User) {
 
 // provisionNew creates a subscription for the customer.
 func (s *Service) provisionNew(ctx context.Context, db store.DB, c *store.Customer, g Grant) (*store.Subscription, error) {
+	// Bonus days waiting on the balance (referral / promo without a subscription) go to the first new subscription.
+	bonus := c.BonusDays
+	if bonus > 0 {
+		g.Days += bonus
+		if err := store.AddBonusDays(ctx, db, c.ID, -bonus); err != nil {
+			return nil, err
+		}
+		c.BonusDays = 0
+	}
 	expire := newExpire(time.Time{}, g.Days)
 	devices := 0
 	if g.Plan.DeviceLimit > 0 {
@@ -153,7 +162,11 @@ func (s *Service) provisionNew(ctx context.Context, db store.DB, c *store.Custom
 // provisionExtend adds days to an existing subscription and re-applies its plan.
 // If the panel user disappeared it is recreated.
 func (s *Service) provisionExtend(ctx context.Context, db store.DB, c *store.Customer, sub *store.Subscription, g Grant) error {
-	expire := newExpire(sub.ExpiresAt, g.Days)
+	return s.provisionExtendTo(ctx, db, c, sub, g, newExpire(sub.ExpiresAt, g.Days))
+}
+
+// provisionExtendTo sets the plan and an exact expiry on an existing subscription.
+func (s *Service) provisionExtendTo(ctx context.Context, db store.DB, c *store.Customer, sub *store.Subscription, g Grant, expire time.Time) error {
 	sub.ExtraDevices += g.ExtraDevices
 	planID := g.Plan.ID
 	sub.PlanID = &planID

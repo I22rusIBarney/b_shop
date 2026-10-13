@@ -171,6 +171,8 @@ type fakeGateway struct {
 	refunds  map[string]*yookassa.Refund
 	created  []yookassa.CreatePayment
 	n        int
+	// Result for charges with a saved method (autopay): succeeded | canceled.
+	savedResult string
 }
 
 func newGateway() *fakeGateway {
@@ -183,9 +185,24 @@ func (g *fakeGateway) CreatePayment(_ context.Context, _ string, in yookassa.Cre
 	g.n++
 	p := &yookassa.Payment{ID: fmt.Sprintf("yk-%d", g.n), Status: "pending", Amount: in.Amount, Metadata: in.Metadata,
 		Confirmation: &yookassa.Confirmation{Type: "redirect", ConfirmationURL: fmt.Sprintf("https://yoomoney.example/%d", g.n)}}
+	if in.PaymentMethodID != "" {
+		p.Confirmation = nil
+		p.Status = g.savedResult
+		if p.Status == "" {
+			p.Status = "succeeded"
+		}
+		p.PaymentMethod = &yookassa.PaymentMethod{Type: "sbp", ID: in.PaymentMethodID, Saved: true}
+		if p.Status == "canceled" {
+			p.CancellationDetails = &struct {
+				Party  string `json:"party"`
+				Reason string `json:"reason"`
+			}{"payment_network", "insufficient_funds"}
+		}
+	}
 	g.payments[p.ID] = p
 	g.created = append(g.created, in)
-	return p, nil
+	cp := *p
+	return &cp, nil
 }
 
 func (g *fakeGateway) GetPayment(_ context.Context, id string) (*yookassa.Payment, error) {
@@ -197,6 +214,15 @@ func (g *fakeGateway) GetPayment(_ context.Context, id string) (*yookassa.Paymen
 	}
 	cp := *p
 	return &cp, nil
+}
+
+// succeedSaved marks a payment paid with a method saved for autopay.
+func (g *fakeGateway) succeedSaved(id, method, methodID string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.payments[id].Status = "succeeded"
+	g.payments[id].Paid = true
+	g.payments[id].PaymentMethod = &yookassa.PaymentMethod{Type: method, ID: methodID, Saved: true}
 }
 
 func (g *fakeGateway) GetRefund(_ context.Context, id string) (*yookassa.Refund, error) {

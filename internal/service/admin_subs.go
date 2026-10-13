@@ -24,29 +24,36 @@ func (s *Service) AdminExtend(ctx context.Context, admin *store.Customer, subID 
 		if err != nil {
 			return err
 		}
-		base := sub.ExpiresAt
-		if days > 0 && base.Before(time.Now()) {
-			base = time.Now().UTC()
-		}
-		expire := base.Add(time.Duration(days) * 24 * time.Hour)
-		if !expire.After(time.Now()) {
-			expire = time.Now().Add(time.Minute)
-		}
-		if sub.RWUserID != nil {
-			u, err := s.Panel.UpdateUser(ctx, remnawave.UpdateUser{ID: *sub.RWUserID, Status: "ACTIVE", ExpireAt: &expire})
-			if err != nil {
-				return fmt.Errorf("панель: %w", err)
-			}
-			sub.ExpiresAt = u.ExpireAt
-		} else {
-			sub.ExpiresAt = expire
-		}
-		if err := store.UpdateSubscription(ctx, tx, sub); err != nil {
+		if err := s.addDays(ctx, tx, sub, days); err != nil {
 			return err
 		}
 		return store.AddEvent(ctx, tx, sub.CustomerID, "admin_days", map[string]any{"subscription": sub.ID, "days": days}, &admin.ID)
 	})
 	return sub, err
+}
+
+// addDays moves a subscription's expiry by days (negative removes) in the panel and the DB.
+// It keeps the plan; an expired subscription is extended from now.
+func (s *Service) addDays(ctx context.Context, db store.DB, sub *store.Subscription, days int) error {
+	base := sub.ExpiresAt
+	if days > 0 && base.Before(time.Now()) {
+		base = time.Now().UTC()
+	}
+	expire := base.Add(time.Duration(days) * 24 * time.Hour)
+	if !expire.After(time.Now()) {
+		expire = time.Now().Add(time.Minute)
+	}
+	if sub.RWUserID != nil {
+		u, err := s.Panel.UpdateUser(ctx, remnawave.UpdateUser{ID: *sub.RWUserID, Status: "ACTIVE", ExpireAt: &expire})
+		if err != nil {
+			return fmt.Errorf("панель: %w", err)
+		}
+		sub.ExpiresAt = u.ExpireAt
+	} else {
+		sub.ExpiresAt = expire
+	}
+	sub.Status = "active"
+	return store.UpdateSubscription(ctx, db, sub)
 }
 
 // AdminGrant creates a subscription on a plan without payment.

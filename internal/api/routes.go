@@ -57,6 +57,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/payment-methods/{id}", s.authed(s.deletePaymentMethod))
 
 	s.adminRoutes(mux)
+	s.stage3Routes(mux)
 	s.fileRoutes(mux)
 
 	// frontend
