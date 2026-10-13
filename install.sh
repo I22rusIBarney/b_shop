@@ -160,29 +160,40 @@ if [ "$RECONFIGURE" = 1 ]; then
 	done
 
 	step "Панель Remnawave"
-	say "Адрес панели (как открываете её в браузере) и API-токен: панель → Настройки → API-токены → создать."
+	say "Ссылка, по которой открываете панель в браузере — можно целиком, вместе с секретным ключом"
+	say "(вида ${B}https://panel.example.com/auth/login?AbCd=XyZ${N}): скрипт сам разберёт адрес и ключ."
+	say "API-токен: панель → Настройки → API-токены → создать."
+	RW_COOKIE="$(envget REMNAWAVE_COOKIE)"
 	while :; do
-		ask RW_URL "Адрес панели" "$(envget REMNAWAVE_URL)"
-		RW_URL="${RW_URL%/}"
-		[[ "$RW_URL" =~ ^https?:// ]] || RW_URL="https://$RW_URL"
+		ask RW_LINK "Ссылка на панель" "$(envget REMNAWAVE_URL)"
+		RW_LINK="$(tr -d '[:space:]' <<<"$RW_LINK")"
+		[[ "$RW_LINK" =~ ^https?:// ]] || RW_LINK="https://$RW_LINK"
+		# Адрес — только схема и домен (порт), без пути и ключа.
+		RW_URL="$(sed -E 's,^(https?://[^/?#]+).*,\1,' <<<"$RW_LINK")"
+		# ?ключ=значение в ссылке — это защита reverse proxy (eGames и похожие): она же cookie для API.
+		QS="${RW_LINK#*\?}"
+		if [ "$QS" != "$RW_LINK" ] && [[ "$QS" =~ ^([A-Za-z0-9_-]+)=([A-Za-z0-9_-]+) ]]; then
+			RW_COOKIE="${BASH_REMATCH[1]}=${BASH_REMATCH[2]}"
+			ok "Адрес $RW_URL, ключ защиты ${BASH_REMATCH[1]}=…"
+		fi
 		ask_secret RW_TOKEN "API-токен"
 		[ -z "$RW_TOKEN" ] && RW_TOKEN="$(envget REMNAWAVE_TOKEN)"
-		RW_COOKIE="$(envget REMNAWAVE_COOKIE)"
 		check_panel() {
 			local hdr=(-H "Authorization: Bearer $RW_TOKEN" -H "Accept: application/json")
 			[ -n "$RW_COOKIE" ] && hdr+=(-H "Cookie: $RW_COOKIE")
-			curl -s -o /tmp/bshop-rw.json -w '%{http_code}' --max-time 12 "${hdr[@]}" "$RW_URL/api/internal-squads" 2>/dev/null || echo 000
+			curl -s -o /tmp/bshop-rw.json -w '%{http_code}' --max-time 12 "${hdr[@]}" "$RW_URL/api/internal-squads" 2>/dev/null || true
 		}
 		CODE="$(check_panel)"
-		if [ "$CODE" = 200 ] && grep -q '"response"' /tmp/bshop-rw.json; then ok "Панель отвечает, токен подходит"; break; fi
+		if [ "$CODE" = 200 ] && grep -q '"response"' /tmp/bshop-rw.json 2>/dev/null; then ok "Панель отвечает, токен подходит"; break; fi
 		case "$CODE" in
-			401|403) warn "Панель отклонила токен ($CODE). Нужен API-токен (не пароль от панели)." ;;
-			000) warn "Панель не отвечает по адресу $RW_URL" ;;
+			401) warn "Панель отклонила токен (401). Нужен API-токен из настроек панели, не пароль." ;;
+			000|"") warn "Панель не отвечает по адресу $RW_URL (сервер не достучался до неё)" ;;
 			*)
-				warn "Панель вернула $CODE — похоже, она закрыта защитой reverse proxy (ссылка вида ?ключ=значение)."
-				ask RW_COOKIE "Cookie для доступа «имя=значение» (Enter — пропустить)" "$RW_COOKIE"
+				warn "Панель вернула $CODE. Похоже на защиту reverse proxy: вставьте ссылку целиком, с ?ключ=значение"
+				ask RW_COOKIE "или введите ключ отдельно «имя=значение» (Enter — оставить)" "$RW_COOKIE"
 				CODE="$(check_panel)"
 				if [ "$CODE" = 200 ]; then ok "Панель отвечает"; break; fi
+				[ "$CODE" = 401 ] && warn "Ключ подошёл, но панель отклонила токен (401)"
 				;;
 		esac
 		yes_no "Ввести заново?" y || break
