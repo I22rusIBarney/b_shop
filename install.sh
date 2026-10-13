@@ -101,7 +101,20 @@ fi
 cd "$DIR"
 
 # ---------------------------------------------------------------- уже установлен?
-envget() { grep -E "^$1=" .env 2>/dev/null | head -1 | cut -d= -f2- || true; }
+# Значение из .env, а при прерванной установке — из черновика ответов .env.draft.
+envget() {
+	local f=.env
+	[ -f .env ] || f=.env.draft
+	grep -E "^$1=" "$f" 2>/dev/null | head -1 | cut -d= -f2- || true
+}
+# Ответы сохраняются сразу, чтобы при повторном запуске не вводить всё заново.
+draft() {
+	[ -f .env ] && return 0
+	touch .env.draft && chmod 600 .env.draft
+	grep -vE "^$1=" .env.draft >.env.draft.tmp 2>/dev/null || true
+	printf '%s=%s\n' "$1" "$2" >>.env.draft.tmp
+	mv .env.draft.tmp .env.draft
+}
 RECONFIGURE=1
 if [ -f .env ]; then
 	say
@@ -117,6 +130,7 @@ if [ -f .env ]; then
 	esac
 fi
 
+[ ! -f .env ] && [ -f .env.draft ] && say "Продолжаю прерванную установку: прежние ответы подставлены — просто жмите Enter."
 SERVER_IP="$(curl -4 -fsS --max-time 8 https://api.ipify.org 2>/dev/null || hostname -I | awk '{print $1}')"
 
 if [ "$RECONFIGURE" = 1 ]; then
@@ -134,11 +148,12 @@ if [ "$RECONFIGURE" = 1 ]; then
 		say "Если домен за Cloudflare с оранжевым облаком, выключите проксирование (серое облако) на время установки."
 		yes_no "Продолжить всё равно?" n && break
 	done
+	draft DOMAIN "$DOMAIN"
 
 	step "Telegram-бот"
 	say "Токен из @BotFather. Если переезжаете со старого бота — тот же токен (старый бот перед запуском нового остановите)."
 	while :; do
-		ask_secret BOT_TOKEN "Токен бота"
+		ask_secret BOT_TOKEN "Токен бота$([ -n "$(envget BOT_TOKEN)" ] && echo ' (Enter — прежний)')"
 		[ -z "$BOT_TOKEN" ] && BOT_TOKEN="$(envget BOT_TOKEN)"
 		[[ "$BOT_TOKEN" =~ ^[0-9]+:[A-Za-z0-9_-]{30,}$ ]] || { warn "Токен выглядит как 123456:ABC…"; continue; }
 		ME="$(curl -fsS --max-time 10 "https://api.telegram.org/bot$BOT_TOKEN/getMe" 2>/dev/null || true)"
@@ -150,13 +165,14 @@ if [ "$RECONFIGURE" = 1 ]; then
 		if [ -z "$ME" ]; then warn "api.telegram.org не отвечает с этого сервера — проверить токен не получилось"; break; fi
 		warn "Telegram не принял токен"
 	done
+	draft BOT_TOKEN "$BOT_TOKEN"
 
 	say
 	say "Telegram ID администраторов через запятую (свой ID можно узнать у @userinfobot)."
 	while :; do
 		ask ADMINS "ID админов" "$(envget ADMIN_TELEGRAM_IDS)"
 		ADMINS="${ADMINS// /}"
-		[[ "$ADMINS" =~ ^[0-9]+(,[0-9]+)*$ ]] && break
+		[[ "$ADMINS" =~ ^[0-9]+(,[0-9]+)*$ ]] && { draft ADMIN_TELEGRAM_IDS "$ADMINS"; break; }
 		warn "Нужны числа через запятую, например 123456789"
 	done
 
@@ -178,7 +194,8 @@ if [ "$RECONFIGURE" = 1 ]; then
 			RW_COOKIE="${BASH_REMATCH[1]}=${BASH_REMATCH[2]}"
 			ok "Адрес $RW_URL, ключ защиты ${BASH_REMATCH[1]}=…"
 		fi
-		ask_secret RW_TOKEN "API-токен"
+		draft REMNAWAVE_URL "$RW_URL"; draft REMNAWAVE_COOKIE "$RW_COOKIE"
+		ask_secret RW_TOKEN "API-токен$([ -n "$(envget REMNAWAVE_TOKEN)" ] && echo ' (Enter — прежний)')"
 		[ -z "$RW_TOKEN" ] && RW_TOKEN="$(envget REMNAWAVE_TOKEN)"
 		check_panel() {
 			local hdr=(-H "Authorization: Bearer $RW_TOKEN" -H "Accept: application/json")
@@ -201,10 +218,12 @@ if [ "$RECONFIGURE" = 1 ]; then
 		yes_no "Ввести заново?" y || break
 	done
 	rm -f /tmp/bshop-rw.json
+	draft REMNAWAVE_URL "$RW_URL"; draft REMNAWAVE_TOKEN "$RW_TOKEN"; draft REMNAWAVE_COOKIE "$RW_COOKIE"
 	[ "$PANEL_OK" = 1 ] || warn "Продолжаю без проверки панели. Исправить адрес или токен позже: ${B}bshop env${N}"
 
 	step "HTTPS"
 	ask ACME_EMAIL "Почта для Let's Encrypt (Enter — без почты)" "$(envget ACME_EMAIL)"
+	draft ACME_EMAIL "$ACME_EMAIL"
 
 	# ------------------------------------------------------------ .env
 	SECRET_KEY="$(envget SECRET_KEY)"; [ -n "$SECRET_KEY" ] || SECRET_KEY="$(openssl rand -hex 32)"
@@ -248,6 +267,7 @@ ACME_EMAIL=$ACME_EMAIL
 COMPOSE_PROFILES=$([ "$PROXY" = caddy ] && echo caddy)
 EOF
 	umask 022
+	rm -f .env.draft
 	ok "Настройки сохранены в $DIR/.env"
 else
 	DOMAIN="$(envget DOMAIN)"; PORT="$(envget BSHOP_PORT)"; ACME_EMAIL="$(envget ACME_EMAIL)"
