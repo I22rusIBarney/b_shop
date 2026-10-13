@@ -409,7 +409,7 @@ function SectionForm({ spec }: { spec: SectionSpec }) {
       {spec.custom === 'apps' && v.source === 'manual' && <AppsEditor value={v.apps || []} onChange={(t) => set('apps', t)} />}
 
       {test && <p className={test.ok ? 'small' : 'err'} style={test.ok ? { color: 'var(--ok)' } : undefined}>{test.message}</p>}
-      <div className="row" style={{ justifyContent: 'flex-end' }}>
+      <div className="row wrap" style={{ justifyContent: 'flex-end' }}>
         {spec.test && (
           <button className="btn secondary small" disabled={busy} onClick={runTest}>
             Проверить подключение
