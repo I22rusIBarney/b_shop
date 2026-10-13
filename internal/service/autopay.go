@@ -278,7 +278,6 @@ func (s *Service) autopayFailed(ctx context.Context, p *store.Payment, reason st
 			escape(p.Title), rub(p.Amount), human),
 		ButtonText: "Продлить", ButtonURL: s.Cfg.PublicURL + "/", EmailSubject: "Ошибка автопродления",
 	})
-	s.Notify.Admin(ctx, "autopay_error", fmt.Sprintf("⚠️ Ошибка автоплатежа\n👤 %s\n📦 %s · %s\n❌ %s", escape(whoLine(c)), escape(p.Title),
-		rub(p.Amount), escape(reason)), c.ID)
+	s.event(ctx, "autopay_error", c, map[string]any{"plan": p.Title, "amount": rub(p.Amount), "error": reason})
 	_ = store.AddEvent(ctx, s.Store.Pool, c.ID, "autopay_failed", map[string]any{"payment": p.ID, "reason": reason}, nil)
 }

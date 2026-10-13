@@ -13,6 +13,7 @@ type File struct {
 	Mime      string    `db:"mime" json:"mime"`
 	Size      int       `db:"size" json:"size"`
 	Data      []byte    `db:"data" json:"-"`
+	OwnerID   *int64    `db:"owner_id" json:"owner_id"`
 	CreatedAt time.Time `db:"created_at" json:"created_at"`
 }
 
@@ -26,7 +27,7 @@ func GetFile(ctx context.Context, db DB, id uuid.UUID) (*File, error) {
 }
 
 func ListFiles(ctx context.Context, db DB) ([]File, error) {
-	return many[File](db.Query(ctx, `SELECT id, name, mime, size, ''::bytea AS data, created_at FROM files ORDER BY created_at DESC`))
+	return many[File](db.Query(ctx, `SELECT id, name, mime, size, ''::bytea AS data, created_at FROM files WHERE owner_id IS NULL ORDER BY created_at DESC`))
 }
 
 func DeleteFile(ctx context.Context, db DB, id uuid.UUID) error {

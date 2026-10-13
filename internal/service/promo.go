@@ -175,7 +175,7 @@ func (s *Service) RedeemPromo(ctx context.Context, c *store.Customer, code strin
 	if res.Kind == "days" {
 		what = "+" + plural(res.Value, "день", "дня", "дней")
 	}
-	s.Notify.Admin(ctx, "promo", fmt.Sprintf("🎟 Промокод <b>%s</b> (%s)\n👤 %s", escape(res.Code), what, escape(c.DisplayName())), c.ID)
+	s.event(ctx, "promo", c, map[string]any{"code": res.Code, "what": what})
 	return res, nil
 }
 

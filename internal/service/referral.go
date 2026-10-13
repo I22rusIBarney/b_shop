@@ -181,8 +181,7 @@ func (s *Service) notifyBonus(ctx context.Context, payer *store.Customer, cb cre
 	s.Notify.Customer(ctx, cb.recipient, Message{Text: text, ButtonText: "Открыть кабинет", ButtonURL: s.Cfg.PublicURL + "/",
 		EmailSubject: "Бонусные дни"})
 	kind := map[string]string{"first": "за первую оплату", "recurring": "за повторную оплату", "invitee": "приглашённому"}[cb.bonus.Kind]
-	s.Notify.Admin(ctx, "referral_bonus", fmt.Sprintf("🎁 Реферальный бонус %s: +%s\n👤 Получатель: %s\n🤝 За: %s", kind, d,
-		escape(whoLine(cb.recipient)), escape(whoLine(payer))), cb.recipient.ID)
+	s.event(ctx, "referral_bonus", cb.recipient, map[string]any{"kind": kind, "days": d, "referral": whoLine(payer)})
 }
 
 // AdminReferralBonus credits manual bonus days to a customer.

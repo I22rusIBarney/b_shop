@@ -57,15 +57,24 @@ type Receipts interface {
 // Notifier delivers messages to customers (Telegram / email) and admin event chats.
 type Notifier interface {
 	Customer(ctx context.Context, c *store.Customer, msg Message)
-	Admin(ctx context.Context, event string, text string, customerID int64)
+	Admin(ctx context.Context, n AdminNote)
+	// Deliver sends a message through one channel ("telegram", "email" or "auto": Telegram, else email).
+	Deliver(ctx context.Context, c *store.Customer, msg Message, channel string) error
 }
 
-// Message is a customer notification; Button is optional.
+// Message is a customer notification; buttons are optional.
 type Message struct {
 	Text         string // Telegram HTML
 	ButtonText   string
 	ButtonURL    string
+	Buttons      []Button // extra buttons, one per row
+	Photo        string   // absolute image URL
 	EmailSubject string
+}
+
+type Button struct {
+	Text string `json:"text"`
+	URL  string `json:"url"`
 }
 
 type Service struct {
@@ -77,6 +86,8 @@ type Service struct {
 	Mailer   *mailer.Mailer
 	Notify   Notifier
 	Log      *slog.Logger
+	// BotUsername is the Telegram bot's username (without @), for deep links.
+	BotUsername string
 
 	// Gateway / Receipts may be overridden in tests; otherwise built from settings on demand.
 	GatewayOverride  PaymentGateway
@@ -96,6 +107,9 @@ type Service struct {
 func (s *Service) set() *settings.All { return s.Settings.Get() }
 
 var ErrPaymentsDisabled = errors.New("оплата временно недоступна")
+
+// ErrUnreachable: the customer has no working channel (bot blocked / no Telegram, no email or SMTP off).
+var ErrUnreachable = errors.New("клиенту некуда отправить сообщение")
 
 func (s *Service) gateway() (PaymentGateway, error) {
 	if s.GatewayOverride != nil {
@@ -139,4 +153,12 @@ func (s *Service) lock(key string) func() {
 	m := v.(*sync.Mutex)
 	m.Lock()
 	return m.Unlock
+}
+
+// RefLink is the customer's referral link (empty without a bot or code).
+func (s *Service) RefLink(c *store.Customer) string {
+	if c.RefCode == nil || s.BotUsername == "" {
+		return ""
+	}
+	return "https://t.me/" + s.BotUsername + "?start=ref_" + *c.RefCode
 }

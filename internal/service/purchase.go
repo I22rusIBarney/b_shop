@@ -280,7 +280,7 @@ func (s *Service) startPayment(ctx context.Context, c *store.Customer, p *store.
 	if err != nil {
 		s.Log.Error("yookassa create", "payment", p.ID, "err", err)
 		_ = store.MarkCanceled(ctx, s.Store.Pool, p.ID, "provider_error")
-		s.Notify.Admin(ctx, "payment_error", fmt.Sprintf("⚠️ Ошибка создания платежа ЮKassa: %v", err), c.ID)
+		s.event(ctx, "payment_error", c, map[string]any{"error": "Ошибка создания платежа ЮKassa: " + err.Error()})
 		return nil, userErr("не удалось создать платёж, попробуйте другой способ или позже")
 	}
 	url := ""
@@ -379,7 +379,7 @@ func (s *Service) syncProviderPayment(ctx context.Context, yp *yookassa.Payment)
 	switch yp.Status {
 	case "succeeded":
 		if got := yp.Amount.ToKopecks(); got < p.Amount {
-			s.Notify.Admin(ctx, "payment_error", fmt.Sprintf("⚠️ Сумма платежа %s меньше ожидаемой: %d < %d", yp.ID, got, p.Amount), p.CustomerID)
+			s.eventByID(ctx, "payment_error", p.CustomerID, map[string]any{"error": fmt.Sprintf("Сумма платежа %s меньше ожидаемой: %d < %d", yp.ID, got, p.Amount)})
 			return nil
 		}
 		method := p.Method
@@ -557,7 +557,7 @@ func (s *Service) ApplyPayment(ctx context.Context, id uuid.UUID) error {
 	})
 	if err != nil {
 		s.Log.Error("apply payment", "payment", id, "err", err)
-		s.Notify.Admin(ctx, "payment_error", fmt.Sprintf("⚠️ Оплата %s получена, но подписка не выдана: %v. Повторю автоматически.", id, err), 0)
+		s.event(ctx, "payment_error", nil, map[string]any{"error": fmt.Sprintf("Оплата %s получена, но подписка не выдана: %v. Повторю автоматически.", id, err)})
 		return err
 	}
 	if pay == nil {
@@ -607,18 +607,24 @@ func (s *Service) afterPurchase(ctx context.Context, c *store.Customer, p *store
 	case "devices":
 		detail = fmt.Sprintf("+%d устр. на %s", p.ExtraDevices, plural(p.Days, "день", "дня", "дней"))
 	}
-	event := "purchase"
-	if p.Operation == "change" {
-		event = "plan_change"
-	} else if p.Operation == "autopay" {
-		event = "autopay"
-	}
 	extra := ""
 	if p.PromoCode != "" {
 		extra = fmt.Sprintf("\n🎟 %s (−%d%%)", escape(p.PromoCode), p.DiscountPercent)
 	}
-	s.Notify.Admin(ctx, event, fmt.Sprintf("🛒 %s\n👤 %s\n📦 %s · %s\n💰 %s%s", opName, escape(whoLine(c)), escape(p.Title),
-		escape(detail), rub(p.Amount), extra), c.ID)
+	switch p.Operation {
+	case "change":
+		s.event(ctx, "plan_change", c, map[string]any{"mode": "с доплатой", "from": s.planName(ctx, p.FromPlanID), "to": p.Title,
+			"days": plural(p.Days, "день", "дня", "дней"), "amount": Raw("\n💰 " + rub(p.Amount) + extra)})
+	case "autopay":
+		s.event(ctx, "autopay", c, map[string]any{"plan": p.Title, "detail": detail, "amount": rub(p.Amount)})
+	default:
+		ev := "purchase"
+		if p.Operation == "renew" {
+			ev = "renew"
+		}
+		s.event(ctx, ev, c, map[string]any{"operation": opName, "plan": p.Title, "detail": detail, "amount": rub(p.Amount), "promo": Raw(extra)})
+	}
+	s.onPurchaseForAutomations(ctx, c, p)
 }
 
 func whoLine(c *store.Customer) string {
@@ -648,7 +654,7 @@ func (s *Service) onRefund(ctx context.Context, p *store.Payment, amount int64) 
 		return err
 	}
 	_ = store.AddEvent(ctx, s.Store.Pool, p.CustomerID, "refund", map[string]any{"payment": p.ID, "amount": amount}, nil)
-	s.Notify.Admin(ctx, "refund", fmt.Sprintf("↩️ Возврат %s по платежу %s", rub(amount), p.ID), p.CustomerID)
+	s.eventByID(ctx, "refund", p.CustomerID, map[string]any{"amount": rub(amount), "payment": p.ID.String()})
 	return nil
 }
 

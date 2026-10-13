@@ -57,7 +57,8 @@ func (s *Service) ActivateTrial(ctx context.Context, c *store.Customer) (*store.
 		}
 		return nil, err
 	}
-	s.Notify.Admin(ctx, "trial", fmt.Sprintf("⭐ Активирован триал\n👤 %s · %d дн.", escape(c.DisplayName()), t.Days), c.ID)
+	s.event(ctx, "trial", c, map[string]any{"days": t.Days, "plan": sub.Title})
+	s.AutomationEvent(ctx, "active_trial", c.ID, map[string]any{"plan_name": sub.Title, "subscription_id": sub.ID})
 	return sub, nil
 }
 

@@ -5,7 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -16,6 +18,7 @@ import (
 
 	tg "github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
+	"github.com/google/uuid"
 )
 
 type Bot struct {
@@ -96,7 +99,86 @@ func (b *Bot) onMessage(ctx context.Context, m *models.Message) {
 	if c.IsBlocked {
 		return
 	}
+	isCommand := strings.HasPrefix(text, "/")
+	hasContent := text != "" || m.Caption != "" || len(m.Photo) > 0 || m.Document != nil
+	if !isCommand && hasContent && b.supportMessage(ctx, m, c) {
+		return
+	}
 	b.sendMenu(ctx, f.ID, c)
+}
+
+// supportMessage files a message written to the bot into the customer's ticket. Returns false if bot chat is off.
+func (b *Bot) supportMessage(ctx context.Context, m *models.Message, c *store.Customer) bool {
+	sup := b.svc.Settings.Get().Support
+	if !sup.Enabled || !sup.BotChat {
+		return false
+	}
+	text := strings.TrimSpace(m.Text)
+	if text == "" {
+		text = strings.TrimSpace(m.Caption)
+	}
+	var files []uuid.UUID
+	if id, ok := b.saveAttachment(ctx, m, c); ok {
+		files = append(files, id)
+	}
+	ticketID, created, err := b.svc.BotSupportMessage(ctx, c, text, files)
+	var reply string
+	switch {
+	case err != nil:
+		var ue *service.UserError
+		if errors.As(err, &ue) {
+			reply = "⚠️ " + esc(ue.Msg)
+		} else {
+			b.log.Error("bot support", "err", err)
+			reply = "⚠️ Не удалось передать сообщение, попробуйте ещё раз или напишите из кабинета."
+		}
+	case created:
+		reply = fmt.Sprintf("✉️ Обращение <b>#%d</b> создано. Ответ придёт сюда — просто продолжайте писать в этот чат.", ticketID)
+	default:
+		return true
+	}
+	_, err = b.tg.SendMessage(ctx, &tg.SendMessageParams{ChatID: m.Chat.ID, Text: reply, ParseMode: models.ParseModeHTML,
+		ReplyMarkup: &models.InlineKeyboardMarkup{InlineKeyboard: [][]models.InlineKeyboardButton{{
+			{Text: "Открыть обращение", WebApp: &models.WebAppInfo{URL: b.webAppURL(fmt.Sprintf("/support/%d", ticketID))}},
+		}}}})
+	b.checkBlocked(ctx, m.Chat.ID, err)
+	return true
+}
+
+func (b *Bot) saveAttachment(ctx context.Context, m *models.Message, c *store.Customer) (uuid.UUID, bool) {
+	var fileID, name, mime string
+	switch {
+	case len(m.Photo) > 0:
+		p := m.Photo[len(m.Photo)-1]
+		fileID, name, mime = p.FileID, "photo.jpg", "image/jpeg"
+	case m.Document != nil:
+		fileID, name, mime = m.Document.FileID, m.Document.FileName, m.Document.MimeType
+	default:
+		return uuid.Nil, false
+	}
+	f, err := b.tg.GetFile(ctx, &tg.GetFileParams{FileID: fileID})
+	if err != nil {
+		return uuid.Nil, false
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, b.tg.FileDownloadLink(f), nil)
+	if err != nil {
+		return uuid.Nil, false
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return uuid.Nil, false
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 21<<20))
+	if err != nil || resp.StatusCode != http.StatusOK {
+		return uuid.Nil, false
+	}
+	saved, err := b.svc.SaveCustomerFile(ctx, c, name, mime, data)
+	if err != nil {
+		b.log.Info("bot attachment rejected", "customer", c.ID, "err", err)
+		return uuid.Nil, false
+	}
+	return saved.ID, true
 }
 
 func (b *Bot) sendMenu(ctx context.Context, chatID int64, c *store.Customer) {
@@ -129,54 +211,127 @@ func esc(s string) string {
 
 // Customer delivers a message by Telegram, falling back to email.
 func (b *Bot) Customer(ctx context.Context, c *store.Customer, msg service.Message) {
-	if c.TelegramID != nil && !c.BotBlocked {
-		params := &tg.SendMessageParams{ChatID: *c.TelegramID, Text: msg.Text, ParseMode: models.ParseModeHTML,
-			LinkPreviewOptions: &models.LinkPreviewOptions{IsDisabled: tg.True()}}
-		if msg.ButtonURL != "" {
-			btn := models.InlineKeyboardButton{Text: msg.ButtonText}
-			if strings.HasPrefix(msg.ButtonURL, b.svc.Cfg.PublicURL) {
-				btn.WebApp = &models.WebAppInfo{URL: msg.ButtonURL}
-			} else {
-				btn.URL = msg.ButtonURL
-			}
-			params.ReplyMarkup = &models.InlineKeyboardMarkup{InlineKeyboard: [][]models.InlineKeyboardButton{{btn}}}
-		}
-		_, err := b.tg.SendMessage(ctx, params)
-		if err == nil {
-			return
-		}
-		b.checkBlocked(ctx, *c.TelegramID, err)
-		b.log.Warn("notify telegram", "customer", c.ID, "err", err)
-	}
-	if c.Email != nil && b.svc.Mailer.Configured() {
-		subject := msg.EmailSubject
-		if subject == "" {
-			subject = b.svc.Settings.Get().General.ShopName
-		}
-		html := "<div style=\"font-family:sans-serif;font-size:15px\">" + strings.ReplaceAll(msg.Text, "\n", "<br>")
-		if msg.ButtonURL != "" {
-			html += fmt.Sprintf(`<p><a href="%s">%s</a></p>`, msg.ButtonURL, esc(msg.ButtonText))
-		}
-		html += "</div>"
-		if err := b.svc.Mailer.Send(ctx, *c.Email, subject, html); err != nil {
-			b.log.Warn("notify email", "customer", c.ID, "err", err)
-		}
+	if err := b.Deliver(ctx, c, msg, "auto"); err != nil && !errors.Is(err, service.ErrUnreachable) {
+		b.log.Warn("notify customer", "customer", c.ID, "err", err)
 	}
 }
 
-// Admin sends an event to admins. Per-event chats/topics come with the notifications settings section.
-func (b *Bot) Admin(ctx context.Context, event, text string, customerID int64) {
-	var markup models.ReplyMarkup
-	if customerID > 0 {
-		markup = &models.InlineKeyboardMarkup{InlineKeyboard: [][]models.InlineKeyboardButton{{
-			{Text: "Открыть клиента", WebApp: &models.WebAppInfo{URL: b.webAppURL(fmt.Sprintf("/admin/customers/%d", customerID))}},
-		}}}
+func (b *Bot) button(text, url string, private bool) models.InlineKeyboardButton {
+	btn := models.InlineKeyboardButton{Text: text}
+	// Web-app buttons work only in private chats; groups get a plain link.
+	if private && strings.HasPrefix(url, b.svc.Cfg.PublicURL) {
+		btn.WebApp = &models.WebAppInfo{URL: url}
+	} else {
+		btn.URL = url
 	}
-	for _, id := range b.svc.Cfg.AdminTelegram {
-		_, err := b.tg.SendMessage(ctx, &tg.SendMessageParams{ChatID: id, Text: text, ParseMode: models.ParseModeHTML,
-			ReplyMarkup: markup, LinkPreviewOptions: &models.LinkPreviewOptions{IsDisabled: tg.True()}})
-		if err != nil {
-			b.log.Warn("notify admin", "event", event, "err", err)
+	return btn
+}
+
+func (b *Bot) keyboard(msg service.Message) *models.InlineKeyboardMarkup {
+	var rows [][]models.InlineKeyboardButton
+	if msg.ButtonURL != "" {
+		rows = append(rows, []models.InlineKeyboardButton{b.button(msg.ButtonText, msg.ButtonURL, true)})
+	}
+	for _, x := range msg.Buttons {
+		rows = append(rows, []models.InlineKeyboardButton{b.button(x.Text, x.URL, true)})
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+	return &models.InlineKeyboardMarkup{InlineKeyboard: rows}
+}
+
+// Deliver sends a message through Telegram, email, or Telegram with email fallback ("auto").
+func (b *Bot) Deliver(ctx context.Context, c *store.Customer, msg service.Message, channel string) error {
+	canTG := c.TelegramID != nil && !c.BotBlocked
+	canMail := c.Email != nil && b.svc.Mailer.Configured()
+	var tgErr error
+	if (channel == "telegram" || channel == "auto") && canTG {
+		tgErr = b.sendTelegram(ctx, *c.TelegramID, msg)
+		if tgErr == nil {
+			return nil
+		}
+		b.checkBlocked(ctx, *c.TelegramID, tgErr)
+		if channel == "telegram" {
+			return tgErr
+		}
+	}
+	if (channel == "email" || channel == "auto") && canMail {
+		return b.sendEmail(ctx, *c.Email, msg)
+	}
+	if tgErr != nil {
+		return tgErr
+	}
+	return service.ErrUnreachable
+}
+
+func (b *Bot) sendTelegram(ctx context.Context, chatID int64, msg service.Message) error {
+	kb := b.keyboard(msg)
+	var markup models.ReplyMarkup
+	if kb != nil {
+		markup = kb
+	}
+	if msg.Photo != "" {
+		caption := msg.Text
+		long := len([]rune(caption)) > 1024
+		if long {
+			caption = ""
+		}
+		p := &tg.SendPhotoParams{ChatID: chatID, Photo: &models.InputFileString{Data: msg.Photo}, Caption: caption, ParseMode: models.ParseModeHTML}
+		if !long {
+			p.ReplyMarkup = markup
+		}
+		if _, err := b.tg.SendPhoto(ctx, p); err != nil {
+			return err
+		}
+		if !long {
+			return nil
+		}
+	}
+	_, err := b.tg.SendMessage(ctx, &tg.SendMessageParams{ChatID: chatID, Text: msg.Text, ParseMode: models.ParseModeHTML,
+		ReplyMarkup: markup, LinkPreviewOptions: &models.LinkPreviewOptions{IsDisabled: tg.True()}})
+	return err
+}
+
+func (b *Bot) sendEmail(ctx context.Context, to string, msg service.Message) error {
+	subject := msg.EmailSubject
+	if subject == "" {
+		subject = b.svc.Settings.Get().General.ShopName
+	}
+	html := "<div style=\"font-family:sans-serif;font-size:15px;line-height:1.5\">"
+	if msg.Photo != "" {
+		html += fmt.Sprintf(`<p><img src="%s" alt="" style="max-width:100%%;border-radius:12px"></p>`, msg.Photo)
+	}
+	html += strings.ReplaceAll(msg.Text, "\n", "<br>")
+	if msg.ButtonURL != "" {
+		html += fmt.Sprintf(`<p><a href="%s">%s</a></p>`, msg.ButtonURL, esc(msg.ButtonText))
+	}
+	for _, x := range msg.Buttons {
+		html += fmt.Sprintf(`<p><a href="%s">%s</a></p>`, x.URL, esc(x.Text))
+	}
+	html += "</div>"
+	return b.svc.Mailer.Send(ctx, to, subject, html)
+}
+
+// Admin sends an event to its chat/topic, or to every admin in ADMIN_TELEGRAM_IDS.
+func (b *Bot) Admin(ctx context.Context, n service.AdminNote) {
+	targets := []int64{n.ChatID}
+	if n.ChatID == 0 {
+		targets = b.svc.Cfg.AdminTelegram
+	}
+	for _, id := range targets {
+		p := &tg.SendMessageParams{ChatID: id, Text: n.Text, ParseMode: models.ParseModeHTML,
+			LinkPreviewOptions: &models.LinkPreviewOptions{IsDisabled: tg.True()}}
+		if n.TopicID > 0 && n.ChatID != 0 {
+			p.MessageThreadID = n.TopicID
+		}
+		if n.ButtonPath != "" {
+			p.ReplyMarkup = &models.InlineKeyboardMarkup{InlineKeyboard: [][]models.InlineKeyboardButton{{
+				b.button(n.ButtonText, b.webAppURL(n.ButtonPath), id > 0),
+			}}}
+		}
+		if _, err := b.tg.SendMessage(ctx, p); err != nil {
+			b.log.Warn("notify admin", "event", n.Event, "chat", id, "err", err)
 		}
 	}
 }
@@ -188,6 +343,11 @@ func (l LogNotifier) Customer(_ context.Context, c *store.Customer, m service.Me
 	l.Log.Info("notify customer", "customer", c.ID, "text", m.Text)
 }
 
-func (l LogNotifier) Admin(_ context.Context, event, text string, customerID int64) {
-	l.Log.Info("notify admin", "event", event, "customer", customerID, "text", text)
+func (l LogNotifier) Deliver(_ context.Context, c *store.Customer, m service.Message, ch string) error {
+	l.Log.Info("deliver", "customer", c.ID, "channel", ch, "text", m.Text)
+	return nil
+}
+
+func (l LogNotifier) Admin(_ context.Context, n service.AdminNote) {
+	l.Log.Info("notify admin", "event", n.Event, "chat", n.ChatID, "customer", n.CustomerID, "text", n.Text)
 }

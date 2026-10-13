@@ -72,6 +72,8 @@ type Customer struct {
 	CreatedAt        time.Time  `db:"created_at" json:"created_at"`
 	LastSeenAt       *time.Time `db:"last_seen_at" json:"last_seen_at"`
 	BonusDays        int        `db:"bonus_days" json:"bonus_days"`
+	NewsSeenAt       *time.Time `db:"news_seen_at" json:"-"`
+	LeadTemperature  string     `db:"lead_temperature" json:"lead_temperature"`
 }
 
 // DisplayName is the best human-readable name for notifications and the admin UI.
@@ -96,7 +98,8 @@ func (c *Customer) DisplayName() string {
 }
 
 const customerCols = `id, telegram_id, email, username, first_name, last_name, language, is_admin, is_blocked,
-	bot_blocked, personal_discount, tag, notes, ref_code, referrer_id, trial_used, source, created_at, last_seen_at, bonus_days`
+	bot_blocked, personal_discount, tag, notes, ref_code, referrer_id, trial_used, source, created_at, last_seen_at, bonus_days,
+	news_seen_at, lead_temperature`
 
 func GetCustomer(ctx context.Context, db DB, id int64) (*Customer, error) {
 	return one[Customer](db.Query(ctx, `SELECT `+customerCols+` FROM customers WHERE id=$1`, id))
@@ -319,4 +322,10 @@ func AddEvent(ctx context.Context, db DB, customerID int64, kind string, data an
 	_, err := db.Exec(ctx, `INSERT INTO customer_events (customer_id, kind, data, actor_id) VALUES ($1,$2,$3,$4)`,
 		customerID, kind, data, actorID)
 	return err
+}
+
+// IsUniqueViolation reports a unique-constraint error.
+func IsUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }

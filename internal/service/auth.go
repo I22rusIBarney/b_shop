@@ -60,7 +60,7 @@ func (s *Service) Login(ctx context.Context, p *auth.Profile, meta LoginMeta) (*
 	}
 	if created {
 		_ = store.AddEvent(ctx, s.Store.Pool, cust.ID, "registered", map[string]string{"provider": p.Provider}, nil)
-		s.Notify.Admin(ctx, "new_customer", fmt.Sprintf("🆕 Новый пользователь: %s (%s)", cust.DisplayName(), p.Provider), cust.ID)
+		s.event(ctx, "new_customer", cust, map[string]any{"via": " (" + p.Provider + ")"})
 	}
 	_ = store.AddEvent(ctx, s.Store.Pool, cust.ID, "login", map[string]string{"provider": p.Provider}, nil)
 	return &Session{Token: token, Customer: cust, Created: created}, nil
@@ -237,7 +237,7 @@ func (s *Service) TelegramBotUser(ctx context.Context, p *auth.Profile) (*store.
 	})
 	if err == nil && created {
 		_ = store.AddEvent(ctx, s.Store.Pool, c.ID, "registered", map[string]string{"provider": "telegram_bot"}, nil)
-		s.Notify.Admin(ctx, "new_customer", fmt.Sprintf("🆕 Новый пользователь: %s", c.DisplayName()), c.ID)
+		s.event(ctx, "new_customer", c, map[string]any{"via": ""})
 	}
 	return c, created, err
 }

@@ -111,6 +111,8 @@ func (s *Service) TestIntegration(ctx context.Context, section string, admin *st
 			return "", err
 		}
 		return "Письмо отправлено на " + *admin.Email, nil
+	case "ai":
+		return s.TestAI(ctx)
 	case "remnawave":
 		sq, err := s.Panel.InternalSquads(ctx)
 		if err != nil {

@@ -277,8 +277,9 @@ func (r *fakeReceipts) CancelIncome(_ context.Context, id, _ string) error {
 
 type notes struct {
 	mu       sync.Mutex
-	customer []string
-	admin    []string
+	customer   []string
+	admin      []string
+	adminNotes []service.AdminNote
 }
 
 func (n *notes) Customer(_ context.Context, _ *store.Customer, m service.Message) {
@@ -287,10 +288,21 @@ func (n *notes) Customer(_ context.Context, _ *store.Customer, m service.Message
 	n.mu.Unlock()
 }
 
-func (n *notes) Admin(_ context.Context, event, text string, _ int64) {
+func (n *notes) Admin(_ context.Context, a service.AdminNote) {
 	n.mu.Lock()
-	n.admin = append(n.admin, event+": "+text)
+	n.admin = append(n.admin, a.Event+": "+a.Text)
+	n.adminNotes = append(n.adminNotes, a)
 	n.mu.Unlock()
+}
+
+func (n *notes) Deliver(_ context.Context, c *store.Customer, m service.Message, _ string) error {
+	if c.TelegramID == nil && c.Email == nil {
+		return service.ErrUnreachable
+	}
+	n.mu.Lock()
+	n.customer = append(n.customer, m.Text)
+	n.mu.Unlock()
+	return nil
 }
 
 // ---- harness ----

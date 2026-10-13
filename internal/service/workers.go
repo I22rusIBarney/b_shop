@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -85,8 +84,7 @@ func (s *Service) ProcessReceipts(ctx context.Context) {
 func (s *Service) receiptAlert(ctx context.Context, p *store.Payment, err error) {
 	// Alert on the first failure and when auth is broken; later retries stay quiet.
 	if p.ReceiptAttempts == 0 || (errors.Is(err, moynalog.ErrAuth) && p.ReceiptAttempts%5 == 0) {
-		s.Notify.Admin(ctx, "receipt_error", fmt.Sprintf("🧾 Не удалось отправить чек в «Мой налог» (платёж %s, %s): %v. Повторю автоматически.",
-			p.ID, rub(p.Amount), err), p.CustomerID)
+		s.eventByID(ctx, "receipt_error", p.CustomerID, map[string]any{"payment": p.ID.String(), "amount": rub(p.Amount), "error": err.Error()})
 	}
 }
 
@@ -157,4 +155,10 @@ func (s *Service) RunWorkers(ctx context.Context) {
 	every(30*time.Second, "receipts", s.ProcessReceipts)
 	every(10*time.Minute, "autopay", s.RunAutopay)
 	every(time.Hour, "purge", func(ctx context.Context) { _ = store.PurgeExpired(ctx, s.Store.Pool) })
+	every(10*time.Second, "ai", s.ProcessAI)
+	every(15*time.Second, "reply-notices", s.ProcessReplyNotices)
+	every(5*time.Minute, "ticket-timers", s.ProcessTicketTimers)
+	every(time.Minute, "broadcasts", s.ProcessBroadcasts)
+	every(5*time.Minute, "automation-triggers", s.ScanAutomationTriggers)
+	every(time.Minute, "automation-runs", s.ProcessAutomationRuns)
 }

@@ -21,6 +21,12 @@ type All struct {
 	Branding Branding `json:"branding"`
 	Links    Links    `json:"links"`
 	Install  Install  `json:"install"`
+
+	Notifications Notifications `json:"notifications"`
+	Support       Support       `json:"support"`
+	AI            AI            `json:"ai"`
+	Automations   Automations   `json:"automations"`
+	Broadcasts    Broadcasts    `json:"broadcasts"`
 }
 
 func Defaults() All {
@@ -86,6 +92,11 @@ func Defaults() All {
 			InviteeDays:      3,
 			RecurringPercent: 10,
 		},
+		Notifications: defaultNotifications(),
+		Support:       defaultSupport(),
+		AI:            defaultAI(),
+		Automations:   defaultAutomations(),
+		Broadcasts:    Broadcasts{RatePerSecond: 20},
 	}
 }
 

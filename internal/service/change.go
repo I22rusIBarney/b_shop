@@ -269,8 +269,8 @@ func (s *Service) ChangePlan(ctx context.Context, c *store.Customer, subID int64
 		}
 		return nil, err
 	}
-	s.Notify.Admin(ctx, "plan_change", fmt.Sprintf("🔄 Смена тарифа (%s)\n👤 %s\n📦 %s → %s\n📅 %d → %d дн.", modeName(q.Mode),
-		escape(whoLine(c)), escape(cur.Name), escape(target.Name), q.DaysBefore, q.DaysAfter), c.ID)
+	s.event(ctx, "plan_change", c, map[string]any{"mode": modeName(q.Mode), "from": cur.Name, "to": target.Name,
+		"days": fmt.Sprintf("%d → %d дн.", q.DaysBefore, q.DaysAfter), "amount": Raw("")})
 	return &BuyResult{Applied: true, SubscriptionID: after.ID}, nil
 }
 

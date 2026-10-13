@@ -80,6 +80,7 @@ func run(log *slog.Logger) error {
 		}
 		svc.Notify = b
 		api.BotUsername = b.Username
+		svc.BotUsername = b.Username
 		go b.Run(ctx)
 		log.Info("telegram bot started", "username", b.Username)
 	}
