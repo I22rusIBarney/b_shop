@@ -115,7 +115,7 @@ func QueueReceipt(ctx context.Context, db DB, id uuid.UUID) error {
 
 func ReceiptsDue(ctx context.Context, db DB, limit int) ([]Payment, error) {
 	return many[Payment](db.Query(ctx, `SELECT * FROM payments WHERE status IN ('succeeded','refunded')
-		AND receipt_status IN ('pending','failed') AND receipt_next_try <= now() AND receipt_attempts < 20
+		AND receipt_status IN ('pending','failed','cancel_pending') AND receipt_next_try <= now() AND receipt_attempts < 20
 		ORDER BY receipt_next_try LIMIT $1`, limit))
 }
 
@@ -125,12 +125,21 @@ func ReceiptDone(ctx context.Context, db DB, id uuid.UUID, receiptUUID string) e
 	return err
 }
 
-func ReceiptFailed(ctx context.Context, db DB, id uuid.UUID, errText string, next time.Time) error {
+// ReceiptRetry records a failed attempt; status is 'failed' for issuing and 'cancel_pending' for annulment.
+func ReceiptRetry(ctx context.Context, db DB, id uuid.UUID, status, errText string, next time.Time) error {
 	if len(errText) > 500 {
 		errText = errText[:500]
 	}
-	_, err := db.Exec(ctx, `UPDATE payments SET receipt_status='failed', receipt_error=$2,
-		receipt_attempts=receipt_attempts+1, receipt_next_try=$3 WHERE id=$1`, id, errText, next)
+	_, err := db.Exec(ctx, `UPDATE payments SET receipt_status=$4, receipt_error=$2,
+		receipt_attempts=receipt_attempts+1, receipt_next_try=$3 WHERE id=$1`, id, errText, next, status)
+	return err
+}
+
+// QueueReceiptCancel schedules annulment of an issued receipt (refund); unissued receipts are dropped.
+func QueueReceiptCancel(ctx context.Context, db DB, id uuid.UUID) error {
+	_, err := db.Exec(ctx, `UPDATE payments SET
+		receipt_status = CASE WHEN receipt_status='done' THEN 'cancel_pending' ELSE 'canceled' END,
+		receipt_next_try = now(), receipt_attempts = 0 WHERE id=$1 AND receipt_status <> 'canceled'`, id)
 	return err
 }
 

@@ -1,90 +1,45 @@
-# Remnawave Telegram Shop
+# BobrGO Shop
 
-[![Stars](https://img.shields.io/github/stars/Jolymmiels/remnawave-telegram-shop.svg?style=social)](https://github.com/Jolymmiels/remnawave-telegram-shop/stargazers)
-[![Forks](https://img.shields.io/github/forks/Jolymmiels/remnawave-telegram-shop.svg?style=social)](https://github.com/Jolymmiels/remnawave-telegram-shop/network/members)
-[![Issues](https://img.shields.io/github/issues/Jolymmiels/remnawave-telegram-shop.svg)](https://github.com/Jolymmiels/remnawave-telegram-shop/issues)
+Telegram-бот и веб-приложение (Mini App + кабинет в браузере) для продажи VPN-подписок на панели **Remnawave**.
 
-Telegram bot for selling and managing [Remnawave](https://remna.st/) subscriptions.
+Основано на [Jolymmiels/remnawave-telegram-shop](https://github.com/Jolymmiels/remnawave-telegram-shop) (AGPL-3.0), переписано заново.
+Лицензия — **AGPL-3.0** (см. `LICENCE.txt`): если сервис работает для пользователей по сети, исходный код изменённой версии должен быть им доступен.
 
-> Installation, configuration, updates, and usage are covered in the [documentation](https://docs.rwp.rw/ru/).
+## Принцип
 
-## What the bot can do
+В `.env` — только то, без чего не запуститься (база, токен бота, адрес, ключ шифрования, Remnawave).
+**Всё остальное настраивается в админке**: тарифы, ЮKassa, «Мой налог», почта, способы входа, рефералка, тексты.
+Ключи и пароли в базе хранятся зашифрованными (AES-256-GCM, ключ из `SECRET_KEY`).
 
-### Subscriptions
+## Что уже есть (этап 1 — ядро)
 
-- Sell and renew VPN subscriptions with configurable plans.
-- Automatically create and update users in Remnawave.
-- Give users their connection link directly in Telegram.
-- Offer a configurable trial period.
-- Apply separate traffic limits, reset strategies, tags, and internal or external squads to regular and trial users.
-- Notify users before their subscription expires.
-- Reward users through a referral program.
+- Вход: Telegram Mini App, Telegram Login в браузере, код на почту, Яндекс ID, VK ID; несколько способов на один аккаунт
+- Тарифы с периодами (дни/недели/месяцы), лимитами трафика и устройств, тегом и сквадами Remnawave
+- Покупка и продление через ЮKassa (СБП, карта, SberPay, T-Pay, ЮMoney), сохранение карты
+- Выдача и продление подписок в Remnawave; повтор при сбое панели без дублей
+- Чеки «Мой налог» с датой платежа, повтор при ошибке, аннулирование при возврате
+- Пробный период, персональная скидка, лимиты подписок, «требуемый тариф»
+- Устройства (HWID), перевыпуск ссылки, несколько подписок у клиента
+- Админ-API: настройки по разделам с проверкой подключения, тарифы, клиенты, платежи
 
-### Payments
+Дальше: веб-интерфейс, промокоды, рефералка, автоматизации, тикеты с ИИ, рассылки и новости, статистика, импорт из RWP.
+Подробная спецификация — `docs/SPEC.md`.
 
-- [YooKassa](https://yookassa.ru/developers/api)
-- [Crypto Pay](https://help.crypt.bot/crypto-pay-api)
-- Telegram Stars
-- Tribute
-- [Platega](https://platega.io): SBP, Russian cards, acquiring, international cards, and cryptocurrency
+## Запуск
 
-### Administration and interface
-
-- Russian and English localization.
-- Colored Telegram buttons with primary, success, and danger styles.
-- Telegram Premium custom emoji in buttons.
-- Configurable links to support, server status, feedback, channel, and terms of service.
-- Synchronization of the local database with Remnawave using the `/sync` admin command.
-- Configurable access restrictions for blocked and trusted Telegram users.
-- Healthcheck endpoint for monitoring the bot, database, and Remnawave availability.
-- Docker-based deployment.
-
-## Menu photo and pinned start message
-
-The bot can show the same photo on the start menu and all its inline-keyboard sections.
-Put your own JPEG or PNG in `assets/menu.jpg` and set this in `.env`:
-
-```dotenv
-MENU_PHOTO_PATH=/assets/menu.jpg
+```bash
+cp .env.sample .env   # заполнить
+docker compose up -d --build
 ```
 
-The supplied `docker-compose.yaml` mounts `./assets:/assets:ro`. With an existing
-Compose file, add that mount to the bot service. The file must be readable by the
-container's UID 1000. For a non-Docker installation, use a local path such as
-`MENU_PHOTO_PATH=./assets/menu.jpg`. Leave the value empty for text-only menus.
+Приложение слушает `127.0.0.1:8080` — поставьте перед ним nginx/caddy с HTTPS на домен из `PUBLIC_URL`.
 
-- Restart/recreate the bot after configuring or replacing the image. The first
-  menu delivery uploads it to Telegram; subsequent deliveries reuse its `file_id`.
-- The file ID, content hash and bot ID are stored in PostgreSQL, not in a
-  short-lived memory cache. An unchanged image is reused after restart. A changed
-  file is uploaded again on its next use; another bot has its own cache.
-- Keep the original file and the database volume. While running, the bot retains
-  the source in memory and can re-upload it if Telegram rejects the cached ID.
-  After restart, a missing source can still use the persisted ID, but cannot be
-  re-uploaded until the source is restored and the bot restarted. An invalid or
-  missing uncached source causes an explicit startup error rather than silently
-  disabling the photo.
-- Telegram photo limits: JPEG/PNG up to 10 MB; width + height at most 10000 pixels;
-  aspect ratio at most 20. **All menu captions, including customized translations
-  and connection details, must fit Telegram's 1024-character limit after HTML
-  parsing.** Text-only menus retain the ordinary text-message limits. Captions
-  are not silently truncated.
-- Inline navigation edits the caption and keyboard of the same photo message;
-  the image and pin remain in place. Payment completion no longer deletes the
-  menu. Existing text-only messages remain navigable; use `/start` for a new photo
-  menu. `/connect` also uses the configured photo, but does not replace the start pin.
-- Every `/start`, with or without a photo, sends and silently pins a new menu,
-  then unpins only previously tracked start menus from this bot in that chat.
-  Unrelated/manual pins are untouched. Pin state survives restart, and failed
-  unpins are retried on the next `/start`. If sending or pinning the new menu fails,
-  the old pin is not removed. Missing pin permissions do not block menu delivery
-  and are logged (groups require the appropriate bot administrator rights).
+В ЮKassa укажите адрес уведомлений `https://<PUBLIC_URL>/api/webhooks/yookassa`
+(события `payment.succeeded`, `payment.canceled`, `refund.succeeded`).
 
-Database migration `000006_add_menu_state` is applied automatically on startup.
-The pin replacement lock assumes one running polling instance per bot token.
+## Разработка
 
-## Links
-
-- [Documentation](https://docs.rwp.rw/ru/)
-- [Changelog](CHANGELOG.md)
-- [Issues](https://github.com/Jolymmiels/remnawave-telegram-shop/issues)
+```bash
+go test ./...            # интеграционные тесты: TEST_DATABASE_URL=postgres://...
+DEV=true go run ./cmd/bshop
+```

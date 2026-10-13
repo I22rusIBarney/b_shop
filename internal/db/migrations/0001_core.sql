@@ -177,7 +177,7 @@ CREATE TABLE payments (
     created_at          timestamptz NOT NULL DEFAULT now(),
     paid_at             timestamptz,
     applied_at          timestamptz,
-    receipt_status      text        NOT NULL DEFAULT 'none' CHECK (receipt_status IN ('none', 'pending', 'done', 'failed', 'canceled')),
+    receipt_status      text        NOT NULL DEFAULT 'none' CHECK (receipt_status IN ('none', 'pending', 'done', 'failed', 'cancel_pending', 'canceled')),
     receipt_uuid        text        NOT NULL DEFAULT '',
     receipt_error       text        NOT NULL DEFAULT '',
     receipt_attempts    int         NOT NULL DEFAULT 0,
@@ -186,7 +186,7 @@ CREATE TABLE payments (
 CREATE INDEX payments_customer_idx ON payments (customer_id, created_at DESC);
 CREATE INDEX payments_status_idx ON payments (status, created_at);
 CREATE UNIQUE INDEX payments_provider_ref_idx ON payments (provider, provider_ref) WHERE provider_ref IS NOT NULL;
-CREATE INDEX payments_receipt_idx ON payments (receipt_status, receipt_next_try) WHERE receipt_status IN ('pending', 'failed');
+CREATE INDEX payments_receipt_idx ON payments (receipt_status, receipt_next_try) WHERE receipt_status IN ('pending', 'failed', 'cancel_pending');
 
 -- Timeline of customer events (purchases, logins, admin actions...).
 CREATE TABLE customer_events (

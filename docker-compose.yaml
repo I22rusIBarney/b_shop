@@ -1,49 +1,31 @@
 services:
-  bot:
-    image: ghcr.io/jolymmiels/remnawave-telegram-shop-bot:latest
-    env_file:
-      - .env
+  shop:
+    build: .
+    image: bshop:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
+    ports:
+      - "127.0.0.1:8080:8080"   # put nginx/caddy with HTTPS in front
     depends_on:
       db:
         condition: service_healthy
-    volumes:
-      - ./translations:/translations
-      - ./assets:/assets:ro
 
   db:
-    image: postgres:17
-    container_name: 'remnawave-telegram-shop-db'
-    hostname: remnawave-telegram-shop-db
+    image: postgres:17-alpine
     restart: unless-stopped
-    env_file:
-      - .env
     environment:
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
-      - TZ=UTC
-    ports:
-      - '127.0.0.1:5432:5432'
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
-      - remnawave-telegram-shop-db-data:/var/lib/postgresql/data
+      - shop-db:/var/lib/postgresql/data
     healthcheck:
-      test: [ 'CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}' ]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 3s
-      timeout: 10s
-      retries: 3
-
-#  ngrok:
-#    image: ngrok/ngrok:latest
-#    command:
-#      - "http"
-#      - "http://bot:8080"
-#    environment:
-#      NGROK_AUTHTOKEN: TOKEN
-#    ports:
-#      - 4040:4040
+      timeout: 5s
+      retries: 10
 
 volumes:
-  remnawave-telegram-shop-db-data:
-    driver: local
-    external: false
-    name: remnawave-telegram-shop-db-data
+  shop-db:

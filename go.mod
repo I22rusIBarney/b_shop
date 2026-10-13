@@ -3,6 +3,7 @@ module bshop
 go 1.24
 
 require (
+	github.com/go-telegram/bot v1.20.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.7.6
 	golang.org/x/net v0.39.0

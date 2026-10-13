@@ -1,48 +1,26 @@
-FROM --platform=$BUILDPLATFORM golang:1.25.3-alpine AS modules
-WORKDIR /modules
+# --- frontend ---
+FROM node:22-alpine AS web
+WORKDIR /web
+COPY web/package*.json ./
+RUN if [ -f package.json ]; then npm ci; fi
+COPY web/ ./
+RUN if [ -f package.json ]; then npm run build; fi
+
+# --- backend ---
+FROM golang:1.24-alpine AS build
+WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
-
-FROM --platform=$BUILDPLATFORM golang:1.25.3-alpine AS builder
-WORKDIR /app
-
-COPY --from=modules /go/pkg /go/pkg
-
 COPY . .
+COPY --from=web /web/dist ./web/dist
+ARG VERSION=dev
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.Version=${VERSION}" -o /out/bshop ./cmd/bshop
 
-RUN apk update && apk add --no-cache ca-certificates tzdata
-RUN update-ca-certificates
-
-ARG TARGETOS
-ARG TARGETARCH
-ARG VERSION
-ARG COMMIT=none
-
-RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
-    -ldflags="-w -s -X main.Version=${VERSION:-dev} -X main.Commit=${COMMIT:-none} -X main.BuildDate=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
-    -o /bin/app ./cmd/app
-
-FROM scratch
-
-ARG VERSION
-ARG COMMIT
-
-LABEL org.opencontainers.image.version="${VERSION}"
-LABEL org.opencontainers.image.revision="${COMMIT}"
-LABEL org.opencontainers.image.source="https://github.com/${GITHUB_REPOSITORY}"
-LABEL org.opencontainers.image.description="Remnawave Telegram Shop Bot"
-LABEL org.opencontainers.image.licenses="MIT"
-
-COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-
-COPY --from=builder /bin/app /app/app
-
-COPY --from=builder /app/db /db
-COPY --from=builder /app/translations /translations
-
-USER 1000
-
-ENV DISABLE_ENV_FILE=true
-
-CMD ["/app/app"]
+# --- runtime ---
+FROM alpine:3.20
+RUN apk add --no-cache ca-certificates tzdata && adduser -D -u 1000 app
+COPY --from=build /out/bshop /app/bshop
+USER app
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s CMD wget -qO- http://127.0.0.1:8080/api/health || exit 1
+ENTRYPOINT ["/app/bshop"]
