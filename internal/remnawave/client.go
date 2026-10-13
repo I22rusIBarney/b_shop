@@ -134,6 +134,8 @@ type UserTraffic struct {
 type Squad struct {
 	UUID uuid.UUID `json:"uuid"`
 	Name string    `json:"name"`
+	// External squads only: the subscription page config assigned to the squad (nil = panel default).
+	SubpageConfigUUID *uuid.UUID `json:"subpageConfigUuid,omitempty"`
 }
 
 type User struct {

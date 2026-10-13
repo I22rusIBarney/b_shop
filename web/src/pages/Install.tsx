@@ -104,7 +104,7 @@ export default function Install() {
   const toast = useToast()
   const { config } = useApp()
   const subs = useLoad(() => get<Subscription[]>('/api/subscriptions'))
-  const guide = useLoad(() => get<Guide>('/api/install-guide'))
+  const guide = useLoad(() => get<Guide>(`/api/install-guide?subscription_id=${id || ''}`), [id])
   const [platform, setPlatform] = useState(detect)
   const [appIdx, setAppIdx] = useState(0)
   const [qr, setQr] = useState('')

@@ -48,7 +48,8 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/subscriptions/{id}/revoke", s.authed(s.revoke))
 	mux.HandleFunc("POST /api/trial", s.authed(s.trial))
 	mux.HandleFunc("GET /api/install-guide", s.authed(func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, s.svc.Guide(r.Context()))
+		sub, _ := strconv.ParseInt(r.URL.Query().Get("subscription_id"), 10, 64)
+		writeJSON(w, http.StatusOK, s.svc.Guide(r.Context(), customer(r), sub))
 	}))
 	mux.HandleFunc("POST /api/payments", s.authed(s.limit("buy", 20, time.Minute, s.buy)))
 	mux.HandleFunc("GET /api/payments", s.authed(s.myPayments))

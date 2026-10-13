@@ -99,10 +99,10 @@ type Service struct {
 	nalogKey   string
 	applyLocks sync.Map
 
-	guideMu    sync.Mutex
-	guideKey   string
-	guideAt    time.Time
-	guideCache json.RawMessage
+	guideMu       sync.Mutex
+	guides        map[string]cachedGuide // by subscription page config uuid ("" = default)
+	squadSubpages map[uuid.UUID]string   // external squad → its subscription page config
+	squadsAt      time.Time
 
 	importOnce sync.Once
 	imp        *importJob

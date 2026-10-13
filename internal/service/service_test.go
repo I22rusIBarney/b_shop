@@ -167,12 +167,15 @@ func (f *fakePanel) UserDevices(context.Context, int64) ([]remnawave.Device, err
 func (f *fakePanel) DeleteDevice(context.Context, int64, string) error              { return nil }
 func (f *fakePanel) DeleteAllDevices(context.Context, int64) error                  { return nil }
 func (f *fakePanel) InternalSquads(context.Context) ([]remnawave.Squad, error)      { return nil, nil }
-func (f *fakePanel) ExternalSquads(context.Context) ([]remnawave.Squad, error)      { return nil, nil }
+func (f *fakePanel) ExternalSquads(context.Context) ([]remnawave.Squad, error) {
+	sp := uuid.MustParse("00000000-0000-0000-0000-000000000002")
+	return []remnawave.Squad{{UUID: uuid.MustParse("00000000-0000-0000-0000-0000000000aa"), Name: "Promo", SubpageConfigUUID: &sp}}, nil
+}
 func (f *fakePanel) SubpageConfigs(context.Context) ([]remnawave.SubpageConfigInfo, error) {
 	return []remnawave.SubpageConfigInfo{{UUID: uuid.MustParse("00000000-0000-0000-0000-000000000001"), Name: "Default"}}, nil
 }
-func (f *fakePanel) SubpageConfig(context.Context, uuid.UUID) (json.RawMessage, error) {
-	return json.RawMessage(`{"version":"1","platforms":{"ios":{"apps":[]}}}`), nil
+func (f *fakePanel) SubpageConfig(_ context.Context, id uuid.UUID) (json.RawMessage, error) {
+	return json.RawMessage(`{"version":"1","id":"` + id.String() + `","platforms":{"ios":{"apps":[]}}}`), nil
 }
 
 type fakeGateway struct {
@@ -718,12 +721,21 @@ func TestPurchaseLimits(t *testing.T) {
 
 func TestInstallGuideFromPanel(t *testing.T) {
 	e := setup(t)
-	g := e.svc.Guide(context.Background())
-	if g.Source != "remnawave" || !strings.Contains(string(g.Config), "platforms") {
-		t.Fatalf("guide %+v", g)
+	ctx := context.Background()
+	c := login(t, e, 3001, "")
+	g := e.svc.Guide(ctx, c, 0)
+	if g.Source != "remnawave" || !strings.Contains(string(g.Config), "-000000000001") {
+		t.Fatalf("default guide %+v", string(g.Config))
+	}
+	// A plan in an external squad with its own subscription page → that page.
+	sq := uuid.MustParse("00000000-0000-0000-0000-0000000000aa")
+	plan := createPlan(t, e, store.Plan{Name: "Promo", IsActive: true, RWExternalSquad: &sq, Periods: []store.Period{{Unit: "month", Amount: 1, Price: 14900}}})
+	p := buyPaid(t, e, c, plan, 0, 0)
+	if g := e.svc.Guide(ctx, c, *p.SubscriptionID); !strings.Contains(string(g.Config), "-000000000002") {
+		t.Fatalf("squad guide %+v", string(g.Config))
 	}
 	mustSet(t, e, "install", `{"source":"manual","apps":[{"platform":"ios","name":"INCY"}]}`)
-	if g := e.svc.Guide(context.Background()); g.Source != "manual" {
+	if g := e.svc.Guide(ctx, c, 0); g.Source != "manual" {
 		t.Fatalf("manual source ignored: %+v", g)
 	}
 }

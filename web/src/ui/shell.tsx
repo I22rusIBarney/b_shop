@@ -16,10 +16,10 @@ function Media({ src, className }: { src: string; className: string }) {
   )
 }
 
-export function Backdrop({ b }: { b: Branding }) {
+export function Backdrop({ b, dim }: { b: Branding; dim?: boolean }) {
   if (!b.bg_mobile && !b.bg_desktop) return <div className="backdrop" />
   return (
-    <div className="backdrop" style={{ opacity: b.bg_opacity / 100, ['--bg-fit' as any]: b.bg_fit, ['--bg-dim' as any]: `${b.bg_dim}%` }}>
+    <div className={dim ? 'backdrop dim' : 'backdrop'} style={{ opacity: b.bg_opacity / 100, ['--bg-fit' as any]: b.bg_fit, ['--bg-dim' as any]: `${b.bg_dim}%` }}>
       {b.bg_desktop && <Media src={b.bg_desktop} className="desktop" />}
       <Media src={b.bg_mobile || b.bg_desktop} className="mobile" />
     </div>
@@ -106,7 +106,7 @@ export function ClientShell() {
   }, [loc.pathname])
   return (
     <>
-      <Backdrop b={config.branding} />
+      <Backdrop b={config.branding} dim={loc.pathname !== '/'} />
       <Effect kind={config.branding.effect} />
       <main className="app">
         <Brand />
