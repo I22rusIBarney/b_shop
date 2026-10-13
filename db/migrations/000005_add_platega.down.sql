@@ -1,2 +1,0 @@
-ALTER TABLE purchase DROP COLUMN IF EXISTS platega_url;
-ALTER TABLE purchase DROP COLUMN IF EXISTS platega_id;

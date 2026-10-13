@@ -1,18 +1,16 @@
+// Package remnawave is a small client for the Remnawave panel API (v3.x, numeric user ids).
+// It knows nothing about shop settings: callers pass every value explicitly.
 package remnawave
 
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
-	"remnawave-tg-shop-bot/internal/config"
-	"remnawave-tg-shop-bot/utils"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -20,444 +18,381 @@ import (
 	"github.com/google/uuid"
 )
 
-// ErrNotFound is returned when the API responds with 404.
-var ErrNotFound = errors.New("not found")
-
-// ctxKey is an unexported type for context keys in this package.
-type ctxKey string
-
-// CtxKeyUsername is the context key used to pass the Telegram username.
-const CtxKeyUsername ctxKey = "username"
+var ErrNotFound = errors.New("remnawave: not found")
 
 type Client struct {
-	httpClient *http.Client
-	baseURL    string
+	base   string
+	token  string
+	local  bool
+	cookie string
+	http   *http.Client
 }
 
-type headerTransport struct {
-	base       http.RoundTripper
-	headers    map[string]string
-	forceLocal bool
+type Options struct {
+	// Local adds X-Forwarded-* headers required when talking to the panel over plain HTTP in Docker.
+	Local  bool
+	Cookie string
 }
 
-func (t *headerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	r := req.Clone(req.Context())
-
-	host := r.URL.Hostname()
-	if t.forceLocal || strings.HasPrefix(host, "remnawave") || host == "127.0.0.1" || host == "localhost" {
-		r.Header.Set("x-forwarded-for", "127.0.0.1")
-		r.Header.Set("x-forwarded-proto", "https")
-	}
-
-	for key, value := range t.headers {
-		r.Header.Set(key, value)
-	}
-
-	return t.base.RoundTrip(r)
-}
-
-func NewClient(baseURL, token, mode string) *Client {
-	baseURL = strings.TrimRight(baseURL, "/")
-	headers := config.RemnawaveHeaders()
-	if headers == nil {
-		headers = make(map[string]string)
-	}
-	headers["Authorization"] = "Bearer " + token
-	forceLocal := mode == "local"
-
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-		Transport: &headerTransport{
-			base:       http.DefaultTransport,
-			headers:    headers,
-			forceLocal: forceLocal,
-		},
-	}
-
+func New(baseURL, token string, opt Options) *Client {
 	return &Client{
-		httpClient: client,
-		baseURL:    baseURL,
+		base:   strings.TrimRight(baseURL, "/"),
+		token:  token,
+		local:  opt.Local,
+		cookie: opt.Cookie,
+		http:   &http.Client{Timeout: 30 * time.Second},
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Generic HTTP helpers
-// ---------------------------------------------------------------------------
+type APIError struct {
+	Status  int
+	Message string
+	Code    string
+}
 
-func (r *Client) doRequest(ctx context.Context, method, path string, body any) ([]byte, int, error) {
-	var bodyReader io.Reader
+func (e *APIError) Error() string {
+	if e.Code != "" {
+		return fmt.Sprintf("remnawave: %d %s (%s)", e.Status, e.Message, e.Code)
+	}
+	return fmt.Sprintf("remnawave: %d %s", e.Status, e.Message)
+}
+
+func (c *Client) do(ctx context.Context, method, path string, body, out any) error {
+	var rd io.Reader
 	if body != nil {
-		data, err := json.Marshal(body)
+		b, err := json.Marshal(body)
 		if err != nil {
-			return nil, 0, fmt.Errorf("marshal request body: %w", err)
+			return err
 		}
-		bodyReader = bytes.NewReader(data)
+		rd = bytes.NewReader(b)
 	}
-
-	req, err := http.NewRequestWithContext(ctx, method, r.baseURL+path, bodyReader)
-	if err != nil {
-		return nil, 0, fmt.Errorf("create request: %w", err)
-	}
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-
-	resp, err := r.httpClient.Do(req)
-	if err != nil {
-		return nil, 0, fmt.Errorf("execute request %s %s: %w", method, path, err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, resp.StatusCode, fmt.Errorf("read response body: %w", err)
-	}
-
-	if resp.StatusCode == http.StatusNotFound {
-		return respBody, resp.StatusCode, ErrNotFound
-	}
-
-	if resp.StatusCode >= 400 {
-		var apiErr apiErrorResponse
-		if json.Unmarshal(respBody, &apiErr) == nil && apiErr.Message != "" {
-			message := fmt.Sprintf("API error %d: %s", resp.StatusCode, apiErr.Message)
-			if apiErr.ErrorCode != "" {
-				message += fmt.Sprintf(" (code: %s)", apiErr.ErrorCode)
-			}
-			if details := strings.TrimSpace(string(apiErr.Errors)); details != "" && details != "null" && details != "[]" {
-				message += fmt.Sprintf(" (details: %s)", details)
-			}
-			return respBody, resp.StatusCode, errors.New(message)
-		}
-		return respBody, resp.StatusCode, fmt.Errorf("API error %d: %s", resp.StatusCode, string(respBody))
-	}
-
-	return respBody, resp.StatusCode, nil
-}
-
-func (r *Client) doJSON(ctx context.Context, method, path string, body, result any) error {
-	respBody, _, err := r.doRequest(ctx, method, path, body)
+	req, err := http.NewRequestWithContext(ctx, method, c.base+path, rd)
 	if err != nil {
 		return err
 	}
-	if result != nil {
-		if err := json.Unmarshal(respBody, result); err != nil {
-			return fmt.Errorf("decode response: %w", err)
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Accept", "application/json")
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	if c.local {
+		req.Header.Set("X-Forwarded-For", "127.0.0.1")
+		req.Header.Set("X-Forwarded-Proto", "https")
+	}
+	if c.cookie != "" {
+		req.Header.Set("Cookie", c.cookie)
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return fmt.Errorf("remnawave %s %s: %w", method, path, err)
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode == http.StatusNotFound {
+		return ErrNotFound
+	}
+	if resp.StatusCode >= 400 {
+		var e struct {
+			Message   string `json:"message"`
+			ErrorCode string `json:"errorCode"`
 		}
+		_ = json.Unmarshal(data, &e)
+		if e.Message == "" {
+			e.Message = strings.TrimSpace(string(data))
+			if len(e.Message) > 300 {
+				e.Message = e.Message[:300]
+			}
+		}
+		return &APIError{Status: resp.StatusCode, Message: e.Message, Code: e.ErrorCode}
+	}
+	if out == nil {
+		return nil
+	}
+	if err := json.Unmarshal(data, out); err != nil {
+		return fmt.Errorf("remnawave %s %s: decode: %w", method, path, err)
 	}
 	return nil
 }
 
-// ---------------------------------------------------------------------------
-// Ping
-// ---------------------------------------------------------------------------
-
-func (r *Client) Ping(ctx context.Context) error {
-	return r.doJSON(ctx, http.MethodGet, "/api/system/health", nil, nil)
+type envelope[T any] struct {
+	Response T `json:"response"`
 }
 
-// ---------------------------------------------------------------------------
-// Users — list
-// ---------------------------------------------------------------------------
+// ---- Users ----
 
-func (r *Client) GetUsers(ctx context.Context) ([]User, error) {
-	const pageSize = 250
-	var users []User
-
-	for offset := 0; ; offset += pageSize {
-		path := fmt.Sprintf("/api/users?size=%d&start=%d", pageSize, offset)
-		var page getAllUsersResponse
-		if err := r.doJSON(ctx, http.MethodGet, path, nil, &page); err != nil {
-			return nil, fmt.Errorf("fetch users at offset %d: %w", offset, err)
-		}
-
-		users = append(users, page.Response.Users...)
-
-		if len(page.Response.Users) < pageSize || len(users) >= page.Response.Total {
-			break
-		}
-	}
-
-	return users, nil
+type UserTraffic struct {
+	UsedTrafficBytes         int64      `json:"usedTrafficBytes"`
+	LifetimeUsedTrafficBytes int64      `json:"lifetimeUsedTrafficBytes"`
+	OnlineAt                 *time.Time `json:"onlineAt"`
+	FirstConnectedAt         *time.Time `json:"firstConnectedAt"`
+	LastConnectedNodeUUID    *uuid.UUID `json:"lastConnectedNodeUuid"`
 }
 
-// ---------------------------------------------------------------------------
-// Users — get by Telegram ID
-// ---------------------------------------------------------------------------
-
-// getUsersByTelegramID fetches panel users by Telegram ID via /api/users/stream.
-func (r *Client) getUsersByTelegramID(ctx context.Context, telegramID int64) ([]User, error) {
-	var users []User
-	cursor := ""
-	for page := 0; page < 100; page++ { // 100 pages is a safety bound
-		path := fmt.Sprintf("/api/users/stream?size=250&telegramId=%d", telegramID)
-		if cursor != "" {
-			path += "&cursor=" + cursor
-		}
-		var resp apiResponse[getUsersStreamResponse]
-		if err := r.doJSON(ctx, http.MethodGet, path, nil, &resp); err != nil {
-			return nil, err
-		}
-		users = append(users, resp.Response.Users...)
-		if !resp.Response.HasMore {
-			break
-		}
-		cursor = streamCursor(resp.Response.NextCursor)
-		if cursor == "" {
-			break
-		}
-	}
-	return users, nil
+type Squad struct {
+	UUID uuid.UUID `json:"uuid"`
+	Name string    `json:"name"`
 }
 
-// streamCursor parses a raw nextCursor (JSON string or number) into a query value.
-func streamCursor(raw json.RawMessage) string {
-	s := strings.TrimSpace(string(raw))
-	if s == "" || s == "null" {
-		return ""
-	}
-	if unquoted, err := strconv.Unquote(s); err == nil {
-		s = unquoted
-	}
-	if s == "" || s == "null" {
-		return ""
-	}
-	return s
+type User struct {
+	ID                   int64       `json:"id"`
+	ShortUUID            string      `json:"shortUuid"`
+	Username             string      `json:"username"`
+	Status               string      `json:"status"`
+	TrafficLimitBytes    int64       `json:"trafficLimitBytes"`
+	TrafficLimitStrategy string      `json:"trafficLimitStrategy"`
+	ExpireAt             time.Time   `json:"expireAt"`
+	TelegramID           *int64      `json:"telegramId"`
+	Email                *string     `json:"email"`
+	Description          *string     `json:"description"`
+	Tag                  *string     `json:"tag"`
+	HwidDeviceLimit      *int        `json:"hwidDeviceLimit"`
+	ExternalSquadUUID    *uuid.UUID  `json:"externalSquadUuid"`
+	SubRevokedAt         *time.Time  `json:"subRevokedAt"`
+	LastTrafficResetAt   *time.Time  `json:"lastTrafficResetAt"`
+	CreatedAt            time.Time   `json:"createdAt"`
+	SubscriptionURL      string      `json:"subscriptionUrl"`
+	ActiveInternalSquads []Squad     `json:"activeInternalSquads"`
+	UserTraffic          UserTraffic `json:"userTraffic"`
 }
 
-// ---------------------------------------------------------------------------
-// Internal squads
-// ---------------------------------------------------------------------------
-
-func (r *Client) getInternalSquads(ctx context.Context) ([]internalSquadItem, error) {
-	var resp apiResponse[internalSquadsResponse]
-	if err := r.doJSON(ctx, http.MethodGet, "/api/internal-squads", nil, &resp); err != nil {
-		return nil, err
-	}
-	return resp.Response.InternalSquads, nil
+// CreateUser is the body for POST /api/users.
+type CreateUser struct {
+	Username             string      `json:"username"`
+	Status               string      `json:"status,omitempty"`
+	ExpireAt             time.Time   `json:"expireAt"`
+	TrafficLimitBytes    int64       `json:"trafficLimitBytes"`
+	TrafficLimitStrategy string      `json:"trafficLimitStrategy,omitempty"`
+	Description          string      `json:"description,omitempty"`
+	Tag                  *string     `json:"tag,omitempty"`
+	TelegramID           *int64      `json:"telegramId,omitempty"`
+	Email                *string     `json:"email,omitempty"`
+	HwidDeviceLimit      *int        `json:"hwidDeviceLimit,omitempty"`
+	ActiveInternalSquads []uuid.UUID `json:"activeInternalSquads"`
+	ExternalSquadUUID    *uuid.UUID  `json:"externalSquadUuid,omitempty"`
 }
 
-func filterSquadsBySelection(allSquads []internalSquadItem, selected map[uuid.UUID]uuid.UUID) []uuid.UUID {
-	if len(selected) == 0 {
-		result := make([]uuid.UUID, 0, len(allSquads))
-		for _, s := range allSquads {
-			result = append(result, s.UUID)
-		}
-		return result
-	}
-	result := make([]uuid.UUID, 0, len(selected))
-	for _, s := range allSquads {
-		if _, ok := selected[s.UUID]; ok {
-			result = append(result, s.UUID)
-		}
-	}
-	return result
+// UpdateUser is the body for PATCH /api/users; nil fields are left unchanged.
+// Use ClearTag / ClearExternalSquad to explicitly null a value.
+type UpdateUser struct {
+	ID                   int64       `json:"id"`
+	Status               string      `json:"status,omitempty"`
+	ExpireAt             *time.Time  `json:"expireAt,omitempty"`
+	TrafficLimitBytes    *int64      `json:"trafficLimitBytes,omitempty"`
+	TrafficLimitStrategy string      `json:"trafficLimitStrategy,omitempty"`
+	Description          *string     `json:"description,omitempty"`
+	Tag                  *string     `json:"-"`
+	TelegramID           *int64      `json:"telegramId,omitempty"`
+	Email                *string     `json:"email,omitempty"`
+	HwidDeviceLimit      *int        `json:"hwidDeviceLimit,omitempty"`
+	ActiveInternalSquads []uuid.UUID `json:"activeInternalSquads,omitempty"`
+	ExternalSquadUUID    *uuid.UUID  `json:"-"`
+	ClearTag             bool        `json:"-"`
+	ClearExternalSquad   bool        `json:"-"`
 }
 
-// ---------------------------------------------------------------------------
-// DecreaseSubscription
-// ---------------------------------------------------------------------------
-
-func (r *Client) DecreaseSubscription(ctx context.Context, telegramId int64, trafficLimit int, days int) (*time.Time, error) {
-	users, err := r.getUsersByTelegramID(ctx, telegramId)
+func (u UpdateUser) MarshalJSON() ([]byte, error) {
+	type plain UpdateUser
+	m := map[string]any{}
+	b, err := json.Marshal(plain(u))
 	if err != nil {
 		return nil, err
 	}
-	if len(users) == 0 {
-		return nil, fmt.Errorf("user with telegramId %d not found", telegramId)
-	}
-
-	existingUser := findUserBySuffix(users, telegramId)
-
-	updated, err := r.updateUser(ctx, existingUser, trafficLimit, days)
-	if err != nil {
+	if err := json.Unmarshal(b, &m); err != nil {
 		return nil, err
 	}
-
-	return &updated.ExpireAt, nil
+	switch {
+	case u.ClearTag:
+		m["tag"] = nil
+	case u.Tag != nil:
+		m["tag"] = *u.Tag
+	}
+	switch {
+	case u.ClearExternalSquad:
+		m["externalSquadUuid"] = nil
+	case u.ExternalSquadUUID != nil:
+		m["externalSquadUuid"] = u.ExternalSquadUUID.String()
+	}
+	return json.Marshal(m)
 }
 
-// ---------------------------------------------------------------------------
-// CreateOrUpdateUser
-// ---------------------------------------------------------------------------
-
-func (r *Client) CreateOrUpdateUser(ctx context.Context, customerId int64, telegramId int64, trafficLimit int, days int, isTrialUser bool) (*User, error) {
-	users, err := r.getUsersByTelegramID(ctx, telegramId)
-	if err != nil {
+func (c *Client) CreateUser(ctx context.Context, in CreateUser) (*User, error) {
+	if in.ActiveInternalSquads == nil {
+		in.ActiveInternalSquads = []uuid.UUID{}
+	}
+	var out envelope[User]
+	if err := c.do(ctx, http.MethodPost, "/api/users", in, &out); err != nil {
 		return nil, err
 	}
-	if len(users) == 0 {
-		return r.createUser(ctx, customerId, telegramId, trafficLimit, days, isTrialUser)
-	}
-
-	existingUser := findUserBySuffix(users, telegramId)
-	return r.updateUser(ctx, existingUser, trafficLimit, days)
+	return &out.Response, nil
 }
 
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
+func (c *Client) UpdateUser(ctx context.Context, in UpdateUser) (*User, error) {
+	var out envelope[User]
+	if err := c.do(ctx, http.MethodPatch, "/api/users", in, &out); err != nil {
+		return nil, err
+	}
+	return &out.Response, nil
+}
 
-func findUserBySuffix(users []User, telegramId int64) *User {
-	suffix := fmt.Sprintf("_%d", telegramId)
-	for i := range users {
-		if strings.Contains(users[i].Username, suffix) {
-			return &users[i]
+func (c *Client) GetUser(ctx context.Context, id int64) (*User, error) {
+	var out envelope[User]
+	if err := c.do(ctx, http.MethodGet, "/api/users/"+strconv.FormatInt(id, 10), nil, &out); err != nil {
+		return nil, err
+	}
+	return &out.Response, nil
+}
+
+func (c *Client) GetUserByUsername(ctx context.Context, username string) (*User, error) {
+	var out envelope[User]
+	if err := c.do(ctx, http.MethodGet, "/api/users/by-username/"+url.PathEscape(username), nil, &out); err != nil {
+		return nil, err
+	}
+	return &out.Response, nil
+}
+
+func (c *Client) GetUserByShortUUID(ctx context.Context, short string) (*User, error) {
+	var out envelope[User]
+	if err := c.do(ctx, http.MethodGet, "/api/users/by-short-uuid/"+url.PathEscape(short), nil, &out); err != nil {
+		return nil, err
+	}
+	return &out.Response, nil
+}
+
+// ListUsers pages through every panel user.
+func (c *Client) ListUsers(ctx context.Context, fn func([]User) error) error {
+	const size = 500
+	for start := 0; ; start += size {
+		var out envelope[struct {
+			Users []User `json:"users"`
+			Total int    `json:"total"`
+		}]
+		if err := c.do(ctx, http.MethodGet, fmt.Sprintf("/api/users?size=%d&start=%d", size, start), nil, &out); err != nil {
+			return err
+		}
+		if len(out.Response.Users) > 0 {
+			if err := fn(out.Response.Users); err != nil {
+				return err
+			}
+		}
+		if len(out.Response.Users) < size || start+size >= out.Response.Total {
+			return nil
 		}
 	}
-	return &users[0]
 }
 
-// UsernameFromCtx extracts the Telegram username stored under CtxKeyUsername.
-// Returns empty string if the value is missing or not a string.
-func UsernameFromCtx(ctx context.Context) string {
-	if v, ok := ctx.Value(CtxKeyUsername).(string); ok {
-		return v
+func (c *Client) DeleteUser(ctx context.Context, id int64) error {
+	err := c.do(ctx, http.MethodDelete, "/api/users/"+strconv.FormatInt(id, 10), nil, nil)
+	if errors.Is(err, ErrNotFound) {
+		return nil
 	}
-	return ""
+	return err
 }
 
-func (r *Client) updateUser(ctx context.Context, existingUser *User, trafficLimit int, days int) (*User, error) {
-	newExpire := getNewExpire(days, existingUser.ExpireAt)
-
-	squads, err := r.getInternalSquads(ctx)
-	if err != nil {
+func (c *Client) action(ctx context.Context, id int64, act string, body any) (*User, error) {
+	var out envelope[User]
+	if err := c.do(ctx, http.MethodPost, fmt.Sprintf("/api/users/%d/actions/%s", id, act), body, &out); err != nil {
 		return nil, err
 	}
-
-	selectedSquads := config.SquadUUIDs()
-	squadIds := filterSquadsBySelection(squads, selectedSquads)
-
-	userUpdate := &UpdateUserRequest{
-		ID:                   &existingUser.ID,
-		ExpireAt:             &newExpire,
-		Status:               "ACTIVE",
-		TrafficLimitBytes:    &trafficLimit,
-		ActiveInternalSquads: squadIds,
-		TrafficLimitStrategy: normalizeStrategy(config.TrafficLimitResetStrategy()),
-	}
-
-	externalSquad := config.ExternalSquadUUID()
-	if externalSquad != uuid.Nil {
-		userUpdate.ExternalSquadUuid = &externalSquad
-	}
-
-	tag := config.RemnawaveTag()
-	if tag != "" {
-		userUpdate.Tag = &tag
-	}
-
-	username := UsernameFromCtx(ctx)
-	if username != "" {
-		userUpdate.Description = &username
-	}
-
-	var resp apiResponse[User]
-	if err := r.doJSON(ctx, http.MethodPatch, "/api/users", userUpdate, &resp); err != nil {
-		return nil, err
-	}
-
-	tgid := ""
-	if existingUser.TelegramID != nil {
-		tgid = strconv.FormatInt(*existingUser.TelegramID, 10)
-	}
-	slog.Info("updated user", "telegramId", utils.MaskHalf(tgid), "username", utils.MaskHalf(username), "days", days)
-	return &resp.Response, nil
+	return &out.Response, nil
 }
 
-func (r *Client) createUser(ctx context.Context, customerId int64, telegramId int64, trafficLimit int, days int, isTrialUser bool) (*User, error) {
-	expireAt := time.Now().UTC().AddDate(0, 0, days)
-	username := generateUsername(customerId, telegramId)
-
-	squads, err := r.getInternalSquads(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	selectedSquads := config.SquadUUIDs()
-	if isTrialUser {
-		selectedSquads = config.TrialInternalSquads()
-	}
-	squadIds := filterSquadsBySelection(squads, selectedSquads)
-
-	externalSquad := config.ExternalSquadUUID()
-	if isTrialUser {
-		externalSquad = config.TrialExternalSquadUUID()
-	}
-
-	strategy := config.TrafficLimitResetStrategy()
-	if isTrialUser {
-		strategy = config.TrialTrafficLimitResetStrategy()
-	}
-
-	createReq := &CreateUserRequest{
-		Username:             username,
-		ActiveInternalSquads: squadIds,
-		Status:               "ACTIVE",
-		TelegramID:           &telegramId,
-		ExpireAt:             expireAt,
-		TrafficLimitStrategy: normalizeStrategy(strategy),
-		TrafficLimitBytes:    &trafficLimit,
-	}
-	if externalSquad != uuid.Nil {
-		createReq.ExternalSquadUuid = &externalSquad
-	}
-	tag := config.RemnawaveTag()
-	if isTrialUser {
-		tag = config.TrialRemnawaveTag()
-	}
-	if tag != "" {
-		createReq.Tag = &tag
-	}
-
-	tgUsername := UsernameFromCtx(ctx)
-	if tgUsername != "" {
-		createReq.Description = &tgUsername
-	}
-
-	var resp apiResponse[User]
-	if err := r.doJSON(ctx, http.MethodPost, "/api/users", createReq, &resp); err != nil {
-		return nil, err
-	}
-	slog.Info("created user", "telegramId", utils.MaskHalf(strconv.FormatInt(telegramId, 10)), "username", utils.MaskHalf(tgUsername), "days", days)
-	return &resp.Response, nil
+func (c *Client) EnableUser(ctx context.Context, id int64) (*User, error) {
+	return c.action(ctx, id, "enable", nil)
 }
 
-// ---------------------------------------------------------------------------
-// Utility functions
-// ---------------------------------------------------------------------------
-
-// Spec CreateUserRequestDto.username: pattern ^[a-zA-Z0-9_-]+$, 3..36 chars.
-func generateUsername(customerId int64, telegramId int64) string {
-	u := fmt.Sprintf("%d_%d", customerId, telegramId)
-	if len(u) <= 36 {
-		return u
-	}
-	h := sha256.Sum256([]byte(u))
-	return "u_" + hex.EncodeToString(h[:16])
+func (c *Client) DisableUser(ctx context.Context, id int64) (*User, error) {
+	return c.action(ctx, id, "disable", nil)
 }
 
-func getNewExpire(daysToAdd int, currentExpire time.Time) time.Time {
-	if daysToAdd <= 0 {
-		if currentExpire.AddDate(0, 0, daysToAdd).Before(time.Now()) {
-			return time.Now().UTC().AddDate(0, 0, 1)
+func (c *Client) ResetTraffic(ctx context.Context, id int64) (*User, error) {
+	return c.action(ctx, id, "reset-traffic", nil)
+}
+
+// RevokeSubscription issues new credentials; onlyPasswords keeps the subscription link.
+func (c *Client) RevokeSubscription(ctx context.Context, id int64, onlyPasswords bool) (*User, error) {
+	return c.action(ctx, id, "revoke", map[string]bool{"revokeOnlyPasswords": onlyPasswords})
+}
+
+// ---- HWID devices ----
+
+type Device struct {
+	HWID        string    `json:"hwid"`
+	UserID      int64     `json:"userId"`
+	Platform    *string   `json:"platform"`
+	OSVersion   *string   `json:"osVersion"`
+	DeviceModel *string   `json:"deviceModel"`
+	UserAgent   *string   `json:"userAgent"`
+	RequestIP   *string   `json:"requestIp"`
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
+type devicesResp struct {
+	Total   int      `json:"total"`
+	Devices []Device `json:"devices"`
+}
+
+func (c *Client) UserDevices(ctx context.Context, userID int64) ([]Device, error) {
+	var out envelope[devicesResp]
+	if err := c.do(ctx, http.MethodGet, fmt.Sprintf("/api/hwid/devices/%d", userID), nil, &out); err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return nil, nil
 		}
-		return currentExpire.AddDate(0, 0, daysToAdd)
+		return nil, err
 	}
-
-	if currentExpire.Before(time.Now().UTC()) || currentExpire.IsZero() {
-		return time.Now().UTC().AddDate(0, 0, daysToAdd)
-	}
-
-	return currentExpire.AddDate(0, 0, daysToAdd)
+	return out.Response.Devices, nil
 }
 
-func normalizeStrategy(s string) string {
-	upper := strings.ToUpper(s)
-	switch upper {
-	case "NO_RESET", "DAY", "WEEK", "MONTH", "MONTH_ROLLING":
-		return upper
-	default:
-		return "MONTH"
+func (c *Client) DeleteDevice(ctx context.Context, userID int64, hwid string) error {
+	return c.do(ctx, http.MethodPost, "/api/hwid/devices/delete", map[string]any{"userId": userID, "hwid": hwid}, nil)
+}
+
+func (c *Client) DeleteAllDevices(ctx context.Context, userID int64) error {
+	return c.do(ctx, http.MethodPost, "/api/hwid/devices/delete-all", map[string]any{"userId": userID}, nil)
+}
+
+// ---- Squads, nodes, health ----
+
+func (c *Client) InternalSquads(ctx context.Context) ([]Squad, error) {
+	var out envelope[struct {
+		InternalSquads []Squad `json:"internalSquads"`
+	}]
+	if err := c.do(ctx, http.MethodGet, "/api/internal-squads", nil, &out); err != nil {
+		return nil, err
 	}
+	return out.Response.InternalSquads, nil
+}
+
+func (c *Client) ExternalSquads(ctx context.Context) ([]Squad, error) {
+	var out envelope[struct {
+		ExternalSquads []Squad `json:"externalSquads"`
+	}]
+	if err := c.do(ctx, http.MethodGet, "/api/external-squads", nil, &out); err != nil {
+		return nil, err
+	}
+	return out.Response.ExternalSquads, nil
+}
+
+type Node struct {
+	UUID        uuid.UUID `json:"uuid"`
+	Name        string    `json:"name"`
+	Address     string    `json:"address"`
+	CountryCode string    `json:"countryCode"`
+	IsConnected bool      `json:"isConnected"`
+	IsDisabled  bool      `json:"isDisabled"`
+}
+
+func (c *Client) Nodes(ctx context.Context) ([]Node, error) {
+	var out envelope[[]Node]
+	if err := c.do(ctx, http.MethodGet, "/api/nodes", nil, &out); err != nil {
+		return nil, err
+	}
+	return out.Response, nil
+}
+
+func (c *Client) Health(ctx context.Context) error {
+	return c.do(ctx, http.MethodGet, "/api/system/health", nil, nil)
 }

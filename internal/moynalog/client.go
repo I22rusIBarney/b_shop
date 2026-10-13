@@ -1,260 +1,236 @@
+// Package moynalog registers self-employed (НПД) income receipts in lknpd.nalog.ru.
 package moynalog
 
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
-	"net/url"
+	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
 var (
-	ErrAuth      = errors.New("authentication error")
-	ErrRetryable = errors.New("retryable error")
-	ErrClient    = errors.New("client error")
+	ErrAuth      = errors.New("moynalog: authentication failed")
+	ErrRetryable = errors.New("moynalog: temporary error")
 )
 
 type Client struct {
-	httpClient *http.Client
-	baseURL    string
-
-	username string
+	base     string
+	login    string
 	password string
+	deviceID string
+	http     *http.Client
 
-	token atomic.Value
-
-	authMu       sync.Mutex
-	authInFlight bool
-	authCond     *sync.Cond
+	mu           sync.Mutex
+	token        string
+	refreshToken string
+	tokenUntil   time.Time
+	inn          string
 }
 
-func NewClient(baseURL, username, password, proxyURL string) (*Client, error) {
-	transport := &http.Transport{
-		MaxIdleConns:        10,
-		IdleConnTimeout:     90 * time.Second,
-		TLSHandshakeTimeout: 10 * time.Second,
+func New(base, login, password string) *Client {
+	if base == "" {
+		base = "https://lknpd.nalog.ru/api/v1"
 	}
-	if proxyURL != "" {
-		parsed, err := url.Parse(proxyURL)
-		if err != nil {
-			return nil, fmt.Errorf("invalid proxy URL: %w", err)
-		}
-		transport.Proxy = http.ProxyURL(parsed)
-	}
-
-	c := &Client{
-		httpClient: &http.Client{
-			Timeout:   30 * time.Second,
-			Transport: transport,
-		},
-		baseURL:  baseURL,
-		username: username,
+	return &Client{
+		base:     strings.TrimRight(base, "/"),
+		login:    login,
 		password: password,
+		deviceID: randomID(21),
+		http:     &http.Client{Timeout: 30 * time.Second},
 	}
-	c.authCond = sync.NewCond(&c.authMu)
-
-	c.token.Store("")
-
-	if err := c.authenticate(); err != nil {
-		return nil, fmt.Errorf("initial auth failed: %w", err)
-	}
-
-	return c, nil
 }
 
-func (c *Client) authenticate() error {
-	c.authMu.Lock()
-	defer c.authMu.Unlock()
-
-	for c.authInFlight {
-		c.authCond.Wait()
+func randomID(n int) string {
+	const a = "abcdefghijklmnopqrstuvwxyz0123456789"
+	b := make([]byte, n)
+	_, _ = rand.Read(b)
+	for i := range b {
+		b[i] = a[int(b[i])%len(a)]
 	}
-
-	if c.token.Load().(string) != "" {
-		return nil
-	}
-
-	c.authInFlight = true
-
-	c.authMu.Unlock()
-	err := c.authenticateOnce()
-	c.authMu.Lock()
-
-	c.authInFlight = false
-	c.authCond.Broadcast()
-
-	return err
+	return string(b)
 }
 
-func (c *Client) authenticateOnce() error {
-	authURL := fmt.Sprintf("%s/auth/lkfl", c.baseURL)
+type deviceInfo struct {
+	SourceDeviceID string            `json:"sourceDeviceId"`
+	SourceType     string            `json:"sourceType"`
+	AppVersion     string            `json:"appVersion"`
+	MetaDetails    map[string]string `json:"metaDetails"`
+}
 
-	reqBody, err := json.Marshal(AuthRequest{
-		Username: c.username,
-		Password: c.password,
-		DeviceInfo: DeviceInfo{
-			SourceDeviceId: "*",
-			SourceType:     "WEB",
-			AppVersion:     "1.0.0",
-		},
-	})
+func (c *Client) device() deviceInfo {
+	return deviceInfo{SourceDeviceID: c.deviceID, SourceType: "WEB", AppVersion: "1.0.0",
+		MetaDetails: map[string]string{"userAgent": "Mozilla/5.0 (X11; Linux x86_64) bshop"}}
+}
+
+type authResp struct {
+	Token         string    `json:"token"`
+	RefreshToken  string    `json:"refreshToken"`
+	TokenExpireIn time.Time `json:"tokenExpireIn"`
+	Profile       struct {
+		INN string `json:"inn"`
+	} `json:"profile"`
+}
+
+func (c *Client) post(ctx context.Context, path, token string, body, out any) error {
+	b, err := json.Marshal(body)
 	if err != nil {
 		return err
 	}
-
-	req, err := http.NewRequest("POST", authURL, bytes.NewBuffer(reqBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base+path, bytes.NewReader(b))
 	if err != nil {
 		return err
 	}
-
 	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.httpClient.Do(req)
+	req.Header.Set("Accept", "application/json, text/plain, */*")
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	resp, err := c.http.Do(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: %v", ErrRetryable, err)
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("%w: status %d: %s", ErrAuth, resp.StatusCode, b)
+	data, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	switch {
+	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
+		return fmt.Errorf("%w: %d %s", ErrAuth, resp.StatusCode, trim(data))
+	case resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500:
+		return fmt.Errorf("%w: %d %s", ErrRetryable, resp.StatusCode, trim(data))
+	case resp.StatusCode >= 300:
+		return fmt.Errorf("moynalog: %d %s", resp.StatusCode, trim(data))
 	}
-
-	var authResp AuthResponse
-	if err := json.NewDecoder(resp.Body).Decode(&authResp); err != nil {
-		return err
+	if out != nil {
+		return json.Unmarshal(data, out)
 	}
-
-	c.token.Store(authResp.Token)
 	return nil
 }
 
-func (c *Client) CreateIncome(ctx context.Context, amount float64, comment string) (*CreateIncomeResponse, error) {
-	const (
-		maxRetries     = 3
-		baseDelay      = 500 * time.Millisecond
-		maxAuthRetries = 2
-	)
-
-	var (
-		lastErr     error
-		authRetries int
-	)
-
-	for attempt := 1; attempt <= maxRetries; attempt++ {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-		}
-
-		resp, err := c.createIncomeOnce(ctx, amount, comment)
-		if err == nil {
-			return resp, nil
-		}
-
-		if errors.Is(err, ErrAuth) {
-			if authRetries >= maxAuthRetries {
-				return nil, err
-			}
-
-			c.token.Store("")
-
-			if err := c.authenticate(); err != nil {
-				return nil, fmt.Errorf("reauth failed: %w", err)
-			}
-
-			authRetries++
-			attempt--
-			continue
-		}
-
-		if !errors.Is(err, ErrRetryable) {
-			return nil, err
-		}
-
-		lastErr = err
-
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-time.After(baseDelay * time.Duration(1<<(attempt-1))):
-		}
+func trim(b []byte) string {
+	s := strings.TrimSpace(string(b))
+	if len(s) > 300 {
+		s = s[:300]
 	}
-
-	return nil, fmt.Errorf("create income failed after retries: %w", lastErr)
+	return s
 }
 
-func (c *Client) createIncomeOnce(ctx context.Context, amount float64, comment string) (*CreateIncomeResponse, error) {
-	incomeURL := fmt.Sprintf("%s/income", c.baseURL)
-	now := time.Now()
-
-	reqBody, err := json.Marshal(CreateIncomeRequest{
-		OperationTime: now,
-		RequestTime:   now,
-		Services: []Service{
-			{
-				Name:     comment,
-				Amount:   amount,
-				Quantity: 1,
-			},
-		},
-		TotalAmount: fmt.Sprintf("%.2f", amount),
-		Client: IncomeClient{
-			IncomeType: "FROM_INDIVIDUAL",
-		},
-		PaymentType:                     "CASH",
-		IgnoreMaxTotalIncomeRestriction: false,
-	})
-	if err != nil {
-		return nil, err
+func (c *Client) ensureToken(ctx context.Context, force bool) (string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !force && c.token != "" && time.Until(c.tokenUntil) > time.Minute {
+		return c.token, nil
 	}
-
-	req, err := http.NewRequestWithContext(ctx, "POST", incomeURL, bytes.NewBuffer(reqBody))
-	if err != nil {
-		return nil, err
+	var r authResp
+	var err error
+	if c.refreshToken != "" {
+		err = c.post(ctx, "/auth/token", "", map[string]any{"deviceInfo": c.device(), "refreshToken": c.refreshToken}, &r)
 	}
-
-	token := c.token.Load().(string)
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json, text/plain, */*")
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
-
-	resp, err := c.httpClient.Do(req)
+	if c.refreshToken == "" || err != nil {
+		r = authResp{}
+		err = c.post(ctx, "/auth/lkfl", "", map[string]any{"username": c.login, "password": c.password, "deviceInfo": c.device()}, &r)
+	}
 	if err != nil {
-		var netErr net.Error
-		if errors.As(err, &netErr) {
-			return nil, fmt.Errorf("%w: %v", ErrRetryable, err)
+		return "", err
+	}
+	if r.Token == "" {
+		return "", ErrAuth
+	}
+	c.token = r.Token
+	if r.RefreshToken != "" {
+		c.refreshToken = r.RefreshToken
+	}
+	c.tokenUntil = r.TokenExpireIn
+	if c.tokenUntil.IsZero() {
+		c.tokenUntil = time.Now().Add(30 * time.Minute)
+	}
+	if r.Profile.INN != "" {
+		c.inn = r.Profile.INN
+	}
+	return c.token, nil
+}
+
+func (c *Client) authed(ctx context.Context, path string, body, out any) error {
+	tok, err := c.ensureToken(ctx, false)
+	if err != nil {
+		return err
+	}
+	err = c.post(ctx, path, tok, body, out)
+	if errors.Is(err, ErrAuth) {
+		if tok, err = c.ensureToken(ctx, true); err != nil {
+			return err
 		}
-		return nil, err
+		err = c.post(ctx, path, tok, body, out)
 	}
-	defer resp.Body.Close()
+	return err
+}
 
-	switch {
-	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
-		return nil, fmt.Errorf("%w: status %d", ErrAuth, resp.StatusCode)
+var msk = time.FixedZone("MSK", 3*3600)
 
-	case resp.StatusCode >= 500:
-		b, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("%w: status %d: %s", ErrRetryable, resp.StatusCode, b)
+func ts(t time.Time) string { return t.In(msk).Format("2006-01-02T15:04:05-07:00") }
 
-	case resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated:
-		b, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("%w: status %d: %s", ErrClient, resp.StatusCode, b)
+// CreateIncome registers a receipt for an individual and returns its UUID.
+// operationTime must be the moment the money was received.
+func (c *Client) CreateIncome(ctx context.Context, name string, kopecks int64, operationTime time.Time) (string, error) {
+	amount := float64(kopecks) / 100
+	body := map[string]any{
+		"operationTime": ts(operationTime),
+		"requestTime":   ts(time.Now()),
+		"services":      []map[string]any{{"name": name, "amount": amount, "quantity": 1}},
+		"totalAmount":   fmt.Sprintf("%d.%02d", kopecks/100, kopecks%100),
+		"client": map[string]any{"contactPhone": nil, "displayName": nil, "inn": nil,
+			"incomeType": "FROM_INDIVIDUAL"},
+		"paymentType":                     "CASH",
+		"ignoreMaxTotalIncomeRestriction": false,
 	}
-
-	var incomeResp CreateIncomeResponse
-	if err := json.NewDecoder(resp.Body).Decode(&incomeResp); err != nil {
-		return nil, err
+	var r struct {
+		ApprovedReceiptUUID string `json:"approvedReceiptUuid"`
 	}
+	if err := c.authed(ctx, "/income", body, &r); err != nil {
+		return "", err
+	}
+	if r.ApprovedReceiptUUID == "" {
+		return "", errors.New("moynalog: empty receipt uuid in response")
+	}
+	return r.ApprovedReceiptUUID, nil
+}
 
-	return &incomeResp, nil
+// CancelIncome annuls a receipt (refund).
+func (c *Client) CancelIncome(ctx context.Context, receiptUUID, comment string) error {
+	if comment == "" {
+		comment = "Возврат средств"
+	}
+	body := map[string]any{
+		"operationTime": ts(time.Now()),
+		"requestTime":   ts(time.Now()),
+		"comment":       comment,
+		"receiptUuid":   receiptUUID,
+		"partnerCode":   nil,
+	}
+	return c.authed(ctx, "/cancel", body, nil)
+}
+
+// ReceiptURL is the public link to the printable receipt.
+func (c *Client) ReceiptURL(ctx context.Context, receiptUUID string) string {
+	if _, err := c.ensureToken(ctx, false); err != nil {
+		return ""
+	}
+	c.mu.Lock()
+	inn := c.inn
+	c.mu.Unlock()
+	if inn == "" {
+		inn = c.login
+	}
+	return fmt.Sprintf("%s/receipt/%s/%s/print", c.base, inn, receiptUUID)
+}
+
+// Check verifies credentials.
+func (c *Client) Check(ctx context.Context) error {
+	_, err := c.ensureToken(ctx, true)
+	return err
 }
