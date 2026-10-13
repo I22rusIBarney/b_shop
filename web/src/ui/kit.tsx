@@ -14,10 +14,10 @@ export function PageLoader() {
   )
 }
 
-export function Toggle({ checked, onChange, label, hint }: { checked: boolean; onChange: (v: boolean) => void; label: ReactNode; hint?: ReactNode }) {
+export function Toggle({ checked, onChange, label, hint, disabled }: { checked: boolean; onChange: (v: boolean) => void; label: ReactNode; hint?: ReactNode; disabled?: boolean }) {
   return (
-    <label className="toggle">
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+    <label className={disabled ? 'toggle disabled' : 'toggle'}>
+      <input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} aria-label={typeof label === 'string' && label ? undefined : 'Переключатель'} />
       <span className="track" />
       <span className="grow">
         <span>{label}</span>

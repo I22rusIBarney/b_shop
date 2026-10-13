@@ -389,3 +389,45 @@ table.t { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 .dot { width: 10px; height: 10px; border-radius: 999px; border: 0; padding: 0; cursor: pointer; background: color-mix(in srgb, var(--muted) 50%, transparent); transition: width .15s; }
 .dot.on { width: 26px; background: var(--accent); }
 .dot.plus { width: 18px; height: 18px; display: grid; place-items: center; font-size: 13px; line-height: 1; color: var(--muted); background: var(--line); }
+
+/* ---- stage 3: promo, plan change, extra devices, referral ---- */
+.glass.panel { padding: 16px 18px; border-radius: 24px; }
+.link-btn { display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; padding: 0; color: var(--accent); font: inherit; font-size: 0.9rem; font-weight: 600; cursor: pointer; }
+.link-btn svg { width: 16px; height: 16px; }
+.badge svg { width: 13px; height: 13px; margin-right: 4px; }
+.promo-line { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.promo-line form { flex: 1 1 100%; }
+.ok-text { color: var(--ok); }
+.toggle.disabled { opacity: .5; cursor: default; }
+
+.cur-plan { font-weight: 800; font-size: 1.25rem; }
+.spec-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.spec { font-size: 0.8rem; padding: 4px 10px; border-radius: 999px; background: color-mix(in srgb, var(--text) 8%, transparent); color: var(--muted); }
+.spec.accent { color: var(--accent); background: var(--accent-soft); font-weight: 700; }
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; border-radius: 16px; background: color-mix(in srgb, var(--surface-solid) 70%, transparent); border: 1px solid var(--line); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+.seg button { border: 0; background: none; color: var(--muted); font: inherit; font-weight: 700; font-size: 0.88rem; padding: 10px 4px; border-radius: 12px; cursor: pointer; }
+.seg button.on { background: var(--accent); color: var(--accent-ink); }
+.seg button:disabled { opacity: .35; cursor: default; }
+.mode-help { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: -6px; }
+.plan-opt.glass { padding: 14px 16px; }
+.plan-opt.off { opacity: .55; cursor: default; }
+.po-name { font-weight: 700; }
+.pay-total { font-family: var(--display); font-size: 1.4rem; }
+.paybar.glass { background: color-mix(in srgb, var(--surface-solid) 92%, transparent); }
+
+.more-dev { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
+.more-dev .glass.panel { padding: 12px 14px; background: color-mix(in srgb, var(--text) 5%, transparent); }
+.stepper { flex: none; display: flex; align-items: center; gap: 4px; padding: 3px; border-radius: 12px; border: 1px solid var(--line-strong); }
+.stepper button { width: 32px; height: 32px; border-radius: 9px; border: 0; background: color-mix(in srgb, var(--text) 8%, transparent); color: var(--text); font-size: 1.1rem; cursor: pointer; }
+.stepper button:disabled { opacity: .35; }
+.stepper span { min-width: 26px; text-align: center; font-weight: 800; }
+
+.ref-hero { position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 12px; }
+.ref-gift { position: absolute; right: -10px; top: -10px; width: 110px; height: 110px; color: var(--accent); opacity: .14; }
+.ref-big { font-family: var(--display); font-size: 1.7rem; color: var(--accent); line-height: 1.15; }
+.ref-big span { display: block; font-family: inherit; font-family: var(--font, inherit); font-size: 0.9rem; color: var(--text); margin-top: 6px; }
+.ref-rules { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.tile { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 14px 6px; text-align: center; }
+.tile b { font-size: 1.5rem; font-family: var(--display); }
+.tile span { font-size: 0.75rem; color: var(--muted); }

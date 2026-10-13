@@ -279,10 +279,11 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 	st := s.svc.Settings.Get()
 	n, _ := store.CountSubscriptions(r.Context(), s.svc.Store.Pool, c.ID, nil)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"customer":        c,
-		"identities":      ids,
-		"trial_available": st.Trial.Enabled && !c.TrialUsed && n == 0,
-		"ref_link":        refLink(c),
+		"customer":         c,
+		"identities":       ids,
+		"trial_available":  st.Trial.Enabled && !c.TrialUsed && n == 0,
+		"ref_link":         refLink(c),
+		"referral_enabled": st.Referral.Enabled,
 	})
 }
 
@@ -315,7 +316,7 @@ func (s *Server) plans(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) subscriptions(w http.ResponseWriter, r *http.Request) {
-	out, err := s.svc.Subscriptions(r.Context(), customer(r), true)
+	out, err := s.svc.Subscriptions(r.Context(), customer(r), r.URL.Query().Get("live") != "0")
 	if err != nil {
 		s.fail(w, r, err)
 		return

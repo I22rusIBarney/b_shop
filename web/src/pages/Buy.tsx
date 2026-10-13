@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { get, post, type BuyResult, type CatalogPlan } from '../lib/api'
-import { useApp } from '../lib/app'
+import { get, post, type BuyResult, type CatalogPlan, type RedeemResult } from '../lib/api'
 import { periodLabel, rub, rubRound } from '../lib/format'
-import { haptic, openLink } from '../lib/tg'
-import { Back } from '../ui/icons'
-import { ErrorBox, PageLoader, Toggle, useAction, useLoad } from '../ui/kit'
+import { Back, Tag } from '../ui/icons'
+import { ErrorBox, PageLoader, useAction, useLoad, useToast } from '../ui/kit'
+import { MethodPicker, followPayment, usePayMethod } from '../ui/pay'
 
 function limitsLine(p: CatalogPlan) {
   const traffic = p.traffic_limit_gb > 0 ? `${p.traffic_limit_gb} ГБ` : 'Безлимит'
@@ -14,7 +13,7 @@ function limitsLine(p: CatalogPlan) {
 }
 
 export default function Buy() {
-  const { config } = useApp()
+  const toast = useToast()
   const [params] = useSearchParams()
   const nav = useNavigate()
   const subID = Number(params.get('sub')) || 0
@@ -22,9 +21,10 @@ export default function Buy() {
   const catalog = useLoad(() => get<CatalogPlan[]>('/api/plans'))
   const [planID, setPlanID] = useState<number>(fixedPlan)
   const [periodID, setPeriodID] = useState<number>(0)
-  const [method, setMethod] = useState(config.payment_methods[0]?.code || '')
-  const [saveCard, setSaveCard] = useState(true)
+  const pay = usePayMethod()
   const { busy, run } = useAction()
+  const [promoOpen, setPromoOpen] = useState(false)
+  const [promo, setPromo] = useState('')
 
   const plans = catalog.data || []
   const plan = useMemo(() => plans.find((p) => p.id === planID), [plans, planID])
@@ -50,22 +50,25 @@ export default function Buy() {
 
   const offer = plan?.offers.find((o) => o.period_id === periodID)
 
-  const pay = () =>
+  const checkout = () =>
     run(async () => {
       const res = await post<BuyResult>('/api/payments', {
         plan_id: planID,
         period_id: periodID,
         subscription_id: subID,
-        method,
-        save_card: saveCard,
+        method: pay.method,
+        save_card: pay.save,
       })
-      if (res.applied) {
-        haptic('success')
-        nav('/', { replace: true })
-        return
-      }
-      nav(`/payment/${res.payment_id}`)
-      if (res.confirmation_url) openLink(res.confirmation_url)
+      followPayment(res, nav)
+    })
+
+  const applyPromo = () =>
+    run(async () => {
+      const r = await post<RedeemResult>('/api/promo', { code: promo, subscription_id: subID })
+      toast(r.message)
+      setPromo('')
+      setPromoOpen(false)
+      await catalog.reload()
     })
 
   return (
@@ -128,25 +131,35 @@ export default function Buy() {
             </div>
           )}
 
-          {offer && offer.price > 0 && (
-            <div className="card stack">
-              <h3>Способ оплаты</h3>
-              {config.payment_methods.length === 0 ? (
-                <p className="err">Оплата временно недоступна. Напишите в поддержку.</p>
-              ) : (
-                <div className="chips" style={{ flexWrap: 'wrap', marginBottom: 0 }}>
-                  {config.payment_methods.map((m) => (
-                    <button key={m.code} className={m.code === method ? 'chip on' : 'chip'} onClick={() => setMethod(m.code)}>
-                      {m.title}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {config.save_card && method === 'bank_card' && (
-                <Toggle checked={saveCard} onChange={setSaveCard} label="Запомнить карту" hint="Для автопродления. Отключить можно в профиле." />
-              )}
-            </div>
-          )}
+          <div className="promo-line">
+            {plan.promo_code ? (
+              <span className="badge accent">
+                <Tag /> {plan.promo_code}: −{plan.discount_percent}%
+              </span>
+            ) : plan.discount_percent > 0 ? (
+              <span className="badge accent">Ваша скидка {plan.discount_percent}%</span>
+            ) : null}
+            {!promoOpen ? (
+              <button className="link-btn" onClick={() => setPromoOpen(true)}>
+                Есть промокод?
+              </button>
+            ) : (
+              <form
+                className="input-row"
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  applyPromo()
+                }}
+              >
+                <input className="input" autoFocus placeholder="Промокод" value={promo} onChange={(e) => setPromo(e.target.value.toUpperCase())} />
+                <button className="btn secondary" disabled={busy || !promo.trim()}>
+                  Применить
+                </button>
+              </form>
+            )}
+          </div>
+
+          {offer && offer.price > 0 && <MethodPicker state={pay} />}
 
           {offer && (
             <div className="paybar card">
@@ -160,7 +173,7 @@ export default function Buy() {
                     {offer.base_price > offer.price && <span className="strike small num">{rub(offer.base_price)}</span>}
                   </div>
                 </div>
-                <button className="btn" disabled={busy || (offer.price > 0 && !method)} onClick={pay}>
+                <button className="btn" disabled={busy || (offer.price > 0 && !pay.method)} onClick={checkout}>
                   {offer.price > 0 ? 'Оплатить' : 'Получить'}
                 </button>
               </div>

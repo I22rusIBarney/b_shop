@@ -133,6 +133,7 @@ export interface Customer {
   source: string
   created_at: string
   last_seen_at: string | null
+  bonus_days: number
 }
 
 export interface Identity {
@@ -148,6 +149,7 @@ export interface Me {
   identities: Identity[]
   trial_available: boolean
   ref_link: string
+  referral_enabled: boolean
 }
 
 export interface Session {
@@ -212,6 +214,8 @@ export interface Offer {
 export interface CatalogPlan extends Plan {
   price_per_month: number
   offers: Offer[]
+  discount_percent: number
+  promo_code: string
 }
 
 export interface Subscription {
@@ -240,6 +244,9 @@ export interface Subscription {
   can_renew: boolean
   can_change_plan: boolean
   can_reset_traffic: boolean
+  autopay: boolean
+  autopay_method_id: number | null
+  autopay_period_id: number | null
 }
 
 export interface Device {
@@ -300,4 +307,155 @@ export interface CustomerRow extends Customer {
 export interface Paged<T> {
   items: T[]
   total: number
+}
+
+// ---- stage 3 ----
+
+export interface ChangeQuote {
+  mode: 'upgrade' | 'convert' | 'downgrade'
+  days_before: number
+  days_after: number
+  amount: number
+  base_amount: number
+}
+
+export interface ChangeTarget {
+  plan_id: number
+  name: string
+  description: string
+  features: string[]
+  traffic_limit_gb: number
+  device_limit: number
+  price_per_month: number
+  quotes: ChangeQuote[] | null
+  unavailable?: string
+}
+
+export interface ChangeInfo {
+  subscription_id: number
+  plan_id: number
+  plan_name: string
+  traffic_limit_gb: number
+  device_limit: number
+  price_per_month: number
+  days_left: number
+  discount_percent: number
+  targets: ChangeTarget[]
+}
+
+export interface DevicesOffer {
+  allowed: boolean
+  reason?: string
+  current: number
+  extra: number
+  max_more: number
+  days_left: number
+  price_per_month: number
+  price_per_device: number
+  discount_percent: number
+}
+
+export interface PaymentMethodInfo {
+  id: number
+  provider: string
+  title: string
+  created_at: string
+}
+
+export interface AutopayInfo {
+  available: boolean
+  enabled: boolean
+  method_id: number | null
+  methods: PaymentMethodInfo[]
+  period_id: number
+  days: number
+  amount: number
+  charge_at: string | null
+  reason?: string
+}
+
+export interface Redemption {
+  id: number
+  promo_id: number
+  customer_id: number
+  status: 'reserved' | 'used'
+  payment_id: string | null
+  subscription_id: number | null
+  days: number
+  created_at: string
+  used_at: string | null
+  code: string
+  kind: 'discount' | 'days'
+  value: number
+  customer?: string
+  plan_ids: number[] | null
+}
+
+export interface RedeemResult {
+  kind: 'discount' | 'days'
+  value: number
+  code: string
+  subscription_id?: number
+  expires_at?: string
+  pending: boolean
+  message: string
+}
+
+export interface ReferralBonus {
+  id: number
+  recipient_id: number
+  referral_id: number | null
+  kind: 'first' | 'recurring' | 'invitee' | 'manual'
+  days: number
+  subscription_id: number | null
+  pending: boolean
+  created_at: string
+  referral_name: string
+}
+
+export interface ReferralInfo {
+  enabled: boolean
+  link: string
+  web_link: string
+  stats: { invited: number; paid: number; days: number }
+  bonuses: ReferralBonus[]
+  description: string
+  inviter_days: number
+  invitee_days: number
+  recurring_percent: number
+  tiers: { min_invited: number; days: number }[]
+  next_tier?: { min_invited: number; days: number }
+  current_days: number
+  bonus_days: number
+}
+
+export interface Promo {
+  id: number
+  code: string
+  kind: 'discount' | 'days'
+  value: number
+  folder: string
+  description: string
+  is_active: boolean
+  max_uses: number
+  valid_from: string | null
+  valid_until: string | null
+  plan_ids: number[]
+  new_customers_only: boolean
+  customer_id: number | null
+  reserve_hours: number
+  created_at?: string
+  used?: number
+  reserved?: number
+  state?: 'active' | 'inactive' | 'expired' | 'exhausted' | 'scheduled'
+}
+
+export interface PlanChange {
+  id: number
+  mode: string
+  days_before: number
+  days_after: number
+  created_at: string
+  from_name: string
+  to_name: string
 }

@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { del, get, patch, post, type Device, type Subscription } from '../lib/api'
+import { del, get, patch, post, type BuyResult, type Device, type DevicesOffer, type Subscription } from '../lib/api'
 import { useApp } from '../lib/app'
-import { bytes, dateTimeFull, plural, relative, shortDate } from '../lib/format'
+import { bytes, dateTimeFull, plural, relative, rub, rubRound, shortDate } from '../lib/format'
 import { haptic, openLink } from '../lib/tg'
-import { Calendar, Check, Chevron, ChevronDown, Close, Copy, Devices as DevicesIcon, Gear, Link as LinkIcon, Pencil, Plug, Swap, Trash } from '../ui/icons'
+import { Calendar, Check, Chevron, ChevronDown, Close, Copy, Devices as DevicesIcon, Gear, Link as LinkIcon, Pencil, Plug, Plus, Swap, Trash } from '../ui/icons'
 import { ErrorBox, PageLoader, Sheet, copy, useAction, useLoad, useToast } from '../ui/kit'
 import { HeroSpace } from '../ui/shell'
+import { MethodPicker, followPayment, usePayMethod } from '../ui/pay'
 
 function subTitle(_s: Subscription, i: number) {
   return `Подписка ${i + 1}`
@@ -235,7 +236,11 @@ function SubCard({ sub, onChanged }: { sub: Subscription; onChanged: () => void 
       )}
 
       <div className="sub-actions">
-        <button className="pill-btn" disabled={!sub.can_renew} onClick={() => nav(`/buy?sub=${sub.id}&plan=${sub.plan_id}`)}>
+        <button
+          className="pill-btn"
+          disabled={sub.kind === 'paid' && !sub.can_renew}
+          onClick={() => nav(sub.kind === 'paid' ? `/buy?sub=${sub.id}&plan=${sub.plan_id}` : `/buy?sub=${sub.id}`)}
+        >
           <Plug />
           Продлить
         </button>
@@ -244,7 +249,7 @@ function SubCard({ sub, onChanged }: { sub: Subscription; onChanged: () => void 
           Установить и настроить
         </Link>
         {sub.can_change_plan && (
-          <button className="pill-btn" onClick={() => nav(`/buy?sub=${sub.id}&change=1`)}>
+          <button className="pill-btn" onClick={() => nav(sub.kind === 'paid' ? `/change/${sub.id}` : `/buy?sub=${sub.id}`)}>
             <Swap />
             Сменить тариф
           </button>
@@ -350,10 +355,65 @@ function Devices({ sub, open, onClose, onChanged }: { sub: Subscription; open: b
           Удалить все устройства
         </button>
       )}
+      {open && <MoreDevices sub={sub} />}
     </Sheet>
   )
 }
 
 function defaultName(d: Device) {
   return d.deviceModel || d.platform || 'Устройство'
+}
+
+function MoreDevices({ sub }: { sub: Subscription }) {
+  const offer = useLoad(() => get<DevicesOffer>(`/api/subscriptions/${sub.id}/extra-devices`), [sub.id])
+  const [count, setCount] = useState(1)
+  const [open, setOpen] = useState(false)
+  const pay = usePayMethod()
+  const nav = useNavigate()
+  const { busy, run } = useAction()
+  const o = offer.data
+  if (!o || !o.allowed) return null
+  const max = o.max_more > 0 ? o.max_more : 20
+  const total = Math.max(100, Math.ceil((o.price_per_device * count) / 100) * 100)
+
+  const buy = () =>
+    run(async () => {
+      const res = await post<BuyResult>(`/api/subscriptions/${sub.id}/extra-devices`, { count, method: pay.method, save_card: false })
+      followPayment(res, nav)
+    })
+
+  return (
+    <div className="more-dev">
+      {!open ? (
+        <button className="pill-btn" onClick={() => setOpen(true)}>
+          <Plus />
+          Докупить устройства
+        </button>
+      ) : (
+        <div className="stack">
+          <div className="spread">
+            <div>
+              <div style={{ fontWeight: 700 }}>Дополнительные устройства</div>
+              <div className="tiny muted">
+                {rubRound(o.price_per_month)}/мес за устройство · до конца подписки {o.days_left} {plural(o.days_left, 'день', 'дня', 'дней')}
+              </div>
+            </div>
+            <div className="stepper" aria-label="Количество">
+              <button onClick={() => setCount(Math.max(1, count - 1))} disabled={count <= 1} aria-label="Меньше">
+                −
+              </button>
+              <span className="num">{count}</span>
+              <button onClick={() => setCount(Math.min(max, count + 1))} disabled={count >= max} aria-label="Больше">
+                +
+              </button>
+            </div>
+          </div>
+          <MethodPicker state={pay} title="Оплата" autopay={false} />
+          <button className="btn block" disabled={busy || !pay.method} onClick={buy}>
+            Оплатить {rub(total)} · будет {o.current + count} {plural(o.current + count, 'устройство', 'устройства', 'устройств')}
+          </button>
+        </div>
+      )}
+    </div>
+  )
 }

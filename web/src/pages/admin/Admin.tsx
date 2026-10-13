@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { useApp } from '../../lib/app'
 import { Brand } from '../../ui/shell'
-import { Card, Home, List, Menu, Palette, Settings as SettingsIcon, Tag, Users, Wallet } from '../../ui/icons'
+import { Card, Gift, Home, List, Menu, Palette, Settings as SettingsIcon, Tag, Users, Wallet } from '../../ui/icons'
 import Customers from './Customers'
 import CustomerCard from './CustomerCard'
 import Payments from './Payments'
@@ -10,11 +10,13 @@ import Plans from './Plans'
 import PlanEditor from './PlanEditor'
 import SettingsPage from './Settings'
 import BrandingPage from './Branding'
+import Promos from './Promos'
 
 const nav = [
   { to: '/admin/customers', label: 'Клиенты', icon: Users },
   { to: '/admin/payments', label: 'Платежи', icon: Wallet },
   { to: '/admin/plans', label: 'Тарифы', icon: Tag },
+  { to: '/admin/promos', label: 'Промокоды', icon: Gift },
 ]
 const settingsNav = [
   { to: '/admin/settings/general', label: 'Общие', icon: SettingsIcon },
@@ -73,6 +75,7 @@ export default function Admin() {
           <Route path="payments" element={<Payments />} />
           <Route path="plans" element={<Plans />} />
           <Route path="plans/:id" element={<PlanEditor />} />
+          <Route path="promos" element={<Promos />} />
           <Route path="branding" element={<BrandingPage />} />
           <Route path="settings/:section" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="customers" replace />} />

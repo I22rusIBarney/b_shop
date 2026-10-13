@@ -15,6 +15,15 @@ import (
 // minCharge is the smallest amount YooKassa accepts (1 ₽).
 const minCharge = 100
 
+// ceilRub rounds a computed surcharge up to whole rubles (and at least the minimum charge).
+func ceilRub(k int64) int64 {
+	k = (k + 99) / 100 * 100
+	if k < minCharge {
+		return minCharge
+	}
+	return k
+}
+
 // daysLeft rounds the time until expiry to whole days (0 if expired).
 func daysLeft(expires time.Time) int {
 	h := time.Until(expires).Hours()
@@ -78,10 +87,7 @@ func changeQuotes(oldPlan, newPlan *store.Plan, days, dim, discount int) []Chang
 	var out []ChangeQuote
 	if newM > oldM {
 		base := (newM - oldM) * int64(days) / int64(dim)
-		amount := applyDiscount(base, discount)
-		if amount < minCharge {
-			amount = minCharge
-		}
+		amount := ceilRub(applyDiscount(base, discount))
 		out = append(out, ChangeQuote{Mode: "upgrade", DaysBefore: days, DaysAfter: days, Amount: amount, BaseAmount: base})
 		if !noConvert && oldM > 0 {
 			out = append(out, ChangeQuote{Mode: "convert", DaysBefore: days, DaysAfter: converted})
@@ -374,10 +380,7 @@ func (s *Service) BuyDevices(ctx context.Context, c *store.Customer, subID int64
 	}
 	dim := s.set().General.DaysInMonth
 	base := plan.ExtraDevicePrice * int64(req.Count) * int64(o.DaysLeft) / int64(dim)
-	amount := applyDiscount(base, c.PersonalDiscount)
-	if amount < minCharge {
-		amount = minCharge
-	}
+	amount := ceilRub(applyDiscount(base, c.PersonalDiscount))
 	p := &store.Payment{CustomerID: c.ID, SubscriptionID: &sub.ID, PlanID: &plan.ID, Operation: "devices",
 		Title: plan.Name, Days: o.DaysLeft, Months: (o.DaysLeft + dim/2) / dim, ExtraDevices: req.Count,
 		Amount: amount, BaseAmount: base, DiscountPercent: c.PersonalDiscount,

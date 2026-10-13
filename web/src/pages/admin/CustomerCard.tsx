@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { del, get, patch, post, type Customer, type Device, type Identity, type Payment, type Plan, type Subscription } from '../../lib/api'
+import { del, get, patch, post, type Customer, type Device, type Identity, type Payment, type Plan, type PlanChange, type Redemption, type ReferralBonus, type Subscription } from '../../lib/api'
 import { bytes, date, dateTime, operationName, paymentStatus, providerName, relative, rub } from '../../lib/format'
 import { Back, Copy, Trash } from '../../ui/icons'
 import { ErrorBox, Field, Sheet, Spinner, Toggle, copy, useAction, useLoad, useToast } from '../../ui/kit'
@@ -20,7 +20,14 @@ interface Detail {
   payments: Payment[]
   events: Event[]
   referrer: Customer | null
+  promos: Redemption[] | null
+  bonuses: ReferralBonus[] | null
+  plan_changes: PlanChange[] | null
+  referral: { invited: number; paid: number; days: number }
 }
+
+const bonusKind: Record<string, string> = { first: 'за первую оплату реферала', recurring: 'за продление реферала', invitee: 'приглашённому', manual: 'вручную' }
+const modeLabel: Record<string, string> = { upgrade: 'доплата', convert: 'конвертация', downgrade: 'понижение', admin: 'админ' }
 
 const eventName: Record<string, string> = {
   registered: 'Регистрация',
@@ -39,6 +46,13 @@ const eventName: Record<string, string> = {
   subscription_status: 'Статус подписки',
   traffic_reset: 'Сброшен трафик',
   settings_changed: 'Изменены настройки',
+  promo: 'Промокод',
+  plan_change: 'Смена тарифа',
+  admin_plan_change: 'Тариф изменён администратором',
+  autopay_on: 'Включено автопродление',
+  autopay_off: 'Отключено автопродление',
+  autopay_failed: 'Ошибка автоплатежа',
+  referral_manual: 'Начислены бонусные дни',
 }
 
 function eventText(e: Event) {
@@ -53,7 +67,16 @@ function eventText(e: Event) {
     case 'admin_grant':
       return `${d.plan}, ${d.days} дн.`
     case 'trial':
+    case 'referral_manual':
       return `${d.days} дн.`
+    case 'promo':
+      return `${d.code} (${d.kind === 'days' ? `+${d.value} дн.` : `−${d.value}%`})`
+    case 'plan_change':
+      return `${d.from} → ${d.to}, ${modeLabel[d.mode] || d.mode}, ${d.days_before} → ${d.days_after} дн.`
+    case 'admin_plan_change':
+      return d.to
+    case 'autopay_failed':
+      return d.reason
     case 'login':
     case 'registered':
     case 'login_linked':
@@ -73,6 +96,9 @@ export default function CustomerCard() {
   const [notes, setNotes] = useState({ tag: '', notes: '', personal_discount: 0 })
   const [grantOpen, setGrantOpen] = useState(false)
   const [devicesFor, setDevicesFor] = useState<Subscription | null>(null)
+  const [changeFor, setChangeFor] = useState<Subscription | null>(null)
+  const [bonusDays, setBonusDays] = useState(3)
+  const [promoCode, setPromoCode] = useState('')
 
   useEffect(() => {
     if (data.data) {
@@ -89,6 +115,9 @@ export default function CustomerCard() {
       </div>
     )
   const { customer: c, subscriptions, identities, payments, events, referrer } = data.data
+  const promos = data.data.promos || []
+  const bonuses = data.data.bonuses || []
+  const changes = data.data.plan_changes || []
   const name = [c.first_name, c.last_name].filter(Boolean).join(' ') || (c.username ? `@${c.username}` : '') || c.email || `#${c.id}`
 
   const saveNotes = () =>
@@ -156,6 +185,8 @@ export default function CustomerCard() {
                   if (confirm(`Удалить подписку «${s.plan_name || s.title}» вместе с пользователем в панели?`)) subAction(() => del(`/api/admin/subscriptions/${s.id}`), 'Подписка удалена')
                 }}
                 onDevices={() => setDevicesFor(s)}
+                onChange={() => setChangeFor(s)}
+                onAutopay={() => subAction(() => post(`/api/admin/subscriptions/${s.id}/autopay`), 'Автоплатёж запущен')}
                 onCopy={async () => (await copy(s.subscription_url)) && toast('Ссылка скопирована')}
               />
             ))
@@ -242,6 +273,65 @@ export default function CustomerCard() {
           )}
         </section>
 
+        <section className="card stack">
+          <h3>Бонусы и промокоды</h3>
+          <div className="small muted">
+            Рефералов: {data.data.referral.invited}, оплатили: {data.data.referral.paid}, получено дней: {data.data.referral.days}
+            {c.bonus_days > 0 && <> · на балансе {c.bonus_days} дн.</>}
+          </div>
+          <div className="row wrap">
+            <input className="input num" type="number" min={1} value={bonusDays} onChange={(e) => setBonusDays(Number(e.target.value))} style={{ width: 90, minHeight: 36 }} aria-label="Бонусных дней" />
+            <button className="btn small" disabled={busy || bonusDays < 1} onClick={() => subAction(() => post(`/api/admin/customers/${c.id}/bonus`, { days: bonusDays }), 'Дни начислены')}>
+              Начислить бонусные дни
+            </button>
+          </div>
+          <form
+            className="row wrap"
+            onSubmit={(e) => {
+              e.preventDefault()
+              subAction(() => post(`/api/admin/customers/${c.id}/promo`, { code: promoCode }), 'Промокод применён').then(() => setPromoCode(''))
+            }}
+          >
+            <input className="input" placeholder="Промокод" value={promoCode} onChange={(e) => setPromoCode(e.target.value.toUpperCase())} style={{ width: 160, minHeight: 36 }} />
+            <button className="btn secondary small" disabled={busy || !promoCode.trim()}>
+              Применить за клиента
+            </button>
+          </form>
+          {(promos.length > 0 || bonuses.length > 0 || changes.length > 0) && (
+            <div className="list small">
+              {promos.map((r) => (
+                <div className="item" key={'p' + r.id}>
+                  <span className="grow">
+                    🎟 {r.code} <span className="muted">{r.kind === 'days' ? `+${r.value} дн.` : `−${r.value}%`}</span>
+                  </span>
+                  <span className={r.status === 'used' ? 'badge ok' : 'badge warn'}>{r.status === 'used' ? 'использован' : 'ждёт оплаты'}</span>
+                  <span className="tiny muted">{date(r.created_at)}</span>
+                </div>
+              ))}
+              {bonuses.map((b) => (
+                <div className="item" key={'b' + b.id}>
+                  <span className="grow">
+                    🎁 +{b.days} дн. <span className="muted">{bonusKind[b.kind]}{b.kind === 'first' || b.kind === 'recurring' ? ` · ${b.referral_name}` : ''}</span>
+                  </span>
+                  {b.pending && <span className="badge">на баланс</span>}
+                  <span className="tiny muted">{date(b.created_at)}</span>
+                </div>
+              ))}
+              {changes.map((x) => (
+                <div className="item" key={'c' + x.id}>
+                  <span className="grow">
+                    🔄 {x.from_name} → {x.to_name}{' '}
+                    <span className="muted">
+                      {modeLabel[x.mode]}, {x.days_before} → {x.days_after} дн.
+                    </span>
+                  </span>
+                  <span className="tiny muted">{date(x.created_at)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
         <section className="card stack" style={{ gridColumn: '1 / -1' }}>
           <h3>История</h3>
           <div className="list small">
@@ -262,6 +352,13 @@ export default function CustomerCard() {
 
       <GrantSheet open={grantOpen} onClose={() => setGrantOpen(false)} plans={plans.data || []} onGrant={(plan_id, days, kind) => subAction(() => post(`/api/admin/customers/${c.id}/subscriptions`, { plan_id, days, kind }), 'Подписка выдана').then(() => setGrantOpen(false))} busy={busy} />
       <DevicesSheet sub={devicesFor} onClose={() => setDevicesFor(null)} />
+      <ChangeSheet
+        sub={changeFor}
+        plans={plans.data || []}
+        busy={busy}
+        onClose={() => setChangeFor(null)}
+        onSave={(plan_id, days) => subAction(() => post(`/api/admin/subscriptions/${changeFor!.id}/change`, { plan_id, days }), 'Тариф изменён').then(() => setChangeFor(null))}
+      />
     </div>
   )
 }
@@ -276,6 +373,8 @@ function SubBlock(p: {
   onDelete: () => void
   onDevices: () => void
   onCopy: () => void
+  onChange: () => void
+  onAutopay: () => void
 }) {
   const { s } = p
   const [days, setDays] = useState(7)
@@ -289,6 +388,7 @@ function SubBlock(p: {
           {s.is_primary && <span className="badge accent" style={{ marginLeft: 8 }}>основная</span>}
           {s.kind === 'trial' && <span className="badge" style={{ marginLeft: 6 }}>пробная</span>}
           {disabled && <span className="badge bad" style={{ marginLeft: 6 }}>отключена</span>}
+          {s.autopay && <span className="badge ok" style={{ marginLeft: 6 }}>автопродление</span>}
         </div>
         <span className="tiny muted num">
           #{s.id} · rw:{s.rw_user_id ?? '—'}
@@ -311,6 +411,14 @@ function SubBlock(p: {
         <button className="btn secondary small" disabled={p.busy} onClick={p.onDevices}>
           Устройства
         </button>
+        <button className="btn secondary small" disabled={p.busy} onClick={p.onChange}>
+          Сменить тариф
+        </button>
+        {s.autopay && (
+          <button className="btn secondary small" disabled={p.busy} onClick={p.onAutopay}>
+            Запустить автооплату
+          </button>
+        )}
         <button className="btn secondary small" disabled={p.busy} onClick={p.onReset}>
           Сбросить трафик
         </button>
@@ -415,6 +523,46 @@ function DevicesSheet({ sub, onClose }: { sub: Subscription | null; onClose: () 
           ))}
         </div>
       )}
+    </Sheet>
+  )
+}
+
+function ChangeSheet({ sub, plans, busy, onClose, onSave }: { sub: Subscription | null; plans: Plan[]; busy: boolean; onClose: () => void; onSave: (plan: number, days: number | null) => void }) {
+  const [plan, setPlan] = useState(0)
+  const [keep, setKeep] = useState(true)
+  const [days, setDays] = useState(30)
+  useEffect(() => {
+    if (sub) {
+      setPlan(plans.find((p) => p.id !== sub.plan_id)?.id || 0)
+      setKeep(true)
+    }
+  }, [sub, plans])
+  return (
+    <Sheet open={!!sub} onClose={onClose} title="Сменить тариф">
+      <div className="stack">
+        <p className="small muted">Сейчас: {sub?.plan_name || sub?.title}, до {date(sub?.expires_at)}. Оплата не создаётся.</p>
+        <Field label="Новый тариф">
+          <select className="input" value={plan} onChange={(e) => setPlan(Number(e.target.value))}>
+            {plans
+              .filter((p) => p.id !== sub?.plan_id)
+              .map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                  {!p.is_active ? ' (неактивен)' : ''}
+                </option>
+              ))}
+          </select>
+        </Field>
+        <Toggle checked={keep} onChange={setKeep} label="Сохранить текущий срок" />
+        {!keep && (
+          <Field label="Новый срок, дней от сегодня">
+            <input className="input num" type="number" min={1} value={days} onChange={(e) => setDays(Number(e.target.value))} />
+          </Field>
+        )}
+        <button className="btn" disabled={busy || !plan || (!keep && days < 1)} onClick={() => onSave(plan, keep ? null : days)}>
+          Сменить
+        </button>
+      </div>
     </Sheet>
   )
 }

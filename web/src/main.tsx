@@ -13,6 +13,8 @@ import PaymentStatus from './pages/PaymentStatus'
 import Install from './pages/Install'
 import Profile from './pages/Profile'
 import Support from './pages/Support'
+import ChangePlan from './pages/ChangePlan'
+import Referral from './pages/Referral'
 
 const Admin = lazy(() => import('./pages/admin/Admin'))
 
@@ -77,6 +79,8 @@ createRoot(document.getElementById('root')!).render(
               <Route path="install/:id" element={<Install />} />
               <Route path="profile" element={<Profile />} />
               <Route path="support" element={<Support />} />
+              <Route path="change/:id" element={<ChangePlan />} />
+              <Route path="referral" element={<Referral />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

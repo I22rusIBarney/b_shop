@@ -61,7 +61,7 @@ const pages: Record<string, { title: string; sections: SectionSpec[] }> = {
         fields: [
           { k: 'pending_minutes', label: 'Сколько минут ждать оплату', hint: 'Потом счёт отменяется', type: 'number' },
           { k: 'success_url', label: 'Страница после оплаты', hint: 'Пусто — встроенная страница статуса', type: 'text' },
-          { k: 'autopay_enabled', label: 'Автопродление сохранённой картой', type: 'bool' },
+          { k: 'autopay_enabled', label: 'Автопродление сохранённым способом оплаты', type: 'bool' },
           { k: 'autopay_days_before', label: 'Списывать за, дней до окончания', type: 'number' },
           { k: 'autopay_notify_days', label: 'Предупреждать за, дней до списания', type: 'number' },
           { k: 'show_save_card', label: 'Показывать «Запомнить карту»', type: 'bool' },

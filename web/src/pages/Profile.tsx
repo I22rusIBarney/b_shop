@@ -1,17 +1,16 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { del, get, post, type Paged, type Payment, type Session } from '../lib/api'
+import { del, get, post, put, type AutopayInfo, type Paged, type Payment, type PaymentMethodInfo, type RedeemResult, type Redemption, type Session, type Subscription } from '../lib/api'
 import { useApp } from '../lib/app'
-import { dateTime, operationName, paymentStatus, providerName, rub } from '../lib/format'
+import { date, dateTime, operationName, paymentStatus, plural, providerName, rub } from '../lib/format'
 import { haptic, openLink } from '../lib/tg'
-import { Card, Chevron, Copy, Exit, Link as LinkIcon, Trash, Users, Wallet } from '../ui/icons'
-import { Field, Sheet, copy, useAction, useLoad, useToast } from '../ui/kit'
+import { Card, Chevron, Exit, Link as LinkIcon, Tag, Trash, Users, Wallet } from '../ui/icons'
+import { Field, Sheet, Toggle, useAction, useLoad } from '../ui/kit'
 
 export default function Profile() {
   const { me, config, signOut, refreshMe } = useApp()
   const nav = useNavigate()
-  const toast = useToast()
-  const [sheet, setSheet] = useState<'' | 'payments' | 'logins' | 'cards'>('')
+  const [sheet, setSheet] = useState<'' | 'payments' | 'logins' | 'cards' | 'promo'>('')
   if (!me) return null
   const c = me.customer
   const name = [c.first_name, c.last_name].filter(Boolean).join(' ') || (c.username ? `@${c.username}` : c.email) || 'Профиль'
@@ -30,30 +29,20 @@ export default function Profile() {
         )}
       </div>
 
-      {me.ref_link && (
-        <div className="card stack">
-          <div className="row">
-            <Users style={{ width: 22, height: 22, color: 'var(--accent)' }} />
-            <h3 className="grow">Пригласить друзей</h3>
-          </div>
-          <p className="small muted">Друг получает бонусные дни при первой оплате, вы — тоже. Ссылка:</p>
-          <div className="row">
-            <div className="mono-box grow ellipsis">{me.ref_link.replace('https://', '')}</div>
-            <button
-              className="icon-btn"
-              aria-label="Скопировать ссылку"
-              onClick={async () => {
-                if (await copy(me.ref_link)) {
-                  haptic('success')
-                  toast('Ссылка скопирована')
-                }
-              }}
-            >
-              <Copy />
-            </button>
-          </div>
-        </div>
-      )}
+      <div className="card list">
+        <button className="item item-link" style={{ background: 'none', border: 0, width: '100%', textAlign: 'left' }} onClick={() => setSheet('promo')}>
+          <Tag style={{ width: 20, height: 20 }} />
+          <span>Применить промокод</span>
+          <Chevron className="chev" style={{ width: 18, height: 18 }} />
+        </button>
+        {me.referral_enabled && (
+          <button className="item item-link" style={{ background: 'none', border: 0, borderTop: '1px solid var(--line)', width: '100%', textAlign: 'left' }} onClick={() => nav('/referral')}>
+            <Users style={{ width: 20, height: 20 }} />
+            <span>Реферальная система</span>
+            <Chevron className="chev" style={{ width: 18, height: 18 }} />
+          </button>
+        )}
+      </div>
 
       <div className="card list">
         <button className="item item-link" style={{ background: 'none', border: 0, width: '100%', textAlign: 'left' }} onClick={() => setSheet('payments')}>
@@ -68,7 +57,7 @@ export default function Profile() {
         </button>
         <button className="item item-link" style={{ background: 'none', border: 0, borderTop: '1px solid var(--line)', width: '100%', textAlign: 'left' }} onClick={() => setSheet('cards')}>
           <Card style={{ width: 20, height: 20 }} />
-          <span>Сохранённые карты</span>
+          <span>Автопродление и способы оплаты</span>
           <Chevron className="chev" style={{ width: 18, height: 18 }} />
         </button>
       </div>
@@ -96,7 +85,8 @@ export default function Profile() {
 
       <PaymentsSheet open={sheet === 'payments'} onClose={() => setSheet('')} />
       <LoginsSheet open={sheet === 'logins'} onClose={() => setSheet('')} onChanged={refreshMe} />
-      <CardsSheet open={sheet === 'cards'} onClose={() => setSheet('')} />
+      <AutopaySheet open={sheet === 'cards'} onClose={() => setSheet('')} />
+      <PromoSheet open={sheet === 'promo'} onClose={() => setSheet('')} />
     </div>
   )
 }
@@ -220,38 +210,138 @@ function LoginsSheet({ open, onClose, onChanged }: { open: boolean; onClose: () 
   )
 }
 
-function CardsSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const data = useLoad(() => (open ? get<{ id: number; title: string; created_at: string }[]>('/api/payment-methods') : Promise.resolve(undefined)), [open])
+function AutopaySheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const subs = useLoad(() => (open ? get<Subscription[]>('/api/subscriptions?live=0') : Promise.resolve(undefined)), [open])
+  const methods = useLoad(() => (open ? get<PaymentMethodInfo[]>('/api/payment-methods') : Promise.resolve(undefined)), [open])
   const { busy, run } = useAction()
+  const paid = (subs.data || []).filter((s) => s.kind === 'paid')
   return (
-    <Sheet open={open} onClose={onClose} title="Сохранённые карты">
-      {!data.data ? (
+    <Sheet open={open} onClose={onClose} title="Автопродление">
+      {!subs.data || !methods.data ? (
         <div className="center" style={{ padding: 20 }}>
           <span className="spinner" />
         </div>
-      ) : data.data.length === 0 ? (
-        <div className="empty">Сохранённых карт нет. Карту можно запомнить при оплате.</div>
       ) : (
-        <div className="list">
-          {data.data.map((m) => (
-            <div className="item" key={m.id}>
-              <Card style={{ width: 20, height: 20 }} />
-              <span className="grow">{m.title || 'Карта'}</span>
-              <button
-                className="icon-btn"
-                aria-label="Удалить карту"
-                disabled={busy}
-                onClick={() =>
-                  run(async () => {
-                    await del(`/api/payment-methods/${m.id}`)
-                    data.reload()
-                  }, 'Карта удалена')
-                }
-              >
-                <Trash />
-              </button>
+        <div className="stack lg">
+          {paid.length === 0 ? (
+            <div className="empty">Автопродление доступно для платных подписок</div>
+          ) : (
+            <div className="list">
+              {paid.map((s, i) => (
+                <AutopayRow key={s.id} sub={s} first={i === 0} hasMethods={methods.data!.length > 0} onChanged={subs.reload} />
+              ))}
             </div>
-          ))}
+          )}
+          <div className="stack">
+            <h3>Сохранённые способы оплаты</h3>
+            {methods.data.length === 0 ? (
+              <p className="small muted">Пока нет. Включите «Автопродление» при следующей оплате — способ оплаты сохранится.</p>
+            ) : (
+              <div className="list">
+                {methods.data.map((m) => (
+                  <div className="item" key={m.id}>
+                    <Card style={{ width: 20, height: 20 }} />
+                    <div className="grow">
+                      <div>{m.title || 'Способ оплаты'}</div>
+                      <div className="tiny muted">сохранён {date(m.created_at)}</div>
+                    </div>
+                    <button
+                      className="icon-btn"
+                      aria-label="Удалить способ оплаты"
+                      disabled={busy}
+                      onClick={() =>
+                        run(async () => {
+                          await del(`/api/payment-methods/${m.id}`)
+                          await Promise.all([methods.reload(), subs.reload()])
+                        }, 'Способ оплаты удалён')
+                      }
+                    >
+                      <Trash />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </Sheet>
+  )
+}
+
+function AutopayRow({ sub, first, hasMethods, onChanged }: { sub: Subscription; first: boolean; hasMethods: boolean; onChanged: () => void }) {
+  const info = useLoad(() => get<AutopayInfo>(`/api/subscriptions/${sub.id}/autopay`), [sub.id, sub.autopay])
+  const { busy, run } = useAction()
+  const a = info.data
+  const set = (on: boolean) =>
+    run(async () => {
+      await put(`/api/subscriptions/${sub.id}/autopay`, { enabled: on })
+      onChanged()
+      info.reload()
+    }, on ? 'Автопродление включено' : 'Автопродление отключено')
+  return (
+    <div className="item" style={{ borderTop: first ? 0 : '1px solid var(--line)', alignItems: 'flex-start' }}>
+      <div className="grow">
+        <div>{sub.plan_name || sub.title}</div>
+        <div className="tiny muted">
+          {!a
+            ? '…'
+            : !a.available
+              ? a.reason
+              : a.enabled
+                ? `Списание ${date(a.charge_at)}: ${rub(a.amount)} за ${a.days} ${plural(a.days, "день", "дня", "дней")}`
+                : hasMethods
+                  ? `Выключено · ${rub(a.amount)} за ${a.days} ${plural(a.days, 'день', 'дня', 'дней')}`
+                  : 'Нет сохранённого способа оплаты'}
+        </div>
+      </div>
+      <Toggle checked={!!a?.enabled} onChange={set} label="" disabled={busy || !a || (!a.enabled && (!a.available || !hasMethods))} />
+    </div>
+  )
+}
+
+function PromoSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const active = useLoad(() => (open ? get<{ active: Redemption[] }>('/api/promo') : Promise.resolve(undefined)), [open])
+  const [code, setCode] = useState('')
+  const [done, setDone] = useState('')
+  const { busy, run } = useAction()
+  const apply = () =>
+    run(async () => {
+      const r = await post<RedeemResult>('/api/promo', { code })
+      haptic('success')
+      setDone(r.message)
+      setCode('')
+      active.reload()
+    })
+  return (
+    <Sheet open={open} onClose={onClose} title="Промокод" icon={<Tag />}>
+      <form
+        className="stack"
+        onSubmit={(e) => {
+          e.preventDefault()
+          apply()
+        }}
+      >
+        <div className="input-row">
+          <input className="input" placeholder="Введите промокод" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} autoCapitalize="characters" />
+          <button className="btn" disabled={busy || !code.trim()}>
+            Применить
+          </button>
+        </div>
+        {done && <p className="ok-text">✓ {done}</p>}
+      </form>
+      {active.data && active.data.active.length > 0 && (
+        <div className="stack" style={{ marginTop: 18 }}>
+          <h3>Ждут оплаты</h3>
+          <div className="list">
+            {active.data.active.map((r) => (
+              <div className="item" key={r.id}>
+                <span className="badge accent">−{r.value}%</span>
+                <span className="grow">{r.code}</span>
+                <span className="tiny muted">к следующей оплате</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </Sheet>
