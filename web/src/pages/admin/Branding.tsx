@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { api, get, put } from '../../lib/api'
 import { useApp } from '../../lib/app'
 import { applyBranding } from '../../lib/theme'
+import { Calendar, Chevron, ChevronDown, Copy, Gear, Link as LinkIcon, Pencil, Plug, Swap } from '../../ui/icons'
 import { ErrorBox, Field, Spinner, Toggle, useAction, useLoad, useToast } from '../../ui/kit'
 
 interface B {
@@ -86,44 +87,67 @@ function Preview({ b }: { b: B }) {
     <div className="preview-phone" style={style} aria-label="Предпросмотр">
       {<img src={b.bg_mobile_file ? `/files/${b.bg_mobile_file}` : '/bg-default.webp'} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: b.bg_fit as any, opacity: b.bg_opacity / 100 }} />}
       <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(180deg, color-mix(in srgb, ${b.background} ${b.bg_dim}%, transparent), color-mix(in srgb, ${b.background} ${b.bg_dim}%, transparent) 45%, ${b.background})` }} />
-      <div style={{ position: 'relative', padding: 14, fontSize: 13 }}>
-        {!b.show_header && <div style={{ height: Math.round(b.hero_space * 0.72) }} />}
-        <div className="brand" style={{ marginBottom: 12, display: b.show_header ? 'flex' : 'none' }}>
-          <img src={b.logo_file ? `/files/${b.logo_file}` : '/logo-default.png'} alt="" style={{ width: 34, height: 34, borderRadius: 10 }} />
-          <div>
-            <div className="brand-name" style={{ fontSize: 15 }}>{b.title}</div>
-            <div className="brand-tag" style={{ fontSize: 11 }}>{b.tagline}</div>
-          </div>
+      {/* The real home markup at phone size (396 px), scaled into the frame: what you see is what clients get. */}
+      <div className="preview-screen">
+        <div className="sub-picker-row">
+          <span className="sub-picker">
+            Подписка 1 <ChevronDown />
+          </span>
         </div>
-        <div className="ticket" style={{ padding: 14 }}>
-          <div className="plan" style={{ fontSize: 13 }}>Бобрёнок</div>
-          <div className="left" style={{ margin: '10px 0 2px' }}>
-            <b style={{ fontSize: 44 }}>23</b>
-            <span style={{ fontSize: 14 }}>дня</span>
-          </div>
-          <div className="until" style={{ fontSize: 11 }}>до 5 ноября 2026 г.</div>
-          <div className="perf" style={{ margin: '12px -14px 10px' }} />
-          <div className="stats" style={{ gap: 8 }}>
-            <div>
-              <div className="stat-label" style={{ fontSize: 10 }}>Трафик</div>
-              <div style={{ fontSize: 12 }}>12,4 ГБ</div>
+        <div className="home-fill" />
+        <div className="carousel-wrap">
+          <section className="glass sub-card">
+            <div className="sub-head">
+              <span className="sub-name">Бобрёнок</span>
+              <span className="sub-date">
+                до <b>05.11.2026</b>
+                <Calendar />
+              </span>
             </div>
-            <div>
-              <div className="stat-label" style={{ fontSize: 10 }}>Устройства</div>
-              <div style={{ fontSize: 12 }}>2 из 3</div>
+            <div className="sub-meta">
+              <span className="dev-pill">
+                2/3 устройства <Pencil />
+              </span>
             </div>
+            <div className="link-row">
+              <span className="link-ico">
+                <LinkIcon />
+              </span>
+              <div className="grow" style={{ minWidth: 0 }}>
+                <div className="link-label">Ссылка подписки</div>
+                <div className="link-url">
+                  <span className="u">https://sub.example.com/abc</span>
+                  <span className="link-mask">••••••••</span>
+                </div>
+              </div>
+              <span className="link-copy">
+                <Copy />
+              </span>
+            </div>
+            <div className="sub-actions">
+              <span className="pill-btn">
+                <Plug /> Продлить
+              </span>
+              <span className="pill-btn">
+                <Gear /> Установить и настроить
+              </span>
+              <span className="pill-btn">
+                <Swap /> Сменить тариф
+              </span>
+            </div>
+          </section>
+          <span className="car-arrow right">
+            <Chevron />
+          </span>
+        </div>
+        <div className="dots-row">
+          <div className="dots">
+            <span className="dot on" />
+            <span className="dot" />
+            <span className="dot plus">+</span>
           </div>
         </div>
-        <div className="actions" style={{ marginTop: 10, gap: 6 }}>
-          {['Продлить', 'Установить', 'Устройства'].map((t) => (
-            <span key={t} className="btn secondary" style={{ minHeight: 44, fontSize: 11 }}>
-              {t}
-            </span>
-          ))}
-        </div>
-        <span className="btn block" style={{ marginTop: 10, minHeight: 40, fontSize: 13 }}>
-          Оплатить
-        </span>
+        <div className="preview-tabbar" />
       </div>
     </div>
   )

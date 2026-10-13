@@ -319,7 +319,7 @@ table.t { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 .filters .input { width: auto; min-height: 40px; }
 .filters .input.grow { flex: 1; min-width: 200px; }
 .swatch { width: 46px; height: 46px; padding: 0; border-radius: 12px; border: 1px solid var(--line-strong); background: none; cursor: pointer; }
-.preview-phone { width: 300px; height: 560px; border-radius: 34px; border: 8px solid #000; overflow: hidden; position: relative; background: var(--bg); flex: none; }
+.preview-phone { width: 300px; height: 560px; color: var(--text); font-family: var(--font); border-radius: 34px; border: 8px solid #000; overflow: hidden; position: relative; background: var(--bg); flex: none; }
 .file-tile { display: flex; align-items: center; gap: 12px; padding: 10px; border: 1px dashed var(--line-strong); border-radius: var(--r-ctl); }
 .file-tile .thumb { width: 64px; height: 64px; border-radius: 10px; background: var(--surface-2); overflow: hidden; display: grid; place-items: center; flex: none; }
 .file-tile .thumb img, .file-tile .thumb video { width: 100%; height: 100%; object-fit: cover; }
@@ -665,11 +665,6 @@ html { touch-action: pan-x pan-y; } /* no pinch-zoom: the layout fits the screen
   .t.stack-sm .ellipsis { white-space: normal; }
 }
 
-/* Phones switch subscriptions by swipe, dots and the picker on top: the side arrows only steal width there. */
-@media (max-width: 480px) and (pointer: coarse) {
-  .carousel-wrap { margin: 0; }
-  .car-arrow { display: none; }
-}
 
 /* ---- plan editor: price per period ---- */
 .period-edit { display: grid; grid-template-columns: 110px minmax(120px, 170px) 1fr auto; align-items: center; gap: 8px 12px; }
@@ -691,3 +686,59 @@ html { touch-action: pan-x pan-y; } /* no pinch-zoom: the layout fits the screen
   .t td { padding: 9px 8px; }
   .t th:first-child, .t td:first-child { padding-left: 12px; }
 }
+
+/* ---------- home: sizes 1:1 with the current BobrGO bot (measured on its screenshot, 396 px wide phone) ----------
+   The card follows the branding sliders: background alpha = --card-alpha, blur = --card-blur. */
+.glass {
+  background: color-mix(in srgb, var(--surface-solid) var(--card-alpha), transparent);
+  backdrop-filter: blur(var(--card-blur)) saturate(1.1); -webkit-backdrop-filter: blur(var(--card-blur)) saturate(1.1);
+}
+.sub-picker { gap: 8px; padding: 3px 14px; font-size: 0.85rem; min-height: 26px; }
+.sub-picker svg { width: 13px; height: 13px; }
+.carousel-wrap { margin: 0 22px; }
+.sub-card { padding: 22px 20px 20px; border-radius: 26px; }
+.sub-head { align-items: center; flex-wrap: nowrap; gap: 8px; }
+.sub-name { flex: 1 1 auto; font-size: 0.92rem; -webkit-line-clamp: 2; }
+.sub-date { gap: 4px; font-size: 0.85rem; }
+.sub-date svg { width: 15px; height: 15px; }
+.sub-meta { margin-top: 6px; }
+.dev-pill { gap: 5px; padding: 1px 10px; font-size: 0.75rem; min-height: 22px; border-width: 1.5px; }
+.dev-pill svg { width: 12px; height: 12px; }
+.link-row { gap: 10px; margin-top: 18px; padding: 7px 10px; border-radius: 16px; }
+.link-ico { width: 24px; height: 24px; border-radius: 8px; }
+.link-ico svg { width: 14px; height: 14px; }
+.link-label { font-size: 0.78rem; }
+.link-url { gap: 6px; font-size: 0.72rem; }
+.link-copy { padding: 4px; }
+.link-copy svg { width: 19px; height: 19px; }
+.sub-actions { gap: 11px; margin-top: 11px; }
+.pill-btn { gap: 10px; min-height: 41px; padding: 0 16px; font-size: 0.875rem; border-width: 1.5px; }
+.pill-btn svg { width: 17px; height: 17px; }
+.car-arrow { width: 34px; height: 34px; }
+.car-arrow.right { right: -34px; }
+.car-arrow.left { left: -34px; }
+.car-arrow svg { width: 16px; height: 16px; }
+.dots-row { margin-top: 0; }
+.dots { gap: 6px; padding: 5px 9px; }
+.dot { width: 8px; height: 8px; }
+.dot.on { width: 22px; }
+.dot.plus { width: 14px; height: 14px; font-size: 11px; }
+.tabbar { gap: 4px; }
+.tabbar a { width: 44px; height: 44px; }
+.tabbar svg { width: 21px; height: 21px; }
+@media (max-height: 700px) {
+  .sub-card { padding: 16px 16px 14px; }
+  .link-row { margin-top: 12px; }
+  .sub-actions { gap: 8px; margin-top: 10px; }
+  .pill-btn { min-height: 38px; }
+}
+@media (max-width: 360px) {
+  .carousel-wrap { margin: 0 16px; }
+  .sub-card { padding-left: 16px; padding-right: 16px; }
+  .car-arrow { width: 30px; height: 30px; }
+  .car-arrow.right { right: -28px; }
+  .car-arrow.left { left: -28px; }
+}
+/* Branding preview: a 396×758 phone screen scaled into the 284 px frame. */
+.preview-screen { position: relative; width: 396px; height: 758px; zoom: 0.717; display: flex; flex-direction: column; gap: 12px; padding: 54px 16px 12px; }
+.preview-tabbar { height: 52px; flex: none; }

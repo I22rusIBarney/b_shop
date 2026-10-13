@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { del, get, patch, post, type BuyResult, type Device, type DevicesOffer, type Subscription } from '../lib/api'
 import { useApp } from '../lib/app'
 import { useBadges } from '../lib/badges'
-import { bytes, dateTimeFull, plural, relative, rub, rubRound, shortDate } from '../lib/format'
+import { bytes, dateTimeFull, plural, rub, rubRound, shortDate } from '../lib/format'
 import { haptic, openLink } from '../lib/tg'
 import { Calendar, Check, Chevron, ChevronDown, Close, Copy, Devices as DevicesIcon, Gear, Link as LinkIcon, News as NewsIcon, Pencil, Plug, Plus, Swap, Trash } from '../ui/icons'
 import { ErrorBox, PageLoader, Sheet, copy, useAction, useLoad, useToast } from '../ui/kit'
@@ -244,8 +244,8 @@ function SubCard({ sub, onChanged }: { sub: Subscription; onChanged: () => void 
       <div className="sub-actions">
         <button
           className="pill-btn"
-          disabled={sub.kind === 'paid' && !sub.can_renew}
-          onClick={() => nav(sub.kind === 'paid' ? `/buy?sub=${sub.id}&plan=${sub.plan_id}` : `/buy?sub=${sub.id}`)}
+          disabled={sub.kind === 'paid' && !!sub.plan_id && !sub.can_renew}
+          onClick={() => nav(sub.kind === 'paid' && sub.plan_id ? `/buy?sub=${sub.id}&plan=${sub.plan_id}` : `/buy?sub=${sub.id}`)}
         >
           <Plug />
           Продлить
@@ -261,7 +261,6 @@ function SubCard({ sub, onChanged }: { sub: Subscription; onChanged: () => void 
           </button>
         )}
       </div>
-      {sub.online_at && <p className="tiny muted center sub-online">Подключение {relative(sub.online_at)}</p>}
 
       <Devices sub={sub} open={devicesOpen} onClose={() => setDevicesOpen(false)} onChanged={onChanged} />
     </section>

@@ -152,7 +152,8 @@ func (s *Service) Buy(ctx context.Context, c *store.Customer, req BuyRequest) (*
 		}
 		samePlan := sub.PlanID != nil && *sub.PlanID == plan.ID
 		// A trial or free subscription can be turned into any plan by paying for it; paid ones use plan change.
-		if !samePlan && sub.Kind == "paid" {
+		// A paid subscription without a known plan (taken over from the panel) is renewed into the chosen plan.
+		if !samePlan && sub.Kind == "paid" && sub.PlanID != nil {
 			return nil, userErr("для другого тарифа используйте смену тарифа")
 		}
 		if samePlan && plan.RenewalDisabled && sub.Kind == "paid" {
