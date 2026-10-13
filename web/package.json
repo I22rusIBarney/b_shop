@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@fontsource/golos-text": "5.2.6",
+    "@fontsource/jetbrains-mono": "5.2.6",
+    "@fontsource/nunito": "5.2.7",
     "@fontsource/unbounded": "5.2.6",
     "@kastov/cryptohapp": "1.1.2",
     "dompurify": "3.2.6",

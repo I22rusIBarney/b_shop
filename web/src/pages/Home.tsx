@@ -1,20 +1,27 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { del, get, post, type Device, type Subscription } from '../lib/api'
 import { useApp } from '../lib/app'
-import { bytes, date, plural, relative, timeLeft } from '../lib/format'
+import { bytes, plural, relative, shortDate } from '../lib/format'
 import { haptic, openLink } from '../lib/tg'
-import { Copy, Download, Phone, Plus, Renew, Trash } from '../ui/icons'
+import { Calendar, Chevron, ChevronDown, Copy, Gear, Link as LinkIcon, Pencil, Phone, Plug, Swap, Trash } from '../ui/icons'
 import { ErrorBox, PageLoader, Sheet, copy, useAction, useLoad, useToast } from '../ui/kit'
 import { HeroSpace } from '../ui/shell'
+
+function subTitle(_s: Subscription, i: number) {
+  return `Подписка ${i + 1}`
+}
 
 export default function Home() {
   const { me, config, refreshMe } = useApp()
   const [params, setParams] = useSearchParams()
   const subs = useLoad(() => get<Subscription[]>('/api/subscriptions'))
-  const [sel, setSel] = useState<number | null>(null)
+  const [idx, setIdx] = useState(0)
+  const [pickOpen, setPickOpen] = useState(false)
   const { busy, run } = useAction()
   const nav = useNavigate()
+  const [dir, setDir] = useState(0)
+  const touch = useRef<{ x: number; y: number } | null>(null)
 
   const trial = () =>
     run(async () => {
@@ -31,147 +38,222 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Primary subscription first.
+  const list = [...(subs.data || [])].sort((a, b) => Number(b.is_primary) - Number(a.is_primary))
+  useEffect(() => {
+    if (idx > 0 && idx >= list.length) setIdx(0)
+  }, [idx, list.length])
+
+  const go = (i: number) => {
+    const n = Math.max(0, Math.min(i, list.length - 1))
+    if (n === idx) return
+    setDir(n > idx ? 1 : -1)
+    setIdx(n)
+    haptic('light')
+  }
+  const onTouchStart = (e: React.TouchEvent) => {
+    touch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+  }
+  const onTouchEnd = (e: React.TouchEvent) => {
+    const t = touch.current
+    touch.current = null
+    if (!t) return
+    const dx = e.changedTouches[0].clientX - t.x
+    const dy = e.changedTouches[0].clientY - t.y
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) go(idx + (dx < 0 ? 1 : -1))
+  }
+
   if (subs.loading && !subs.data) return <PageLoader />
   if (subs.error) return <ErrorBox text={subs.error} retry={subs.reload} />
-  const list = subs.data || []
   const b = config.branding
 
   const banner = b.banner ? (
-    <div className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: 14, cursor: b.banner_link ? 'pointer' : 'default' }} onClick={() => b.banner_link && openLink(b.banner_link)}>
+    <div className="glass" style={{ padding: 0, overflow: 'hidden', cursor: b.banner_link ? 'pointer' : 'default' }} onClick={() => b.banner_link && openLink(b.banner_link)}>
       {b.banner.includes('#video') ? <video src={b.banner} autoPlay muted loop playsInline /> : <img src={b.banner} alt="" />}
     </div>
   ) : null
 
   if (list.length === 0)
     return (
-      <div className="stack lg">
+      <div className="home">
         <HeroSpace />
         {banner}
-        <div className="card stack lg">
+        <div className="glass sub-card stack lg">
           <div className="stack">
-            <h1>Подписки пока нет</h1>
-            <p className="muted">Выберите тариф — подключение займёт пару минут, настройки придут сразу после оплаты.</p>
+            <h2>Подписки пока нет</h2>
+            <p className="muted">Выберите тариф — подключение займёт пару минут.</p>
           </div>
           {me?.trial_available && (
-            <button className="btn block" disabled={busy} onClick={trial}>
+            <button className="pill-btn filled" disabled={busy} onClick={trial}>
               Попробовать бесплатно — {config.trial.days} {plural(config.trial.days, 'день', 'дня', 'дней')}
             </button>
           )}
-          <Link className={me?.trial_available ? 'btn secondary block' : 'btn block'} to="/buy">
+          <Link className="pill-btn" to="/buy">
             Выбрать тариф
           </Link>
         </div>
       </div>
     )
 
-  const current = list.find((s) => s.id === sel) || list.find((s) => s.is_primary) || list[0]
   return (
-    <div className="stack lg">
+    <div className="home">
+      <div className="sub-picker-row">
+        <button className="sub-picker" onClick={() => setPickOpen(true)}>
+          {subTitle(list[idx], idx)}
+          <ChevronDown />
+        </button>
+      </div>
       <HeroSpace />
       {banner}
-      {list.length > 1 || current ? (
-        <div className="chips" role="tablist">
-          {list.map((s) => (
-            <button key={s.id} role="tab" aria-selected={s.id === current.id} className={s.id === current.id ? 'chip on' : 'chip'} onClick={() => setSel(s.id)}>
-              {s.plan_name || s.title}
-            </button>
+      <div className="carousel-wrap">
+        <div className="carousel" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+          {list[idx] && (
+            <div className="slide" key={list[idx].id} style={{ ['--from' as any]: `${dir * 24}px` }}>
+              <SubCard sub={list[idx]} onChanged={subs.reload} />
+            </div>
+          )}
+        </div>
+        {idx > 0 && (
+          <button className="car-arrow left" onClick={() => go(idx - 1)} aria-label="Предыдущая подписка">
+            <Chevron style={{ transform: 'rotate(180deg)' }} />
+          </button>
+        )}
+        {idx < list.length - 1 && (
+          <button className="car-arrow right" onClick={() => go(idx + 1)} aria-label="Следующая подписка">
+            <Chevron />
+          </button>
+        )}
+      </div>
+      <div className="dots-row">
+        <div className="dots">
+          {list.map((s, i) => (
+            <button key={s.id} className={i === idx ? 'dot on' : 'dot'} onClick={() => go(i)} aria-label={subTitle(s, i)} />
           ))}
-          <button className="chip" onClick={() => nav('/buy')} aria-label="Добавить подписку">
-            <Plus style={{ width: 14, height: 14, verticalAlign: '-2px' }} /> Ещё
+          <button className="dot plus" onClick={() => nav('/buy')} aria-label="Новая подписка">
+            +
           </button>
         </div>
-      ) : null}
-      <Ticket sub={current} onChanged={subs.reload} />
+      </div>
+
+      <Sheet open={pickOpen} onClose={() => setPickOpen(false)} title="Подписки">
+        <div className="list">
+          {list.map((s, i) => (
+            <button
+              key={s.id}
+              className="item item-link"
+              style={{ background: 'none', border: 0, borderTop: i ? '1px solid var(--line)' : 0, width: '100%', textAlign: 'left' }}
+              onClick={() => {
+                setPickOpen(false)
+                go(i)
+              }}
+            >
+              <div className="grow">
+                <div>{subTitle(s, i)}</div>
+                <div className="tiny muted">
+                  {s.plan_name || s.title} · до {shortDate(s.expires_at)}
+                </div>
+              </div>
+              {i === idx && <span className="badge accent">открыта</span>}
+            </button>
+          ))}
+        </div>
+        <Link className="pill-btn" style={{ marginTop: 16 }} to="/buy">
+          Новая подписка
+        </Link>
+      </Sheet>
     </div>
   )
 }
 
-function Ticket({ sub, onChanged }: { sub: Subscription; onChanged: () => void }) {
+function SubCard({ sub, onChanged }: { sub: Subscription; onChanged: () => void }) {
   const toast = useToast()
   const nav = useNavigate()
   const [devicesOpen, setDevicesOpen] = useState(false)
-  const left = timeLeft(sub.expires_at)
+  const expired = new Date(sub.expires_at) < new Date()
   const limit = sub.traffic_limit_bytes
   const pct = limit > 0 ? Math.min(100, (sub.used_traffic_bytes / limit) * 100) : 0
   const devices = sub.device_limit > 0 ? sub.device_limit + sub.extra_devices : 0
+  const url = sub.subscription_url
 
   return (
-    <>
-      <section className={left.expired ? 'ticket expired' : 'ticket'} aria-label="Подписка">
-        <div className="spread">
-          <span className="plan">{sub.plan_name || sub.title}</span>
-          {sub.kind === 'trial' && <span className="badge accent">Пробный</span>}
-          {left.expired && <span className="badge bad">Истекла</span>}
-        </div>
-        <div className="left">
-          <b className="num">{left.value}</b>
-          <span>{left.expired ? 'дней осталось' : left.unit}</span>
-        </div>
-        <div className="until">{left.expired ? `закончилась ${date(sub.expires_at)}` : `до ${date(sub.expires_at)}`}</div>
-
-        <div className="perf" />
-
-        <div className="stats">
-          <div>
-            <div className="stat-label">Трафик</div>
-            <div className="stat-value num">
-              {bytes(sub.used_traffic_bytes)}
-              {limit > 0 ? <span className="muted"> из {bytes(limit)}</span> : <span className="muted"> · безлимит</span>}
-            </div>
-            {limit > 0 && (
-              <div className={pct > 90 ? 'meter bad' : pct > 75 ? 'meter warn' : 'meter'} style={{ marginTop: 6 }}>
-                <i style={{ width: `${pct}%` }} />
-              </div>
-            )}
+    <section className="glass sub-card" aria-label={sub.plan_name || sub.title}>
+      <div className="sub-head">
+        <span className="sub-name">{sub.plan_name || sub.title}</span>
+        <span className={expired ? 'sub-date bad' : 'sub-date'}>
+          {expired ? 'истекла ' : 'до '}
+          <b>{shortDate(sub.expires_at)}</b>
+          <Calendar />
+        </span>
+      </div>
+      <div className="sub-meta">
+        <button className="dev-pill" onClick={() => setDevicesOpen(true)}>
+          {sub.devices_used}
+          {devices ? `/${devices}` : ''} {plural(devices || sub.devices_used, 'устройство', 'устройства', 'устройств')}
+          <Pencil />
+        </button>
+        {sub.kind === 'trial' && <span className="dev-pill muted-pill">Пробная</span>}
+      </div>
+      {limit > 0 && (
+        <div className="traffic">
+          <div className="spread tiny">
+            <span className="muted">Трафик</span>
+            <span className="num">
+              {bytes(sub.used_traffic_bytes)} из {bytes(limit)}
+            </span>
           </div>
-          <button className="item-link" style={{ background: 'none', border: 0, padding: 0, textAlign: 'left' }} onClick={() => setDevicesOpen(true)}>
-            <div className="stat-label">Устройства</div>
-            <div className="stat-value num">
-              {sub.devices_used}
-              <span className="muted"> {devices ? `из ${devices}` : 'подключено'}</span>
+          <div className={pct > 90 ? 'meter bad' : pct > 75 ? 'meter warn' : 'meter'}>
+            <i style={{ width: `${pct}%` }} />
+          </div>
+        </div>
+      )}
+
+      {url && (
+        <div className="link-row">
+          <span className="link-ico">
+            <LinkIcon />
+          </span>
+          <div className="grow" style={{ minWidth: 0 }}>
+            <div className="link-label">Ссылка подписки</div>
+            <div className="link-url">
+              <span className="u">{url}</span>
+              <span className="link-mask">••••••••</span>
             </div>
+          </div>
+          <button
+            className="link-copy"
+            aria-label="Скопировать ссылку подписки"
+            onClick={async () => {
+              if (await copy(url)) {
+                haptic('success')
+                toast('Ссылка скопирована')
+              }
+            }}
+          >
+            <Copy />
           </button>
         </div>
+      )}
 
-        {sub.subscription_url && (
-          <div className="row" style={{ marginTop: 16 }}>
-            <div className="mono-box grow ellipsis">{sub.subscription_url.replace(/^https?:\/\//, '')}</div>
-            <button
-              className="icon-btn"
-              aria-label="Скопировать ссылку подписки"
-              onClick={async () => {
-                if (await copy(sub.subscription_url)) {
-                  haptic('success')
-                  toast('Ссылка скопирована')
-                }
-              }}
-            >
-              <Copy />
-            </button>
-          </div>
-        )}
-        <p className="tiny muted" style={{ marginTop: 10 }}>
-          {sub.online_at ? `Последнее подключение ${relative(sub.online_at)}` : 'Ещё не подключались'}
-        </p>
-      </section>
-
-      <div className="actions">
-        <button className="btn secondary" disabled={!sub.can_renew} onClick={() => nav(`/buy?sub=${sub.id}&plan=${sub.plan_id}`)}>
-          <Renew />
+      <div className="sub-actions">
+        <button className="pill-btn" disabled={!sub.can_renew} onClick={() => nav(`/buy?sub=${sub.id}&plan=${sub.plan_id}`)}>
+          <Plug />
           Продлить
         </button>
-        <Link className="btn secondary" to={`/install/${sub.id}`}>
-          <Download />
-          Установить
+        <Link className="pill-btn" to={`/install/${sub.id}`}>
+          <Gear />
+          Установить и настроить
         </Link>
-        <button className="btn secondary" onClick={() => setDevicesOpen(true)}>
-          <Phone />
-          Устройства
-        </button>
+        {sub.can_change_plan && (
+          <button className="pill-btn" onClick={() => nav(`/buy?sub=${sub.id}&change=1`)}>
+            <Swap />
+            Сменить тариф
+          </button>
+        )}
       </div>
+      {sub.online_at && <p className="tiny muted center" style={{ marginTop: 10 }}>Подключение {relative(sub.online_at)}</p>}
 
       <Devices sub={sub} open={devicesOpen} onClose={() => setDevicesOpen(false)} onChanged={onChanged} />
-    </>
+    </section>
   )
 }
 

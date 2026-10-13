@@ -39,6 +39,8 @@ export function ready() {
     w.expand()
     w.setHeaderColor?.('bg_color')
     w.disableVerticalSwipes?.()
+    // Phones: open full screen like a native app (Telegram 8.0+).
+    if (['ios', 'android'].includes(w.platform) && w.isVersionAtLeast?.('8.0')) w.requestFullscreen?.()
   } catch {
     /* old clients */
   }

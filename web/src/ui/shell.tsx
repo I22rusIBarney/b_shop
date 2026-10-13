@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useApp } from '../lib/app'
 import type { Branding } from '../lib/api'
-import { Chat, Home, Shield, User } from './icons'
+import { Chat, Home, HomeFill, Shield, User } from './icons'
 
 function Media({ src, className }: { src: string; className: string }) {
   if (!src) return null
@@ -89,22 +89,18 @@ export function ClientShell() {
         <Outlet />
       </main>
       <nav className="tabbar" aria-label="Разделы">
-        <NavLink to="/" end>
-          <Home />
-          Главная
+        <NavLink to="/" end aria-label="Главная">
+          {({ isActive }) => (isActive ? <HomeFill /> : <Home />)}
         </NavLink>
-        <NavLink to="/support">
+        <NavLink to="/support" aria-label="Поддержка">
           <Chat />
-          Поддержка
         </NavLink>
-        <NavLink to="/profile">
+        <NavLink to="/profile" aria-label="Профиль">
           <User />
-          Профиль
         </NavLink>
         {me?.customer.is_admin && (
-          <NavLink to="/admin">
+          <NavLink to="/admin" aria-label="Админка">
             <Shield />
-            Админка
           </NavLink>
         )}
       </nav>
