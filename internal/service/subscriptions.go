@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"bshop/internal/remnawave"
@@ -132,16 +133,80 @@ func (s *Service) ownedSub(ctx context.Context, c *store.Customer, id int64) (*s
 	return sub, nil
 }
 
-func (s *Service) Devices(ctx context.Context, c *store.Customer, subID int64) ([]remnawave.Device, error) {
+// DeviceView is a panel HWID device plus what the cabinet shows on top of it.
+type DeviceView struct {
+	remnawave.Device
+	Name string `json:"name"` // custom name set by the client, empty if none
+	App  string `json:"app"`  // client app parsed from the User-Agent (Happ, INCY, v2rayNG…)
+}
+
+// AppFromUserAgent extracts the client app name: "Happ/3.7.0/ios" → "Happ".
+func AppFromUserAgent(ua string) string {
+	ua = strings.TrimSpace(ua)
+	if ua == "" {
+		return ""
+	}
+	name := ua
+	if i := strings.IndexAny(name, "/ ("); i > 0 {
+		name = name[:i]
+	}
+	if len(name) > 24 {
+		name = name[:24]
+	}
+	return name
+}
+
+func (s *Service) Devices(ctx context.Context, c *store.Customer, subID int64) ([]DeviceView, error) {
 	sub, err := s.ownedSub(ctx, c, subID)
 	if err != nil {
 		return nil, err
 	}
 	devs, err := s.Panel.UserDevices(ctx, *sub.RWUserID)
-	if devs == nil {
-		devs = []remnawave.Device{}
+	if err != nil {
+		return nil, err
 	}
-	return devs, err
+	names := map[string]string{}
+	rows, err := s.Store.Pool.Query(ctx, `SELECT hwid, name FROM device_names WHERE subscription_id = $1`, sub.ID)
+	if err == nil {
+		for rows.Next() {
+			var h, n string
+			if rows.Scan(&h, &n) == nil {
+				names[h] = n
+			}
+		}
+		rows.Close()
+	}
+	out := make([]DeviceView, 0, len(devs))
+	for _, d := range devs {
+		v := DeviceView{Device: d, Name: names[d.HWID]}
+		if d.UserAgent != nil {
+			v.App = AppFromUserAgent(*d.UserAgent)
+		}
+		out = append(out, v)
+	}
+	return out, nil
+}
+
+// RenameDevice stores a custom device name; an empty name resets it.
+func (s *Service) RenameDevice(ctx context.Context, c *store.Customer, subID int64, hwid, name string) error {
+	sub, err := s.ownedSub(ctx, c, subID)
+	if err != nil {
+		return err
+	}
+	name = strings.TrimSpace(name)
+	if hwid == "" {
+		return userErr("не указано устройство")
+	}
+	if len([]rune(name)) > 40 {
+		return userErr("название длиннее 40 символов")
+	}
+	if name == "" {
+		_, err = s.Store.Pool.Exec(ctx, `DELETE FROM device_names WHERE subscription_id = $1 AND hwid = $2`, sub.ID, hwid)
+		return err
+	}
+	_, err = s.Store.Pool.Exec(ctx, `INSERT INTO device_names (subscription_id, hwid, name) VALUES ($1, $2, $3)
+		ON CONFLICT (subscription_id, hwid) DO UPDATE SET name = EXCLUDED.name, updated_at = now()`, sub.ID, hwid, name)
+	return err
 }
 
 func (s *Service) DeleteDevice(ctx context.Context, c *store.Customer, subID int64, hwid string) error {
@@ -153,6 +218,13 @@ func (s *Service) DeleteDevice(ctx context.Context, c *store.Customer, subID int
 		err = s.Panel.DeleteAllDevices(ctx, *sub.RWUserID)
 	} else {
 		err = s.Panel.DeleteDevice(ctx, *sub.RWUserID, hwid)
+	}
+	if err == nil {
+		if hwid == "" {
+			_, _ = s.Store.Pool.Exec(ctx, `DELETE FROM device_names WHERE subscription_id = $1`, sub.ID)
+		} else {
+			_, _ = s.Store.Pool.Exec(ctx, `DELETE FROM device_names WHERE subscription_id = $1 AND hwid = $2`, sub.ID, hwid)
+		}
 	}
 	if err == nil {
 		_ = store.AddEvent(ctx, s.Store.Pool, sub.CustomerID, "device_deleted", map[string]any{"subscription": sub.ID, "all": hwid == ""}, &c.ID)

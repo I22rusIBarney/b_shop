@@ -249,6 +249,8 @@ export interface Device {
   osVersion: string | null
   deviceModel: string | null
   userAgent: string | null
+  name: string
+  app: string
   createdAt: string
   updatedAt: string
 }

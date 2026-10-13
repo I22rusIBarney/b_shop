@@ -44,6 +44,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/subscriptions/{id}/primary", s.authed(s.setPrimary))
 	mux.HandleFunc("GET /api/subscriptions/{id}/devices", s.authed(s.devices))
 	mux.HandleFunc("DELETE /api/subscriptions/{id}/devices", s.authed(s.deleteDevice))
+	mux.HandleFunc("PATCH /api/subscriptions/{id}/devices", s.authed(s.renameDevice))
 	mux.HandleFunc("POST /api/subscriptions/{id}/revoke", s.authed(s.revoke))
 	mux.HandleFunc("POST /api/trial", s.authed(s.trial))
 	mux.HandleFunc("GET /api/install-guide", s.authed(func(w http.ResponseWriter, r *http.Request) {
@@ -353,6 +354,27 @@ func (s *Server) deleteDevice(w http.ResponseWriter, r *http.Request) {
 		err = s.svc.DeleteDevice(r.Context(), customer(r), id, r.URL.Query().Get("hwid"))
 	}
 	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (s *Server) renameDevice(w http.ResponseWriter, r *http.Request) {
+	id, err := pathID(r, "id")
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	var in struct {
+		HWID string `json:"hwid"`
+		Name string `json:"name"`
+	}
+	if err := decode(r, &in); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err := s.svc.RenameDevice(r.Context(), customer(r), id, in.HWID, in.Name); err != nil {
 		s.fail(w, r, err)
 		return
 	}

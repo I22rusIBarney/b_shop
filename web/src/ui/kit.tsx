@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom'
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Close } from './icons'
 
@@ -36,7 +37,7 @@ export function Field({ label, hint, children }: { label: ReactNode; hint?: Reac
   )
 }
 
-export function Sheet({ open, onClose, title, children }: { open: boolean; onClose: () => void; title?: ReactNode; children: ReactNode }) {
+export function Sheet({ open, onClose, title, icon, children }: { open: boolean; onClose: () => void; title?: ReactNode; icon?: ReactNode; children: ReactNode }) {
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
@@ -44,18 +45,23 @@ export function Sheet({ open, onClose, title, children }: { open: boolean; onClo
     return () => window.removeEventListener('keydown', onKey)
   }, [open, onClose])
   if (!open) return null
-  return (
+  // Portal: a sheet opened inside an animated (transformed) card must still cover the whole screen.
+  return createPortal(
     <div className="sheet-wrap" onClick={onClose}>
       <div className="sheet" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        <div className="spread" style={{ marginBottom: 14 }}>
-          <h2>{title}</h2>
+        <div className="sheet-head">
+          <h2>
+            {icon && <span className="sheet-ico">{icon}</span>}
+            {title}
+          </h2>
           <button className="icon-btn" onClick={onClose} aria-label="Закрыть">
             <Close />
           </button>
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 

@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { del, get, post, type Device, type Subscription } from '../lib/api'
+import { del, get, patch, post, type Device, type Subscription } from '../lib/api'
 import { useApp } from '../lib/app'
-import { bytes, plural, relative, shortDate } from '../lib/format'
+import { bytes, dateTimeFull, plural, relative, shortDate } from '../lib/format'
 import { haptic, openLink } from '../lib/tg'
-import { Calendar, Chevron, ChevronDown, Copy, Gear, Link as LinkIcon, Pencil, Phone, Plug, Swap, Trash } from '../ui/icons'
+import { Calendar, Check, Chevron, ChevronDown, Close, Copy, Devices as DevicesIcon, Gear, Link as LinkIcon, Pencil, Plug, Swap, Trash } from '../ui/icons'
 import { ErrorBox, PageLoader, Sheet, copy, useAction, useLoad, useToast } from '../ui/kit'
 import { HeroSpace } from '../ui/shell'
 
@@ -259,12 +259,18 @@ function SubCard({ sub, onChanged }: { sub: Subscription; onChanged: () => void 
 
 function Devices({ sub, open, onClose, onChanged }: { sub: Subscription; open: boolean; onClose: () => void; onChanged: () => void }) {
   const [list, setList] = useState<Device[] | null>(null)
+  const [editing, setEditing] = useState<string | null>(null)
+  const [draft, setDraft] = useState('')
   const { busy, run } = useAction()
   useEffect(() => {
     if (!open) return
     setList(null)
+    setEditing(null)
     get<Device[]>(`/api/subscriptions/${sub.id}/devices`).then(setList, () => setList([]))
   }, [open, sub.id])
+
+  const limit = sub.device_limit > 0 ? sub.device_limit + sub.extra_devices : 0
+  const used = list ? list.length : sub.devices_used
 
   const remove = (hwid?: string) =>
     run(async () => {
@@ -273,10 +279,22 @@ function Devices({ sub, open, onClose, onChanged }: { sub: Subscription; open: b
       onChanged()
     }, hwid ? 'Устройство отключено' : 'Все устройства отключены')
 
+  const startEdit = (d: Device) => {
+    setEditing(d.hwid)
+    setDraft(d.name || defaultName(d))
+  }
+  const save = (d: Device) =>
+    run(async () => {
+      const name = draft.trim() === defaultName(d) ? '' : draft.trim()
+      await patch(`/api/subscriptions/${sub.id}/devices`, { hwid: d.hwid, name })
+      setList((l) => (l || []).map((x) => (x.hwid === d.hwid ? { ...x, name } : x)))
+      setEditing(null)
+    })
+
   return (
-    <Sheet open={open} onClose={onClose} title="Устройства">
-      <p className="small muted" style={{ marginBottom: 12 }}>
-        Удалите старое устройство, чтобы освободить место для нового. Удалённое устройство сможет подключиться снова, если хватит лимита.
+    <Sheet open={open} onClose={onClose} title="Устройства" icon={<DevicesIcon />}>
+      <p className="dev-count">
+        Подключено: <b>{used}{limit ? `/${limit}` : ''}</b> {plural(limit || used, 'устройство', 'устройства', 'устройств')}
       </p>
       {list === null ? (
         <div className="center" style={{ padding: 20 }}>
@@ -285,19 +303,44 @@ function Devices({ sub, open, onClose, onChanged }: { sub: Subscription; open: b
       ) : list.length === 0 ? (
         <div className="empty">Подключённых устройств нет</div>
       ) : (
-        <div className="list">
+        <div className="dev-list">
           {list.map((d) => (
-            <div className="item" key={d.hwid}>
-              <Phone style={{ width: 22, height: 22, flex: 'none', color: 'var(--muted)' }} />
-              <div className="grow">
-                <div className="ellipsis">{d.deviceModel || d.platform || 'Устройство'}</div>
-                <div className="tiny muted ellipsis">
-                  {[d.platform, d.osVersion].filter(Boolean).join(' ')} · {relative(d.updatedAt)}
+            <div className="dev-card" key={d.hwid}>
+              {editing === d.hwid ? (
+                <form
+                  className="dev-edit"
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    save(d)
+                  }}
+                >
+                  <input autoFocus value={draft} maxLength={40} onChange={(e) => setDraft(e.target.value)} aria-label="Название устройства" />
+                  <button className="dev-btn ok" type="submit" disabled={busy} aria-label="Сохранить">
+                    <Check />
+                  </button>
+                  <button className="dev-btn" type="button" onClick={() => setEditing(null)} aria-label="Отмена">
+                    <Close />
+                  </button>
+                </form>
+              ) : (
+                <div className="dev-top">
+                  <span className="dev-name">{d.name || defaultName(d)}</span>
+                  <button className="dev-btn" onClick={() => startEdit(d)} aria-label="Переименовать">
+                    <Pencil />
+                  </button>
+                  <button className="dev-btn del" disabled={busy} onClick={() => remove(d.hwid)} aria-label="Удалить устройство">
+                    <Trash />
+                  </button>
                 </div>
+              )}
+              <div className="dev-bottom">
+                <span className="dev-info">{[d.platform, d.osVersion, d.app].filter(Boolean).join(' • ') || '—'}</span>
+                <span className="dev-dates">
+                  Добавлено: {dateTimeFull(d.createdAt)}
+                  <br />
+                  Последнее обновление: {dateTimeFull(d.updatedAt)}
+                </span>
               </div>
-              <button className="icon-btn" aria-label="Удалить устройство" disabled={busy} onClick={() => remove(d.hwid)}>
-                <Trash />
-              </button>
             </div>
           ))}
         </div>
@@ -309,4 +352,8 @@ function Devices({ sub, open, onClose, onChanged }: { sub: Subscription; open: b
       )}
     </Sheet>
   )
+}
+
+function defaultName(d: Device) {
+  return d.deviceModel || d.platform || 'Устройство'
 }

@@ -41,6 +41,12 @@ export function dateTime(iso: string | null | undefined): string {
 }
 
 /** Time left until iso, as a number + unit for big display. */
+/** 05.10.2026, 11:28 */
+export function dateTimeFull(iso: string | null | undefined): string {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
 export function timeLeft(iso: string): { value: number; unit: string; expired: boolean } {
   const ms = new Date(iso).getTime() - Date.now()
   if (ms <= 0) return { value: 0, unit: 'дней', expired: true }

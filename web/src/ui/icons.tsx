@@ -40,6 +40,7 @@ export const News = I(['M4 5h13v14H6a2 2 0 0 1-2-2z', 'M17 9h3v8a2 2 0 0 1-2 2',
 export const ChevronDown = I('m6 9 6 6 6-6')
 export const Calendar = I(['M4 6h16v15H4z', 'M4 10h16', 'M8 3v4', 'M16 3v4', 'M8 14h2', 'M14 14h2'])
 export const Pencil = I(['M4 20h4L19 9l-4-4L4 16z', 'M13.5 6.5l4 4'])
+export const Devices = I(['M3 5h13v9H3z', 'M7 18h5', 'M9.5 14v4', 'M15 9h6v12h-6z', 'M17.5 18h1'])
 export const Gear = Settings
 export const Plug = I(['M9 7V3', 'M15 7V3', 'M6 7h12v4a6 6 0 0 1-12 0z', 'M12 17v4'])
 export const HomeFill = (p: P) => (
