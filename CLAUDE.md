@@ -65,6 +65,11 @@
   автоопределением устройства → шаги (Install.tsx нормализует конфиг Remnawave и ручной список в GPlatform/GStep),
   ссылки happ:// и т.п. из Telegram идут через GET /open?to=… (internal/api/openapp.go).
 
+- 14.10.2026, ветка `redesign`: мобильная вёрстка (карточка подписки, поддержка, смена тарифа, таблицы админки
+  карточками через .stack-sm + data-label, цены тарифа, уведомления), usePolling + useLoad.refresh для живой переписки,
+  jsencrypt для HAPP_CRYPT-ссылок. Стенд для скриншотов: бинарник в DEV=true на :8099 + `npx vite` (прокси /api),
+  сессия вставляется в sessions как sha256(токена), localStorage bshop.token.
+
 ## Дальше
 - Боевой переезд по docs/MIGRATION.md на тестовом стенде Алексея; проверить на реальных ЮKassa/Remnawave.
 - Не сделано: тексты бота из translations RWP, предложения статей БЗ из тикетов, abuse-детектор (много IP).
