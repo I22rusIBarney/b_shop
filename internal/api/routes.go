@@ -127,7 +127,8 @@ func meta(r *http.Request) service.LoginMeta {
 }
 
 func (s *Server) loginWebApp(w http.ResponseWriter, r *http.Request) {
-	r = s.optionalAuth(r)
+	// Mini App launch is always a sign-in, never "link to the current account":
+	// a stored session must not turn it into a link that returns no token.
 	var in struct {
 		InitData string `json:"init_data"`
 	}

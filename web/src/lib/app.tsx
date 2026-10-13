@@ -55,8 +55,11 @@ export function AppProvider({ children, fallback, failed }: { children: ReactNod
         for (let i = 0; i < 2; i++) {
           try {
             const s = await post<Session>('/api/auth/telegram/webapp', { init_data: tg.initData() })
-            setToken(s.token)
-            tg.cloudSetToken(s.token)
+            // Never wipe a working session with an empty answer.
+            if (s.token) {
+              setToken(s.token)
+              tg.cloudSetToken(s.token)
+            }
             err = ''
             break
           } catch (e: any) {
