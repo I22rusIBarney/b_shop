@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { useApp } from '../../lib/app'
 import { Brand } from '../../ui/shell'
-import { Card, Gift, Home, List, Menu, Palette, Settings as SettingsIcon, Tag, Users, Wallet } from '../../ui/icons'
+import { Card, Chat, Gift, Help, Home, List, Menu, News, Palette, Renew, Settings as SettingsIcon, Shield, Tag, Users, Wallet } from '../../ui/icons'
 import Customers from './Customers'
 import CustomerCard from './CustomerCard'
 import Payments from './Payments'
@@ -11,12 +11,21 @@ import PlanEditor from './PlanEditor'
 import SettingsPage from './Settings'
 import BrandingPage from './Branding'
 import Promos from './Promos'
+import { TicketChat, TicketList } from './Tickets'
+import Knowledge from './Knowledge'
+import Broadcasts from './Broadcasts'
+import Automations from './Automations'
+import Notifications from './Notifications'
+import { useBadges } from '../../lib/badges'
 
 const nav = [
   { to: '/admin/customers', label: 'Клиенты', icon: Users },
   { to: '/admin/payments', label: 'Платежи', icon: Wallet },
   { to: '/admin/plans', label: 'Тарифы', icon: Tag },
   { to: '/admin/promos', label: 'Промокоды', icon: Gift },
+  { to: '/admin/tickets', label: 'Обращения', icon: Chat },
+  { to: '/admin/broadcasts', label: 'Рассылки', icon: News },
+  { to: '/admin/automations', label: 'Автоматизации', icon: Renew },
 ]
 const settingsNav = [
   { to: '/admin/settings/general', label: 'Общие', icon: SettingsIcon },
@@ -27,11 +36,15 @@ const settingsNav = [
   { to: '/admin/settings/trial', label: 'Пробный период', icon: Tag },
   { to: '/admin/settings/referral', label: 'Рефералка', icon: Users },
   { to: '/admin/settings/links', label: 'Ссылки и установка', icon: List },
+  { to: '/admin/settings/support', label: 'Поддержка и ИИ', icon: Help },
+  { to: '/admin/notifications', label: 'Уведомления', icon: Shield },
+  { to: '/admin/settings/automations', label: 'Триггеры и рассылки', icon: Renew },
 ]
 
 export default function Admin() {
   const { config } = useApp()
   const [open, setOpen] = useState(false)
+  const badges = useBadges()
   const loc = useLocation()
   useEffect(() => setOpen(false), [loc.pathname])
   useEffect(() => {
@@ -52,6 +65,7 @@ export default function Admin() {
           <NavLink key={n.to} to={n.to}>
             <n.icon />
             {n.label}
+            {n.to === '/admin/tickets' && !!badges.admin_tickets && <span className="count">{badges.admin_tickets}</span>}
           </NavLink>
         ))}
         <div className="group">Настройки</div>
@@ -77,6 +91,12 @@ export default function Admin() {
           <Route path="plans/:id" element={<PlanEditor />} />
           <Route path="promos" element={<Promos />} />
           <Route path="branding" element={<BrandingPage />} />
+          <Route path="tickets" element={<TicketList />} />
+          <Route path="tickets/:id" element={<TicketChat />} />
+          <Route path="support/knowledge" element={<Knowledge />} />
+          <Route path="broadcasts" element={<Broadcasts />} />
+          <Route path="automations" element={<Automations />} />
+          <Route path="notifications" element={<Notifications />} />
           <Route path="settings/:section" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="customers" replace />} />
         </Routes>

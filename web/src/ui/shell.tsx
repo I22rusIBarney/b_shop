@@ -1,5 +1,7 @@
-import { useMemo } from 'react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { useEffect, useMemo } from 'react'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { refreshBadges, useBadges } from '../lib/badges'
+import { startParam } from '../lib/tg'
 import { useApp } from '../lib/app'
 import type { Branding } from '../lib/api'
 import { Chat, Home, HomeFill, Shield, User } from './icons'
@@ -78,8 +80,30 @@ export function Brand({ always }: { always?: boolean }) {
   )
 }
 
+// Deep links from the bot: ?startapp=plans | referrals | support | news | ticket_<id>
+const startRoutes: Record<string, string> = { plans: '/buy', buy: '/buy', referrals: '/referral', referral: '/referral', support: '/support', news: '/news', profile: '/profile' }
+let startHandled = false
+
+function useStartRoute() {
+  const nav = useNavigate()
+  useEffect(() => {
+    if (startHandled) return
+    startHandled = true
+    const p = startParam()
+    const m = /^ticket_(\d+)$/.exec(p)
+    if (m) nav(`/support/${m[1]}`, { replace: true })
+    else if (startRoutes[p]) nav(startRoutes[p], { replace: true })
+  }, [nav])
+}
+
 export function ClientShell() {
   const { config, me } = useApp()
+  const badges = useBadges()
+  const loc = useLocation()
+  useStartRoute()
+  useEffect(() => {
+    refreshBadges()
+  }, [loc.pathname])
   return (
     <>
       <Backdrop b={config.branding} />
@@ -94,6 +118,7 @@ export function ClientShell() {
         </NavLink>
         <NavLink to="/support" aria-label="Поддержка">
           <Chat />
+          {badges.tickets > 0 && <span className="nav-badge">{badges.tickets}</span>}
         </NavLink>
         <NavLink to="/profile" aria-label="Профиль">
           <User />
@@ -101,6 +126,7 @@ export function ClientShell() {
         {me?.customer.is_admin && (
           <NavLink to="/admin" aria-label="Админка">
             <Shield />
+            {!!badges.admin_tickets && <span className="nav-badge">{badges.admin_tickets}</span>}
           </NavLink>
         )}
       </nav>

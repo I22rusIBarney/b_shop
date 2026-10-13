@@ -459,3 +459,200 @@ export interface PlanChange {
   from_name: string
   to_name: string
 }
+
+// ---- stage 4 ----
+
+export interface Ticket {
+  id: number
+  customer_id: number
+  subject: string
+  status: 'open' | 'waiting' | 'resolved' | 'closed'
+  assignee_id: number | null
+  tag: string
+  source: string
+  ai_enabled: boolean
+  rating: number | null
+  rating_comment: string
+  unread_admin: boolean
+  unread_customer: boolean
+  created_at: string
+  updated_at: string
+  last_customer_at: string
+  first_response_at: string | null
+  resolved_at: string | null
+  closed_at: string | null
+}
+
+export interface TicketMessage {
+  id: number
+  ticket_id: number
+  author: 'customer' | 'operator' | 'ai' | 'system' | 'note' | 'draft'
+  author_id: number | null
+  body: string
+  attachments: string[]
+  reply_to: number | null
+  confidence: number | null
+  draft_status: '' | 'pending' | 'sent' | 'rejected'
+  created_at: string
+}
+
+export interface TicketView extends Ticket {
+  messages: TicketMessage[]
+}
+
+export interface AdminTicketView extends TicketView {
+  customer: Customer
+  subscriptions: Subscription[]
+}
+
+export interface TicketRow extends Ticket {
+  customer_name: string
+  username: string | null
+  telegram_id: number | null
+  last_body: string
+  last_author: string
+  pending_draft: boolean
+}
+
+export interface FAQItem {
+  id: number
+  section: string
+  question: string
+  answer: string
+  is_active: boolean
+  sort: number
+}
+
+export interface SupportTemplate {
+  id: number
+  category: string
+  title: string
+  body: string
+  sort: number
+}
+
+export interface KBArticle {
+  id: number
+  title: string
+  body: string
+  is_active: boolean
+  updated_at?: string
+}
+
+export interface SupportConfig {
+  enabled: boolean
+  faq: FAQItem[]
+  max_files: number
+  max_mb: number
+  rating: boolean
+}
+
+export interface UploadedFile {
+  id: string
+  name: string
+  mime: string
+  size: number
+  url: string
+}
+
+export interface NewsItem {
+  id: number
+  title: string
+  body: string
+  image: string
+  buttons: { text: string; url: string }[]
+  date: string
+  unread: boolean
+}
+
+export interface Badges {
+  news: number
+  tickets: number
+  admin_tickets?: number
+}
+
+export interface Broadcast {
+  id: number
+  title: string
+  body: string
+  image: string
+  buttons: { text: string; url: string }[]
+  audience: { segment: string; plan_id?: number }
+  channel: 'telegram' | 'email' | 'all'
+  show_in_news: boolean
+  status: 'draft' | 'scheduled' | 'sending' | 'done' | 'canceled'
+  scheduled_at: string | null
+  total: number
+  sent: number
+  failed: number
+  created_at: string
+  started_at: string | null
+  finished_at: string | null
+}
+
+export interface AutoStep {
+  step_order: number
+  delay_duration: string
+  template_id: number | null
+  message_content: string
+  stop_on_purchase: boolean
+  buttons: { text: string; url: string }[]
+  repeat_count: number
+  repeat_interval: string | null
+  slots: unknown[]
+  webhook_url: string | null
+  webhook_method: string | null
+  image?: string
+}
+
+export interface Automation {
+  id: number
+  name: string
+  trigger_type: 'event' | 'cron'
+  trigger_factor: string
+  is_active: boolean
+  cooldown_hours: number
+  skip_if_active_in: string[]
+  schedule_mode: string
+  loop_count: number
+  shuffle_steps: boolean
+  steps: AutoStep[]
+  stats?: { active: number; runs: number; sent: number; converted: number }
+}
+
+export interface TriggerInfo {
+  factor: string
+  type: 'event' | 'cron'
+  title: string
+  about: string
+  vars: string[] | null
+}
+
+export interface AutomationRun {
+  id: number
+  automation_id: number
+  automation_name: string
+  status: 'active' | 'done' | 'stopped'
+  stop_reason: string
+  position: number
+  plan: unknown[]
+  next_at: string | null
+  sent: number
+  converted: boolean
+  started_at: string
+  finished_at: string | null
+}
+
+export interface EventInfo {
+  key: string
+  title: string
+  group: string
+  template: string
+  vars: string[]
+}
+
+export async function uploadFile(file: File, admin = false): Promise<UploadedFile> {
+  const fd = new FormData()
+  fd.append('file', file)
+  return api<UploadedFile>('POST', admin ? '/api/admin/tickets/files' : '/api/files', fd)
+}

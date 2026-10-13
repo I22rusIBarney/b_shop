@@ -13,12 +13,18 @@
 ## Карта кода
 - `internal/service` — бизнес-логика: purchase.go (покупка/продление/ApplyPayment), change.go (смена тарифа, доп. устройства),
   promo.go, referral.go, autopay.go, workers.go (фоновые задачи), provision.go (Remnawave), subscriptions.go, auth.go.
-- `internal/store` — SQL; `internal/api` — HTTP (routes.go кабинет, admin.go, stage3.go); `internal/bot` — Telegram.
+  Этап 4: notify.go (каталог админ-событий, шаблоны, маршруты чат/топик), support.go (тикеты, ИИ первой линии, таймеры),
+  broadcasts.go (рассылки → «Новости»), automations.go (движок сценариев, импорт/экспорт RWP, предупреждения).
+- `internal/ai` — клиент OpenAI-совместимого API. `internal/store` — SQL; `internal/api` — HTTP (routes.go кабинет, admin.go,
+  stage3.go, stage4.go); `internal/bot` — Telegram (Deliver: TG/почта; Admin: чат/топик; сообщения боту → тикеты).
 - `web/src/pages` — кабинет (Home, Buy, ChangePlan, Referral, Profile, Install…), `web/src/pages/admin` — админка.
 - `docs/SPEC.md` — полный список функций по скриншотам RWP; `import/automations-*.json` — 10 сценариев автоматизаций.
 
 ## Проверка
 - Go: `GOTOOLCHAIN=local GOFLAGS=-mod=mod GOPROXY=off go vet ./...`
+  Если модулей нет в кеше: proxy.golang.org закрыт, GitHub открыт → `GOPROXY=direct GOSUMDB=off`, а golang.org/x/{net,crypto,sync,text}
+  клонировать с github.com/golang/* и подключить replace через отдельный `-modfile` (не коммитить). Postgres-роль bshop/bshop
+  и БД bshop_test в свежей среде создать вручную.
 - Тесты (нужен Postgres): `TEST_DATABASE_URL=postgres://bshop:bshop@127.0.0.1:5432/bshop_test?sslmode=disable go test ./internal/service`
   (если Postgres лежит: `pg_ctlcluster 16 main start`).
 - Фронт: `cd web && npx tsc --noEmit -p . && npx vite build`.
@@ -29,9 +35,15 @@
   автопродление, админка (клиенты, платежи, тарифы, промокоды, настройки, оформление).
 - Не проверено на реальных ЮKassa/Remnawave — ждём тестовый стенд Алексея.
 
+- Этап 4 готов (13.10.2026): обращения (кабинет + чат в боте, вложения, оценка, автозакрытие), ИИ-ассистент
+  (порог уверенности → черновик, эскалация, база знаний + FAQ, подсказка оператору), шаблоны «/», рассылки с сегментами,
+  тестом, отложенной отправкой и лентой «Новости», уведомления админам (вкл/чат/топик/шаблон/тест), автоматизации
+  (10 сценариев RWP импортируются как есть, скоринг лидов, тихие часы, {promo:…}, конверсия, участие в карточке клиента),
+  deep links ?startapp=plans|referrals|support|news|ticket_N. Автоматизации по умолчанию выключены (Настройки → Триггеры).
+- RAG без pgvector: статьи подбираются по совпадению слов в пределах лимита символов. Предложения статей из тикетов,
+  автоответы по расписанию, уведомления о нодах/abuse/torrent — не сделаны (нужны вебхуки Remnawave, этап 5).
+
 ## Дальше
-- Этап 4: тикеты + ИИ-поддержка (OpenRouter-совместимый, его Gemini-прокси), автоматизации (импорт JSON),
-  рассылки → лента «Новости», уведомления админам по событиям в разные чаты/топики с шаблонами и кнопкой «Открыть клиента».
 - Этап 5: статистика, импорт из БД RWP, перенос (новый секрет вебхука Remnawave, перенос VAPID-ключей).
 
 ## Как работать экономно

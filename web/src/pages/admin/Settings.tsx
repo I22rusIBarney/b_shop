@@ -5,7 +5,7 @@ import { Close, Plus } from '../../ui/icons'
 import { ErrorBox, Field, Spinner, Toggle, useAction, useLoad } from '../../ui/kit'
 
 type FieldSpec =
-  | { k: string; label: string; hint?: string; type: 'text' | 'secret' | 'textarea' | 'number' | 'bool' | 'ids' | 'plan' | 'methods' | 'subpage' }
+  | { k: string; label: string; hint?: string; type: 'text' | 'secret' | 'textarea' | 'number' | 'bool' | 'ids' | 'strings' | 'plan' | 'methods' | 'subpage' }
   | { k: string; label: string; hint?: string; type: 'select'; options: [string, string][] }
 
 interface SectionSpec {
@@ -180,6 +180,90 @@ const pages: Record<string, { title: string; sections: SectionSpec[] }> = {
       },
     ],
   },
+  support: {
+    title: 'Поддержка и ассистент',
+    sections: [
+      {
+        key: 'support',
+        title: 'Обращения',
+        about: 'Таймеры считаются от последнего изменения обращения. Нерабочее время — в часовом поясе магазина.',
+        fields: [
+          { k: 'enabled', label: 'Принимать обращения в кабинете', hint: 'Выключено — в разделе «Поддержка» останется ссылка на поддержку', type: 'bool' },
+          { k: 'bot_chat', label: 'Сообщения боту попадают в обращения', hint: 'Клиент пишет боту — ответ оператора и ассистента приходит туда же', type: 'bool' },
+          { k: 'max_open', label: 'Открытых обращений на клиента', hint: '0 — без ограничений', type: 'number' },
+          { k: 'autoclose_waiting_minutes', label: 'Закрывать без ответа клиента через, мин', hint: '0 — не закрывать', type: 'number' },
+          { k: 'autoclose_resolved_minutes', label: 'Закрывать решённые через, мин', type: 'number' },
+          { k: 'email_reply_delay_minutes', label: 'Письмо об ответе через, мин', hint: 'Для клиентов без Telegram. Не отправляется, если клиент уже ответил', type: 'number' },
+          { k: 'attach_max_mb', label: 'Размер вложения, МБ', type: 'number' },
+          { k: 'attach_max_files', label: 'Вложений в сообщении', hint: '0 — вложения выключены', type: 'number' },
+          { k: 'rating_enabled', label: 'Просить оценку после закрытия', type: 'bool' },
+          { k: 'rating_delay_minutes', label: 'Просить оценку через, мин после закрытия', type: 'number' },
+          { k: 'work_hours', label: 'Рабочие часы', hint: 'Например 10:00-22:00. Пусто — всегда', type: 'text' },
+          { k: 'new_ticket_text', label: 'Автоответ на новое обращение', type: 'textarea' },
+          { k: 'off_hours_text', label: 'Автоответ в нерабочее время', type: 'textarea' },
+        ],
+      },
+      {
+        key: 'ai',
+        title: 'ИИ-ассистент (первая линия)',
+        about: 'Любой OpenAI-совместимый API: OpenRouter (https://openrouter.ai/api/v1) или свой прокси к Gemini. Ассистент отвечает сам, если уверен; иначе оставляет оператору черновик. Деньги, возвраты и просьбы позвать человека он передаёт оператору.',
+        test: 'ai',
+        fields: [
+          { k: 'enabled', label: 'Ассистент отвечает в обращениях', type: 'bool' },
+          { k: 'base_url', label: 'Адрес API (Base URL)', hint: 'Запросы идут на {адрес}/chat/completions', type: 'text' },
+          { k: 'api_key', label: 'API-ключ', type: 'secret' },
+          { k: 'model', label: 'Модель', hint: 'Например google/gemini-2.5-flash или gemini-2.5-flash', type: 'text' },
+          { k: 'fallback_models', label: 'Резервные модели', hint: 'Через запятую, пробуются по очереди', type: 'strings' },
+          { k: 'vision_model', label: 'Модель для картинок', hint: 'Пусто — основная', type: 'text' },
+          { k: 'reasoning_effort', label: 'Рассуждение (reasoning)', type: 'select', options: [['', 'По умолчанию'], ['low', 'Низкое'], ['medium', 'Среднее'], ['high', 'Высокое']] },
+          { k: 'confidence', label: 'Порог уверенности', hint: 'От 0 до 1. Ниже — черновик оператору', type: 'number' },
+          { k: 'debounce_seconds', label: 'Ждать новых сообщений, сек', hint: 'Клиент часто пишет несколькими сообщениями', type: 'number' },
+          { k: 'max_calls_per_hour', label: 'Ответов на обращение в час', type: 'number' },
+          { k: 'history_messages', label: 'Сообщений истории', type: 'number' },
+          { k: 'max_tokens', label: 'Токенов в ответе', type: 'number' },
+          { k: 'temperature', label: 'Temperature', type: 'number' },
+          { k: 'timeout_seconds', label: 'Таймаут, сек', type: 'number' },
+          { k: 'knowledge_chars', label: 'Лимит базы знаний, символов', type: 'number' },
+          { k: 'analyze_images', label: 'Смотреть картинки из обращения', type: 'bool' },
+          { k: 'use_customer_data', label: 'Давать данные клиента (подписки, тарифы, цены)', type: 'bool' },
+          { k: 'use_knowledge', label: 'Давать частые вопросы и базу знаний', type: 'bool' },
+          { k: 'notify_drafts', label: 'Уведомлять о черновиках', type: 'bool' },
+          { k: 'system_prompt', label: 'Инструкция ассистенту', type: 'textarea' },
+        ],
+      },
+    ],
+  },
+  automations: {
+    title: 'Автоматизации и рассылки',
+    sections: [
+      {
+        key: 'automations',
+        title: 'Автоматизации',
+        about: 'Общий выключатель и пороги триггеров. Сами сценарии — в разделе «Автоматизации».',
+        fields: [
+          { k: 'enabled', label: 'Автоматизации работают', type: 'bool' },
+          { k: 'quiet_hours', label: 'Тихие часы', hint: 'Например 22:00-09:00 — сообщения подождут до утра. Пусто — без тихих часов', type: 'text' },
+          { k: 'expiring_soon_days', label: '«Скоро истекает»: за сколько дней', type: 'number' },
+          { k: 'recently_expired_hours', label: '«Недавно истекла»: в течение, часов', type: 'number' },
+          { k: 'abandoned_cart_hours', label: '«Брошенная корзина»: счёт за последние, часов', type: 'number' },
+          { k: 'active_trial_hours', label: '«Пробный период»: начат в течение, часов', type: 'number' },
+          { k: 'inactive_days', label: '«Давно не заходил»: дней', type: 'number' },
+          { k: 'hot_seen_days', label: 'Горячий лид: заходил за, дней', hint: 'Не платил, но пытался оплатить', type: 'number' },
+          { k: 'warm_seen_days', label: 'Тёплый лид: заходил за, дней', hint: 'Не платил, брал пробный период', type: 'number' },
+          { k: 'cool_seen_days', label: 'Прохладный лид: заходил за, дней', hint: 'Дольше — холодный', type: 'number' },
+          { k: 'lead_min_age_hours', label: 'Не считать лидом первые, часов', type: 'number' },
+          { k: 'stable_min_payments', label: 'Стабильный клиент: оплат от', type: 'number' },
+          { k: 'stable_min_days', label: 'Стабильный клиент: платит дней', type: 'number' },
+          { k: 'personal_promo_hours', label: 'Личный промокод {promo:…} действует, часов', type: 'number' },
+        ],
+      },
+      {
+        key: 'broadcasts',
+        title: 'Рассылки',
+        fields: [{ k: 'rate_per_second', label: 'Сообщений в секунду', hint: 'Telegram допускает до 30', type: 'number' }],
+      },
+    ],
+  },
 }
 
 const methodNames: [string, string][] = [
@@ -279,6 +363,8 @@ function SectionForm({ spec }: { spec: SectionSpec }) {
                 </select>
               ) : f.type === 'number' ? (
                 <input className="input num" type="number" step="any" value={v[f.k] ?? 0} onChange={(e) => set(f.k, Number(e.target.value))} />
+              ) : f.type === 'strings' ? (
+                <input className="input" value={(v[f.k] || []).join(', ')} onChange={(e) => set(f.k, e.target.value.split(',').map((x) => x.trim()).filter(Boolean))} />
               ) : f.type === 'ids' ? (
                 <input className="input" value={(v[f.k] || []).join(', ')} onChange={(e) => set(f.k, e.target.value.split(/[\s,]+/).filter(Boolean).map(Number).filter((n) => !Number.isNaN(n)))} />
               ) : (

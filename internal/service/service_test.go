@@ -276,7 +276,7 @@ func (r *fakeReceipts) CancelIncome(_ context.Context, id, _ string) error {
 }
 
 type notes struct {
-	mu       sync.Mutex
+	mu         sync.Mutex
 	customer   []string
 	admin      []string
 	adminNotes []service.AdminNote
