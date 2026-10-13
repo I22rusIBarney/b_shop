@@ -5,7 +5,7 @@ import { Close, Plus } from '../../ui/icons'
 import { ErrorBox, Field, Spinner, Toggle, useAction, useLoad } from '../../ui/kit'
 
 type FieldSpec =
-  | { k: string; label: string; hint?: string; type: 'text' | 'secret' | 'textarea' | 'number' | 'bool' | 'ids' | 'plan' | 'methods' }
+  | { k: string; label: string; hint?: string; type: 'text' | 'secret' | 'textarea' | 'number' | 'bool' | 'ids' | 'plan' | 'methods' | 'subpage' }
   | { k: string; label: string; hint?: string; type: 'select'; options: [string, string][] }
 
 interface SectionSpec {
@@ -167,7 +167,17 @@ const pages: Record<string, { title: string; sections: SectionSpec[] }> = {
     title: 'Ссылки и установка',
     sections: [
       { key: 'links', title: 'Ссылки в кабинете и боте', about: 'Канал, правила, поддержка и любые другие ссылки.', custom: 'links', fields: [] },
-      { key: 'install', title: 'Приложения для подключения', about: 'Показываются на экране «Установить». В ссылке добавления {url} заменяется ссылкой подписки, {url_b64} — ею же в base64.', custom: 'apps', fields: [{ k: 'note', label: 'Примечание под инструкцией', type: 'textarea' }] },
+      {
+        key: 'install',
+        title: 'Инструкции по подключению',
+        about: 'По умолчанию приложения и пошаговые инструкции берутся из панели Remnawave (Настройки страницы подписки) — меняете там, кабинет подхватывает в течение 5 минут. Вручную: список ниже, в ссылке добавления {url} — ссылка подписки, {url_b64} — она же в base64.',
+        custom: 'apps',
+        fields: [
+          { k: 'source', label: 'Откуда брать', type: 'select', options: [['remnawave', 'Из панели Remnawave'], ['manual', 'Вручную']] },
+          { k: 'subpage_config_uuid', label: 'Конфигурация из панели', type: 'subpage' },
+          { k: 'note', label: 'Примечание под инструкцией', type: 'textarea' },
+        ],
+      },
     ],
   },
 }
@@ -197,6 +207,10 @@ export default function SettingsPage() {
 function SectionForm({ spec }: { spec: SectionSpec }) {
   const data = useLoad(() => get<Record<string, any>>(`/api/admin/settings/${spec.key}`), [spec.key])
   const plans = useLoad(() => (spec.fields.some((f) => f.type === 'plan') ? get<Plan[]>('/api/admin/plans') : Promise.resolve([])), [spec.key])
+  const subpages = useLoad(
+    () => (spec.fields.some((f) => f.type === 'subpage') ? get<{ uuid: string; name: string }[]>('/api/admin/remnawave/subpage-configs').catch(() => []) : Promise.resolve([])),
+    [spec.key],
+  )
   const [v, setV] = useState<Record<string, any> | null>(null)
   const [test, setTest] = useState<{ ok: boolean; message: string } | null>(null)
   const { busy, run } = useAction()
@@ -254,6 +268,15 @@ function SectionForm({ spec }: { spec: SectionSpec }) {
                     </option>
                   ))}
                 </select>
+              ) : f.type === 'subpage' ? (
+                <select className="input" value={v[f.k] || ''} onChange={(e) => set(f.k, e.target.value)} disabled={v.source === 'manual'}>
+                  <option value="">Первая по порядку</option>
+                  {(subpages.data || []).map((c) => (
+                    <option key={c.uuid} value={c.uuid}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
               ) : f.type === 'number' ? (
                 <input className="input num" type="number" step="any" value={v[f.k] ?? 0} onChange={(e) => set(f.k, Number(e.target.value))} />
               ) : f.type === 'ids' ? (
@@ -297,7 +320,7 @@ function SectionForm({ spec }: { spec: SectionSpec }) {
 
       {spec.custom === 'tiers' && <Tiers value={v.tiers || []} onChange={(t) => set('tiers', t)} />}
       {spec.custom === 'links' && <LinksEditor value={v.items || []} onChange={(t) => set('items', t)} />}
-      {spec.custom === 'apps' && <AppsEditor value={v.apps || []} onChange={(t) => set('apps', t)} />}
+      {spec.custom === 'apps' && v.source === 'manual' && <AppsEditor value={v.apps || []} onChange={(t) => set('apps', t)} />}
 
       {test && <p className={test.ok ? 'small' : 'err'} style={test.ok ? { color: 'var(--ok)' } : undefined}>{test.message}</p>}
       <div className="row" style={{ justifyContent: 'flex-end' }}>

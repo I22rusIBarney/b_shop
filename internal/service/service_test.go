@@ -158,6 +158,12 @@ func (f *fakePanel) DeleteDevice(context.Context, int64, string) error          
 func (f *fakePanel) DeleteAllDevices(context.Context, int64) error                  { return nil }
 func (f *fakePanel) InternalSquads(context.Context) ([]remnawave.Squad, error)      { return nil, nil }
 func (f *fakePanel) ExternalSquads(context.Context) ([]remnawave.Squad, error)      { return nil, nil }
+func (f *fakePanel) SubpageConfigs(context.Context) ([]remnawave.SubpageConfigInfo, error) {
+	return []remnawave.SubpageConfigInfo{{UUID: uuid.MustParse("00000000-0000-0000-0000-000000000001"), Name: "Default"}}, nil
+}
+func (f *fakePanel) SubpageConfig(context.Context, uuid.UUID) (json.RawMessage, error) {
+	return json.RawMessage(`{"version":"1","platforms":{"ios":{"apps":[]}}}`), nil
+}
 
 type fakeGateway struct {
 	mu       sync.Mutex
@@ -659,5 +665,17 @@ func TestPurchaseLimits(t *testing.T) {
 		if r.amount == 0 {
 			t.Fatal("receipt issued for a free purchase")
 		}
+	}
+}
+
+func TestInstallGuideFromPanel(t *testing.T) {
+	e := setup(t)
+	g := e.svc.Guide(context.Background())
+	if g.Source != "remnawave" || !strings.Contains(string(g.Config), "platforms") {
+		t.Fatalf("guide %+v", g)
+	}
+	mustSet(t, e, "install", `{"source":"manual","apps":[{"platform":"ios","name":"INCY"}]}`)
+	if g := e.svc.Guide(context.Background()); g.Source != "manual" {
+		t.Fatalf("manual source ignored: %+v", g)
 	}
 }

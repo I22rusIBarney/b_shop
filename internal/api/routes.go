@@ -46,6 +46,9 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/subscriptions/{id}/devices", s.authed(s.deleteDevice))
 	mux.HandleFunc("POST /api/subscriptions/{id}/revoke", s.authed(s.revoke))
 	mux.HandleFunc("POST /api/trial", s.authed(s.trial))
+	mux.HandleFunc("GET /api/install-guide", s.authed(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, s.svc.Guide(r.Context()))
+	}))
 	mux.HandleFunc("POST /api/payments", s.authed(s.limit("buy", 20, time.Minute, s.buy)))
 	mux.HandleFunc("GET /api/payments", s.authed(s.myPayments))
 	mux.HandleFunc("GET /api/payments/{id}", s.authed(s.paymentStatus))
@@ -483,11 +486,11 @@ func (s *Server) spa(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) publicBranding(ctx context.Context, b settings.Branding) map[string]any {
 	return map[string]any{
-		"title": b.Title, "tagline": b.Tagline, "logo": fileURL(b.LogoFile),
+		"title": b.Title, "tagline": b.Tagline, "logo": orDefault(fileURL(b.LogoFile), "/logo-default.png"),
 		"colors": map[string]string{"primary": b.Primary, "background": b.Background, "surface": b.Surface,
 			"text": b.Text, "muted": b.Muted},
 		"card_opacity": b.CardOpacity, "card_blur": b.CardBlur,
-		"bg_mobile": s.mediaURL(ctx, b.BgMobileFile), "bg_desktop": s.mediaURL(ctx, b.BgDesktopFile),
+		"bg_mobile": orDefault(s.mediaURL(ctx, b.BgMobileFile), "/bg-default.webp"), "bg_desktop": s.mediaURL(ctx, b.BgDesktopFile),
 		"bg_fit": b.BgFit, "bg_opacity": b.BgOpacity,
 		"banner": s.mediaURL(ctx, b.BannerFile), "banner_link": b.BannerLink,
 		"login_text": b.LoginText, "effect": b.Effect,
@@ -502,4 +505,11 @@ func enabledLinks(l settings.Links) []settings.Link {
 		}
 	}
 	return out
+}
+
+func orDefault(v, def string) string {
+	if v == "" {
+		return def
+	}
+	return v
 }

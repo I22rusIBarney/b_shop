@@ -396,3 +396,32 @@ func (c *Client) Nodes(ctx context.Context) ([]Node, error) {
 func (c *Client) Health(ctx context.Context) error {
 	return c.do(ctx, http.MethodGet, "/api/system/health", nil, nil)
 }
+
+// ---- Subscription page configs (apps and installation guides) ----
+
+type SubpageConfigInfo struct {
+	UUID         uuid.UUID `json:"uuid"`
+	Name         string    `json:"name"`
+	ViewPosition int       `json:"viewPosition"`
+}
+
+func (c *Client) SubpageConfigs(ctx context.Context) ([]SubpageConfigInfo, error) {
+	var out envelope[struct {
+		Configs []SubpageConfigInfo `json:"configs"`
+	}]
+	if err := c.do(ctx, http.MethodGet, "/api/subscription-page-configs", nil, &out); err != nil {
+		return nil, err
+	}
+	return out.Response.Configs, nil
+}
+
+// SubpageConfig returns the raw config JSON (platforms, apps, blocks, svgLibrary...).
+func (c *Client) SubpageConfig(ctx context.Context, id uuid.UUID) (json.RawMessage, error) {
+	var out envelope[struct {
+		Config json.RawMessage `json:"config"`
+	}]
+	if err := c.do(ctx, http.MethodGet, "/api/subscription-page-configs/"+id.String(), nil, &out); err != nil {
+		return nil, err
+	}
+	return out.Response.Config, nil
+}

@@ -125,7 +125,9 @@ func (s *Server) manifest(w http.ResponseWriter, r *http.Request) {
 			icons = append(icons, map[string]string{"src": fileURL(b.PWAIconFile), "sizes": size, "purpose": "any maskable"})
 		}
 	} else {
-		icons = append(icons, map[string]string{"src": "/icon.svg", "sizes": "any", "type": "image/svg+xml"})
+		icons = append(icons,
+			map[string]string{"src": "/icon-192.png", "sizes": "192x192", "type": "image/png"},
+			map[string]string{"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"})
 	}
 	w.Header().Set("Content-Type", "application/manifest+json")
 	w.Header().Set("Cache-Control", "no-cache")

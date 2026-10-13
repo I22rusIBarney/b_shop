@@ -81,10 +81,10 @@ function Preview({ b }: { b: B }) {
   } as CSSProperties
   return (
     <div className="preview-phone" style={style} aria-label="Предпросмотр">
-      {b.bg_mobile_file && <img src={`/files/${b.bg_mobile_file}`} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: b.bg_fit as any, opacity: b.bg_opacity / 100 }} />}
+      {<img src={b.bg_mobile_file ? `/files/${b.bg_mobile_file}` : '/bg-default.webp'} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: b.bg_fit as any, opacity: b.bg_opacity / 100 }} />}
       <div style={{ position: 'relative', padding: 14, fontSize: 13 }}>
         <div className="brand" style={{ marginBottom: 12 }}>
-          <img src={b.logo_file ? `/files/${b.logo_file}` : '/icon.svg'} alt="" style={{ width: 34, height: 34, borderRadius: 10 }} />
+          <img src={b.logo_file ? `/files/${b.logo_file}` : '/logo-default.png'} alt="" style={{ width: 34, height: 34, borderRadius: 10 }} />
           <div>
             <div className="brand-name" style={{ fontSize: 15 }}>{b.title}</div>
             <div className="brand-tag" style={{ fontSize: 11 }}>{b.tagline}</div>
@@ -204,7 +204,7 @@ export default function BrandingPage() {
                 <input className="input" value={b.tagline} onChange={(e) => set('tagline', e.target.value)} />
               </Field>
             </div>
-            <FilePick label="Логотип" hint="Квадратный PNG, SVG или WebP" value={b.logo_file} accept="image/*" onChange={(v) => set('logo_file', v)} />
+            <FilePick label="Логотип" hint="Квадратный PNG, SVG или WebP. Не задан — щит BobrGO" value={b.logo_file} accept="image/*" onChange={(v) => set('logo_file', v)} />
           </section>
 
           <section className="card stack">
@@ -228,7 +228,7 @@ export default function BrandingPage() {
 
           <section className="card stack">
             <h3>Фон кабинета</h3>
-            <FilePick label="Для телефона" hint="Картинка или видео MP4/WebM, вертикальная" value={b.bg_mobile_file} accept="image/*,video/mp4,video/webm" onChange={(v) => set('bg_mobile_file', v)} />
+            <FilePick label="Для телефона" hint="Картинка или видео MP4/WebM, вертикальная. Не задан — стандартный фон BobrGO" value={b.bg_mobile_file} accept="image/*,video/mp4,video/webm" onChange={(v) => set('bg_mobile_file', v)} />
             <FilePick label="Для компьютера" hint="Если не задан — используется фон для телефона" value={b.bg_desktop_file} accept="image/*,video/mp4,video/webm" onChange={(v) => set('bg_desktop_file', v)} />
             <div className="form-grid">
               <Field label="Заполнение">
@@ -272,7 +272,7 @@ export default function BrandingPage() {
                 <input className="input" value={b.pwa_short_name} onChange={(e) => set('pwa_short_name', e.target.value)} />
               </Field>
             </div>
-            <FilePick label="Иконка приложения" hint="PNG 512×512" value={b.pwa_icon_file} accept="image/png,image/webp" onChange={(v) => set('pwa_icon_file', v)} />
+            <FilePick label="Иконка приложения" hint="PNG 512×512. Не задана — щит BobrGO" value={b.pwa_icon_file} accept="image/png,image/webp" onChange={(v) => set('pwa_icon_file', v)} />
           </section>
         </div>
 

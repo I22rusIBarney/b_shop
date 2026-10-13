@@ -3,6 +3,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"sync"
@@ -16,6 +17,8 @@ import (
 	"bshop/internal/settings"
 	"bshop/internal/store"
 	"bshop/internal/yookassa"
+
+	"github.com/google/uuid"
 )
 
 // Panel is the subset of the Remnawave client the service uses (faked in tests).
@@ -34,6 +37,8 @@ type Panel interface {
 	DeleteAllDevices(ctx context.Context, userID int64) error
 	InternalSquads(ctx context.Context) ([]remnawave.Squad, error)
 	ExternalSquads(ctx context.Context) ([]remnawave.Squad, error)
+	SubpageConfigs(ctx context.Context) ([]remnawave.SubpageConfigInfo, error)
+	SubpageConfig(ctx context.Context, id uuid.UUID) (json.RawMessage, error)
 }
 
 // PaymentGateway is the subset of the YooKassa client the service uses.
@@ -81,6 +86,11 @@ type Service struct {
 	nalog      *moynalog.Client
 	nalogKey   string
 	applyLocks sync.Map
+
+	guideMu    sync.Mutex
+	guideKey   string
+	guideAt    time.Time
+	guideCache json.RawMessage
 }
 
 func (s *Service) set() *settings.All { return s.Settings.Get() }

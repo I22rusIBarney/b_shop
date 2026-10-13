@@ -59,7 +59,7 @@ export function Brand() {
   const b = config.branding
   return (
     <div className="brand">
-      <img src={b.logo || '/icon.svg'} alt="" />
+      <img src={b.logo || '/logo-default.png'} alt="" />
       <div>
         <div className="brand-name">{b.title || config.shop_name}</div>
         {b.tagline && <div className="brand-tag">{b.tagline}</div>}

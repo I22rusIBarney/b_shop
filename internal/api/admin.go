@@ -29,6 +29,14 @@ func (s *Server) adminRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/admin/plans/{id}/default", s.admin(s.adminPlanDefault))
 	mux.HandleFunc("POST /api/admin/plans/reorder", s.admin(s.adminPlanReorder))
 	mux.HandleFunc("GET /api/admin/remnawave/squads", s.admin(s.adminSquads))
+	mux.HandleFunc("GET /api/admin/remnawave/subpage-configs", s.admin(func(w http.ResponseWriter, r *http.Request) {
+		list, err := s.svc.Panel.SubpageConfigs(r.Context())
+		if err != nil {
+			s.fail(w, r, &service.UserError{Msg: "панель Remnawave недоступна: " + err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, list)
+	}))
 
 	mux.HandleFunc("GET /api/admin/customers", s.admin(s.adminCustomers))
 	mux.HandleFunc("GET /api/admin/customers/{id}", s.admin(s.adminCustomer))
@@ -170,6 +178,9 @@ func (s *Server) adminSettingsPut(w http.ResponseWriter, r *http.Request) {
 		}
 		s.fail(w, r, err)
 		return
+	}
+	if key == "install" {
+		s.svc.ResetGuideCache()
 	}
 	_ = store.AddEvent(r.Context(), s.svc.Store.Pool, customer(r).ID, "settings_changed", map[string]string{"section": key}, nil)
 	s.adminSettingsGet(w, r)

@@ -61,13 +61,13 @@ func Defaults() All {
 		SMTP: SMTP{Port: 587, RatePerSecond: 5},
 		Branding: Branding{
 			Title:        "BobrGO",
-			Tagline:      "Тихо, быстро, стабильно",
+			Tagline:      "Тихо. Быстро. Надёжно.",
 			Primary:      "#ff9f1c",
 			Background:   "#07080c",
 			Surface:      "#151210",
 			Text:         "#fff4e6",
 			Muted:        "#b8aaa0",
-			CardOpacity:  80,
+			CardOpacity:  78,
 			CardBlur:     8,
 			BgFit:        "cover",
 			BgOpacity:    100,
@@ -77,7 +77,7 @@ func Defaults() All {
 			Effect:       "none",
 		},
 		Links:   Links{Items: []Link{}},
-		Install: Install{Apps: []InstallApp{}},
+		Install: Install{Source: "remnawave", Apps: []InstallApp{}},
 		Referral: Referral{
 			Enabled:          false,
 			InviterDays:      3,
@@ -428,11 +428,19 @@ type InstallApp struct {
 }
 
 type Install struct {
-	Apps []InstallApp `json:"apps"`
-	Note string       `json:"note"`
+	// Source: "remnawave" takes apps and step-by-step guides from the panel's subscription page config,
+	// "manual" uses Apps below.
+	Source string `json:"source"`
+	// SubpageConfigUUID picks a panel config; empty = the first one.
+	SubpageConfigUUID string       `json:"subpage_config_uuid"`
+	Apps              []InstallApp `json:"apps"`
+	Note              string       `json:"note"`
 }
 
 func (in *Install) Validate() error {
+	if in.Source != "manual" {
+		in.Source = "remnawave"
+	}
 	ok := map[string]bool{"ios": true, "android": true, "windows": true, "macos": true, "linux": true, "tv": true}
 	for _, a := range in.Apps {
 		if !ok[a.Platform] {
