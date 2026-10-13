@@ -52,6 +52,13 @@ func New(token string, svc *service.Service, log *slog.Logger) (*Bot, error) {
 // Run polls updates until ctx is done.
 func (b *Bot) Run(ctx context.Context) {
 	_, _ = b.tg.DeleteWebhook(ctx, &tg.DeleteWebhookParams{})
+	// The menu button opens the web app at PUBLIC_URL, so a domain change needs no trip to @BotFather.
+	if strings.HasPrefix(b.svc.Cfg.PublicURL, "https://") {
+		if _, err := b.tg.SetChatMenuButton(ctx, &tg.SetChatMenuButtonParams{MenuButton: models.MenuButtonWebApp{
+			Type: models.MenuButtonTypeWebApp, Text: "Открыть", WebApp: models.WebAppInfo{URL: b.webAppURL("/")}}}); err != nil {
+			b.log.Warn("set menu button", "err", err)
+		}
+	}
 	b.tg.Start(ctx)
 }
 

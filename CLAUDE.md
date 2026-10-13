@@ -56,6 +56,11 @@
   .dump/.sql/.gz/.tar, pg_restore/psql во временную БД bshop_rwp_import, пробный прогон с Wipe, применение,
   сессии админа переносятся). В образе нужен postgresql17-client (Dockerfile, alpine 3.21).
 
+- Установка: install.sh (вопросы с проверкой домена/токена/панели, Docker, .env, HTTPS: свой Caddy-профиль если 80/443
+  свободны / отдельный сайт в системном nginx + certbot / ручной блок для чужого прокси), команда bshop (scripts/bshop.sh:
+  update/backup/restore/logs…), cron-бэкап. Образ собирает GitHub Actions (.github/workflows/image.yml) → ghcr.io/i22rusibarney/b_shop.
+  Кнопка меню бота ставится сама (SetChatMenuButton в bot.Run).
+
 ## Дальше
 - Боевой переезд по docs/MIGRATION.md на тестовом стенде Алексея; проверить на реальных ЮKassa/Remnawave.
 - Не сделано: тексты бота из translations RWP, предложения статей БЗ из тикетов, abuse-детектор (много IP).

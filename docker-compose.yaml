@@ -1,16 +1,21 @@
+# BobrGO Shop. Обычно ставится скриптом install.sh, который сам заполняет .env и выбирает способ HTTPS.
 services:
   shop:
+    image: ${BSHOP_IMAGE:-ghcr.io/i22rusibarney/b_shop:latest}
     build: .
-    image: bshop:latest
     restart: unless-stopped
     env_file: .env
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
     ports:
-      - "127.0.0.1:8080:8080"   # put nginx/caddy with HTTPS in front
+      # Только для nginx на этом же сервере; снаружи порт закрыт.
+      - "127.0.0.1:${BSHOP_PORT:-8080}:8080"
     depends_on:
       db:
         condition: service_healthy
+    logging: &logs
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
 
   db:
     image: postgres:17-alpine
@@ -26,6 +31,29 @@ services:
       interval: 3s
       timeout: 5s
       retries: 10
+    logging: *logs
+
+  # HTTPS с автоматическим сертификатом Let's Encrypt, когда порты 80/443 на сервере свободны.
+  # Включается строкой COMPOSE_PROFILES=caddy в .env (это делает install.sh).
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["caddy"]
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on: [shop]
+    logging: *logs
 
 volumes:
   shop-db:
+  caddy-data:
+  caddy-config:

@@ -1,0 +1,8 @@
+# Пример. install.sh создаёт рабочий Caddyfile сам (с вашим доменом и почтой).
+# Вручную: cp Caddyfile.example Caddyfile — домен подставится из DOMAIN в .env.
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy shop:8080 {
+		header_up X-Real-IP {remote_host}
+	}
+}
