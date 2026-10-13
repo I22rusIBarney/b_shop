@@ -117,21 +117,24 @@ export default function PlanEditor() {
         <h3>Сроки и цены</h3>
         {p.periods.length === 0 && <p className="small muted">Добавьте хотя бы один срок.</p>}
         {p.periods.map((per, i) => (
-          <div key={i} className="row wrap">
-            <span style={{ width: 110 }}>{periodLabel(per.unit, per.amount)}</span>
-            <input
-              className="input num"
-              style={{ width: 140 }}
-              type="number"
-              min={0}
-              step="0.01"
-              value={per.price / 100}
-              onChange={(e) => setPeriod(i, { price: Math.round(Number(e.target.value) * 100) })}
-              aria-label="Цена в рублях"
-            />
-            <span className="muted">₽</span>
-            <Toggle checked={per.is_best} onChange={(v) => setPeriod(i, { is_best: v })} label="Выгодно" />
-            <button className="icon-btn" onClick={() => set('periods', p.periods.filter((_, j) => j !== i))} aria-label="Удалить срок">
+          <div key={i} className="period-edit">
+            <span className="pe-label">{periodLabel(per.unit, per.amount)}</span>
+            <label className="pe-price">
+              <input
+                className="input num"
+                type="number"
+                min={0}
+                step="0.01"
+                value={per.price / 100}
+                onChange={(e) => setPeriod(i, { price: Math.round(Number(e.target.value) * 100) })}
+                aria-label={`Цена за ${periodLabel(per.unit, per.amount)}, ₽`}
+              />
+              <span className="muted">₽</span>
+            </label>
+            <div className="pe-best">
+              <Toggle checked={per.is_best} onChange={(v) => setPeriod(i, { is_best: v })} label="Выгодно" />
+            </div>
+            <button className="icon-btn pe-del" onClick={() => set('periods', p.periods.filter((_, j) => j !== i))} aria-label={`Удалить срок ${periodLabel(per.unit, per.amount)}`}>
               <Close />
             </button>
           </div>

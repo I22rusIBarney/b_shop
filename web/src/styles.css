@@ -511,7 +511,15 @@ input[type="datetime-local"]::-webkit-date-and-time-value { text-align: left; }
 .faq summary::-webkit-details-marker { display: none; }
 .faq p { margin: 8px 0 0; white-space: pre-wrap; color: var(--muted); }
 .ev-row { display: grid; grid-template-columns: minmax(0, 1fr) 150px 90px auto; gap: 8px; align-items: center; }
-@media (max-width: 700px) { .ev-row { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 700px) {
+  .ev-row { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr) auto; }
+  .ev-row > :first-child { grid-column: 1 / -1; }
+  .ev-row .input { min-width: 0; width: 100%; }
+}
+@media (max-width: 420px) {
+  .ev-row { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
+  .ev-row > :last-child { grid-column: 1 / -1; justify-self: end; }
+}
 .sub-picker-row { gap: 8px; }
 
 /* ---- statistics ---- */
@@ -659,4 +667,14 @@ html { touch-action: pan-x pan-y; } /* no pinch-zoom: the layout fits the screen
 @media (max-width: 480px) and (pointer: coarse) {
   .carousel-wrap { margin: 0; }
   .car-arrow { display: none; }
+}
+
+/* ---- plan editor: price per period ---- */
+.period-edit { display: grid; grid-template-columns: 110px minmax(120px, 170px) 1fr auto; align-items: center; gap: 8px 12px; }
+.pe-label { font-weight: 600; }
+.pe-price { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.pe-price .input { min-width: 0; flex: 1; }
+@media (max-width: 520px) {
+  .period-edit { grid-template-columns: minmax(0, 1fr) auto; padding-top: 10px; border-top: 1px solid var(--line); }
+  .pe-del { grid-row: 1; grid-column: 2; justify-self: end; }
 }
