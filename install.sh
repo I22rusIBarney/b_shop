@@ -43,7 +43,8 @@ yes_no() { # yes_no "Вопрос" [y|n]
 	local __a __def="${2:-y}"
 	read -r -u 3 -p "$1 $([ "$__def" = y ] && echo '[Д/н]' || echo '[д/Н]'): " __a || true
 	__a="${__a:-$__def}"
-	[[ "$__a" =~ ^([yYдД]|yes|да)$ ]]
+	# case, а не [[ =~ ]]: в локали C на свежем сервере кириллица в [...] сравнивается побайтно.
+	case "$__a" in y | Y | yes | Yes | д | Д | да | Да | ДА) return 0 ;; *) return 1 ;; esac
 }
 
 # ---------------------------------------------------------------- проверки
@@ -164,6 +165,7 @@ if [ "$RECONFIGURE" = 1 ]; then
 	say "(вида ${B}https://panel.example.com/auth/login?AbCd=XyZ${N}): скрипт сам разберёт адрес и ключ."
 	say "API-токен: панель → Настройки → API-токены → создать."
 	RW_COOKIE="$(envget REMNAWAVE_COOKIE)"
+	PANEL_OK=0
 	while :; do
 		ask RW_LINK "Ссылка на панель" "$(envget REMNAWAVE_URL)"
 		RW_LINK="$(tr -d '[:space:]' <<<"$RW_LINK")"
@@ -184,7 +186,7 @@ if [ "$RECONFIGURE" = 1 ]; then
 			curl -s -o /tmp/bshop-rw.json -w '%{http_code}' --max-time 12 "${hdr[@]}" "$RW_URL/api/internal-squads" 2>/dev/null || true
 		}
 		CODE="$(check_panel)"
-		if [ "$CODE" = 200 ] && grep -q '"response"' /tmp/bshop-rw.json 2>/dev/null; then ok "Панель отвечает, токен подходит"; break; fi
+		if [ "$CODE" = 200 ] && grep -q '"response"' /tmp/bshop-rw.json 2>/dev/null; then ok "Панель отвечает, токен подходит"; PANEL_OK=1; break; fi
 		case "$CODE" in
 			401) warn "Панель отклонила токен (401). Нужен API-токен из настроек панели, не пароль." ;;
 			000|"") warn "Панель не отвечает по адресу $RW_URL (сервер не достучался до неё)" ;;
@@ -192,13 +194,14 @@ if [ "$RECONFIGURE" = 1 ]; then
 				warn "Панель вернула $CODE. Похоже на защиту reverse proxy: вставьте ссылку целиком, с ?ключ=значение"
 				ask RW_COOKIE "или введите ключ отдельно «имя=значение» (Enter — оставить)" "$RW_COOKIE"
 				CODE="$(check_panel)"
-				if [ "$CODE" = 200 ]; then ok "Панель отвечает"; break; fi
+				if [ "$CODE" = 200 ]; then ok "Панель отвечает"; PANEL_OK=1; break; fi
 				[ "$CODE" = 401 ] && warn "Ключ подошёл, но панель отклонила токен (401)"
 				;;
 		esac
 		yes_no "Ввести заново?" y || break
 	done
 	rm -f /tmp/bshop-rw.json
+	[ "$PANEL_OK" = 1 ] || warn "Продолжаю без проверки панели. Исправить адрес или токен позже: ${B}bshop env${N}"
 
 	step "HTTPS"
 	ask ACME_EMAIL "Почта для Let's Encrypt (Enter — без почты)" "$(envget ACME_EMAIL)"
