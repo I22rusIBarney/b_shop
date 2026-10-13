@@ -312,7 +312,7 @@ table.t { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 .save-bar { position: sticky; bottom: 0; padding: 12px 0; background: linear-gradient(transparent, var(--bg) 40%); display: flex; justify-content: flex-end; gap: 8px; }
 
 @media (max-width: 899px) {
-  .admin { grid-template-columns: 1fr; }
+  .admin { grid-template-columns: 1fr; align-content: start; }
   .admin-nav { position: fixed; z-index: 60; width: 270px; transform: translateX(-105%); transition: transform .2s ease; }
   .admin-nav.open { transform: none; box-shadow: 0 0 0 100vmax rgba(0,0,0,.5); }
   .admin-top { display: flex; align-items: center; gap: 10px; position: sticky; top: 0; z-index: 30; padding: calc(10px + var(--safe-top)) 14px 10px; background: var(--surface-solid); border-bottom: 1px solid var(--line); }
@@ -514,3 +514,25 @@ table.t { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 .lead-tags { display: flex; flex-wrap: wrap; gap: 4px; }
 @media (max-width: 720px) { .stats-grid { grid-template-columns: 1fr; } .kpis { grid-template-columns: 1fr 1fr; } }
 .t td.num { white-space: nowrap; }
+
+/* ---- admin on phones (inside Telegram too) ---- */
+html, body { overflow-x: hidden; }
+html { touch-action: pan-x pan-y; } /* no pinch-zoom: the layout fits the screen */
+.admin-main { overflow-x: clip; }
+.stats-grid { grid-template-columns: repeat(auto-fill, minmax(min(360px, 100%), 1fr)); }
+.stats-grid > *, .grid2 > *, .kpis > * { min-width: 0; }
+.grid2 { grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); }
+.kpis { grid-template-columns: repeat(auto-fill, minmax(min(160px, 100%), 1fr)); }
+.chart, .chart-plot { max-width: 100%; overflow: hidden; }
+@media (max-width: 899px) {
+  .admin-top {
+    padding-top: calc(10px + max(var(--safe-top), var(--tg-safe-area-inset-top, 0px)) + var(--tg-content-safe-area-inset-top, 0px));
+  }
+  .admin-main { padding-left: 12px; padding-right: 12px; }
+  .admin-head h1 { font-size: 1.5rem; }
+  .filters .input, .filters select { flex: 1 1 140px; min-width: 0; }
+  .filters .input.grow { flex-basis: 100%; }
+  .card { padding: 14px; }
+  .stats-bar select { flex: 0 0 auto; }
+}
+@media (max-width: 720px) { .kpis { grid-template-columns: 1fr 1fr; } }

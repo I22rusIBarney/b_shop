@@ -41,6 +41,8 @@ export function AppProvider({ children, fallback, failed }: { children: ReactNod
   const start = useCallback(async () => {
     setBoot({ state: 'loading' })
     try {
+      // Inside Telegram wait for the SDK: after a reload the launch data is only available through it.
+      await tg.whenSDK()
       tg.ready()
       const config = await get<PublicConfig>('/api/config')
       applyBranding(config.branding)

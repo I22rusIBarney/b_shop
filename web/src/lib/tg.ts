@@ -17,7 +17,53 @@ export function initData(): string {
   const sdk = webApp()?.initData
   if (sdk) return sdk
   const params = new URLSearchParams(launchHash.slice(1))
-  return params.get('tgWebAppData') || ''
+  const fromHash = params.get('tgWebAppData')
+  if (fromHash) return fromHash
+  // After a reload inside Telegram the launch hash is gone; the SDK keeps the launch params here.
+  try {
+    const saved = JSON.parse(sessionStorage.getItem('__telegram__initParams') || '{}')
+    if (saved?.tgWebAppData) return saved.tgWebAppData
+  } catch {
+    /* ignore */
+  }
+  return ''
+}
+
+/** Opened inside Telegram (even if the launch data is missing). */
+export function inTelegramClient(): boolean {
+  if (initData() !== '') return true
+  const p = webApp()?.platform
+  return !!p && p !== 'unknown'
+}
+
+/** Resolves once telegram-web-app.js has loaded (or failed), at most after `ms`. */
+export function whenSDK(ms = 3000): Promise<void> {
+  if (webApp()) return Promise.resolve()
+  return new Promise((resolve) => {
+    const started = Date.now()
+    const tick = () => {
+      if (webApp() || Date.now() - started > ms) return resolve()
+      const tag = document.querySelector<HTMLScriptElement>('script[src*="telegram-web-app.js"]')
+      if (tag && (tag as any).dataset.failed) return resolve()
+      setTimeout(tick, 40)
+    }
+    tick()
+  })
+}
+
+/** Reopen the Mini App from the bot (fresh launch data). */
+export function reopen(bot: string) {
+  const w = webApp()
+  if (w && bot) {
+    try {
+      w.openTelegramLink(`https://t.me/${bot}`)
+      w.close()
+      return
+    } catch {
+      /* fall through */
+    }
+  }
+  window.location.reload()
 }
 
 export function inTelegram(): boolean {

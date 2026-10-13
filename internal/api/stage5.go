@@ -102,4 +102,12 @@ func (s *Server) stage5Routes(mux *http.ServeMux) {
 		s.svc.ImportCancel(r.Context())
 		return s.svc.ImportStatus(r.Context()), nil
 	})))
+
+	// ---- admin: sync customers from the Remnawave panel ----
+	mux.HandleFunc("GET /api/admin/panel-sync", s.admin(s.handle(func(r *http.Request) (any, error) {
+		return s.svc.PanelSyncStatus(), nil
+	})))
+	mux.HandleFunc("POST /api/admin/panel-sync", s.admin(s.handle(func(r *http.Request) (any, error) {
+		return s.svc.StartPanelSync()
+	})))
 }

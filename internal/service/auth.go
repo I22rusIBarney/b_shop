@@ -208,7 +208,7 @@ func (s *Service) LoginTelegramWebApp(ctx context.Context, initData string, meta
 	if !s.set().Auth.TelegramEnabled && meta.LinkTo == nil {
 		return nil, userErr("вход через Telegram отключён")
 	}
-	p, err := auth.VerifyWebAppInitData(initData, s.Cfg.BotToken, 24*time.Hour)
+	p, err := auth.VerifyWebAppInitData(initData, s.Cfg.BotToken, 7*24*time.Hour)
 	if err != nil {
 		return nil, userErr("не удалось проверить данные Telegram, откройте приложение заново")
 	}

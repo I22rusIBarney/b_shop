@@ -31,10 +31,11 @@ export function bucketLabel(t: string, group: string, long = false): string {
 
 function useWidth<T extends HTMLElement>() {
   const ref = useRef<T>(null)
-  const [w, setW] = useState(600)
+  const [w, setW] = useState(320)
   useLayoutEffect(() => {
     const el = ref.current
     if (!el) return
+    setW(Math.max(240, Math.floor(el.clientWidth)))
     const ro = new ResizeObserver(([e]) => setW(Math.max(240, Math.floor(e.contentRect.width))))
     ro.observe(el)
     return () => ro.disconnect()

@@ -58,6 +58,7 @@ const eventName: Record<string, string> = {
   device_added: 'Новое устройство',
   device_removed: 'Устройство удалено',
   torrent: 'Торрент-трафик',
+  panel_sync: 'Подписка из панели',
 }
 
 function eventText(e: Event) {

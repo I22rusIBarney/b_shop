@@ -117,6 +117,16 @@ func (f *fakePanel) GetUser(_ context.Context, id int64) (*remnawave.User, error
 	return nil, remnawave.ErrNotFound
 }
 
+func (f *fakePanel) ListUsers(_ context.Context, fn func([]remnawave.User) error) error {
+	f.mu.Lock()
+	var list []remnawave.User
+	for _, u := range f.users {
+		list = append(list, *u)
+	}
+	f.mu.Unlock()
+	return fn(list)
+}
+
 func (f *fakePanel) GetUserByUsername(_ context.Context, name string) (*remnawave.User, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

@@ -4,6 +4,7 @@ import { post, type Session } from '../lib/api'
 import { useApp } from '../lib/app'
 import { Backdrop, Brand, HeroSpace } from '../ui/shell'
 import { Field, useAction } from '../ui/kit'
+import { inTelegramClient, reopen } from '../lib/tg'
 
 declare global {
   interface Window {
@@ -66,6 +67,7 @@ export default function Login() {
     })
 
   const b = config.branding
+  const tgClient = inTelegramClient()
   return (
     <>
       <Backdrop b={b} />
@@ -80,7 +82,18 @@ export default function Login() {
             {b.login_text && <p className="muted">{b.login_text}</p>}
           </div>
 
-          {config.auth.telegram && config.bot_username && (
+          {tgClient && (
+            <div className="stack">
+              <p className="small" style={{ margin: 0 }}>
+                Telegram не передал данные для входа — так бывает, если приложение долго было открыто в фоне.
+              </p>
+              <button className="btn block" onClick={() => reopen(config.bot_username)}>
+                Открыть заново
+              </button>
+            </div>
+          )}
+
+          {!tgClient && config.auth.telegram && config.bot_username && (
             <div className="stack">
               <TelegramWidget bot={config.bot_username} onAuth={(u) => run(async () => done(await post<Session>('/api/auth/telegram/widget', u)))} />
               <a className="btn secondary block" href={`https://t.me/${config.bot_username}`}>

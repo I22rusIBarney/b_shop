@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { get, type CustomerRow, type Paged, type Plan } from '../../lib/api'
 import { relative, rub, shortDate } from '../../lib/format'
 import { ErrorBox, Spinner, useLoad } from '../../ui/kit'
+import PanelSync from './PanelSync'
 
 const PAGE = 50
 
@@ -48,7 +49,10 @@ export default function Customers() {
     <>
       <div className="admin-head">
         <h1>Клиенты</h1>
-        {data.data && <span className="muted num">{data.data.total.toLocaleString('ru-RU')}</span>}
+        <div className="row" style={{ gap: 10 }}>
+          {data.data && <span className="muted num">{data.data.total.toLocaleString('ru-RU')}</span>}
+          <PanelSync onDone={data.reload} />
+        </div>
       </div>
       <div className="filters">
         <input className="input grow" placeholder="Имя, @username, почта, Telegram ID, ссылка подписки" value={q} onChange={(e) => setQ(e.target.value)} />

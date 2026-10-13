@@ -38,6 +38,7 @@ type Panel interface {
 	InternalSquads(ctx context.Context) ([]remnawave.Squad, error)
 	ExternalSquads(ctx context.Context) ([]remnawave.Squad, error)
 	SubpageConfigs(ctx context.Context) ([]remnawave.SubpageConfigInfo, error)
+	ListUsers(ctx context.Context, fn func([]remnawave.User) error) error
 	SubpageConfig(ctx context.Context, id uuid.UUID) (json.RawMessage, error)
 }
 
@@ -105,6 +106,8 @@ type Service struct {
 
 	importOnce sync.Once
 	imp        *importJob
+	syncOnce   sync.Once
+	psync      *panelSync
 }
 
 func (s *Service) set() *settings.All { return s.Settings.Get() }
