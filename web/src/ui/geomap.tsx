@@ -163,7 +163,7 @@ export default function GeoMap({ countries, points, compact }: { countries: Reco
             height={H}
             role="img"
             aria-label="Карта запросов подписки"
-            style={{ touchAction: mode === 'globe' ? 'pan-y' : zoom > 1 ? 'none' : 'pan-y', cursor: drag.current ? 'grabbing' : 'grab' }}
+            style={{ touchAction: mode === 'globe' || zoom > 1 ? 'none' : 'pan-y', cursor: drag.current ? 'grabbing' : 'grab' }}
             onPointerDown={onDown}
             onPointerMove={onMove}
             onPointerUp={onUp}

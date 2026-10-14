@@ -65,7 +65,8 @@ export default function Admin() {
         </button>
         <strong>Админка</strong>
       </header>
-      <nav className={open ? 'admin-nav open' : 'admin-nav'} aria-label="Админка" onClick={(e) => e.target === e.currentTarget && setOpen(false)}>
+      <div className={open ? 'admin-scrim open' : 'admin-scrim'} onClick={() => setOpen(false)} aria-hidden="true" />
+      <nav className={open ? 'admin-nav open' : 'admin-nav'} aria-label="Админка">
         <Brand always />
         {nav.map((n) => (
           <NavLink key={n.to} to={n.to}>

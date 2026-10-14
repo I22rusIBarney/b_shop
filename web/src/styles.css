@@ -293,6 +293,7 @@ textarea.input { min-height: 96px; resize: vertical; line-height: 1.45; }
 
 /* ---------- admin ---------- */
 .admin { display: grid; grid-template-columns: 248px 1fr; min-height: 100dvh; background: var(--bg); }
+.admin-scrim { display: none; }
 .admin-nav { position: sticky; top: 0; height: 100dvh; overflow: auto; border-right: 1px solid var(--line); padding: 18px 12px; background: var(--surface-solid); }
 .admin-nav .brand { margin: 0 6px 18px; }
 .admin-nav a { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 10px; color: var(--muted); text-decoration: none; font-size: 0.925rem; }
@@ -329,7 +330,9 @@ table.t { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 @media (max-width: 899px) {
   .admin { grid-template-columns: 1fr; align-content: start; }
   .admin-nav { position: fixed; z-index: 60; width: 270px; transform: translateX(-105%); transition: transform .2s ease; }
-  .admin-nav.open { transform: none; box-shadow: 0 0 0 100vmax rgba(0,0,0,.5); }
+  .admin-nav.open { transform: none; }
+  .admin-scrim { display: block; position: fixed; inset: 0; z-index: 59; background: rgba(0,0,0,.5); opacity: 0; pointer-events: none; transition: opacity .2s ease; }
+  .admin-scrim.open { opacity: 1; pointer-events: auto; }
   .admin-top { display: flex; align-items: center; gap: 10px; position: sticky; top: 0; z-index: 30; padding: calc(10px + var(--safe-top)) 14px 10px; background: var(--surface-solid); border-bottom: 1px solid var(--line); }
   .admin-main { padding: 16px 14px 60px; }
 }
@@ -755,7 +758,7 @@ html { touch-action: pan-x pan-y; } /* no pinch-zoom: the layout fits the screen
 .geo-grat { fill: none; stroke: color-mix(in srgb, var(--text) 7%, transparent); stroke-width: .5; }
 .geo-land { stroke: color-mix(in srgb, var(--text) 24%, transparent); stroke-width: .5; }
 .geo-rim { fill: none; stroke: color-mix(in srgb, var(--accent) 35%, transparent); stroke-width: 1.2; }
-.geo-dots circle { fill: var(--accent); fill-opacity: .9; stroke: var(--text); stroke-opacity: .7; stroke-width: .6; cursor: pointer; filter: drop-shadow(0 0 5px var(--accent)); }
+.geo-dots circle { fill: #19c6e6; fill-opacity: .95; stroke: #fff; stroke-opacity: .95; stroke-width: 1.2; cursor: pointer; filter: drop-shadow(0 0 4px rgba(0,0,0,.7)); }
 .geomap-zoom { position: absolute; top: 10px; right: 10px; display: flex; flex-direction: column; border-radius: 10px; overflow: hidden; border: 1px solid var(--line-strong); background: color-mix(in srgb, var(--surface-solid) 88%, transparent); }
 .geomap-zoom button { width: 34px; height: 34px; border: 0; border-top: 1px solid var(--line); background: transparent; color: var(--text); font-size: 1.15rem; line-height: 1; cursor: pointer; }
 .geomap-zoom button:first-child { border-top: 0; }
