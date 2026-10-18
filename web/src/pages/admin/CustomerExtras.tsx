@@ -3,6 +3,8 @@ import { get, post, type AutomationRun, type TicketRow } from '../../lib/api'
 import { dateTime, shortDate } from '../../lib/format'
 import { ticketStatus } from '../../ui/chat'
 import { useAction, useLoad } from '../../ui/kit'
+import { Empty, Panel } from '../../ui/admin'
+import { Chat, Renew } from '../../ui/icons'
 
 const stopReason: Record<string, string> = {
   purchase: 'оплатил',
@@ -29,40 +31,52 @@ export default function CustomerExtras({ customerId }: { customerId: number }) {
 
   return (
     <>
-      <section className="card stack">
-        <h3>Обращения</h3>
+      <Panel icon={Chat} tone="green" title="Обращения" count={tickets.data?.items.length}>
         {!tickets.data?.items.length ? (
-          <p className="small muted">Обращений не было</p>
+          <Empty icon={Chat}>Обращений не было</Empty>
         ) : (
-          <div className="list small">
+          <div className="feed">
             {tickets.data.items.map((t) => {
-              const [label, cls] = ticketStatus[t.status]
+              const [label] = ticketStatus[t.status]
               return (
-                <div className="item item-link" key={t.id} onClick={() => nav(`/admin/tickets/${t.id}`)}>
-                  <span className="grow ellipsis">
-                    #{t.id} {t.subject}
+                <button type="button" className="feed-item feed-link" key={t.id} onClick={() => nav(`/admin/tickets/${t.id}`)}>
+                  <span className="ic" style={{ ['--c' as string]: '#4fcf8a' }}>
+                    <Chat />
                   </span>
-                  {t.rating && <span className="badge">★ {t.rating}</span>}
-                  <span className={cls}>{label}</span>
-                  <span className="tiny muted">{shortDate(t.created_at)}</span>
-                </div>
+                  <div className="main">
+                    <div>
+                      <span className="muted num">#{t.id}</span> {t.subject}
+                    </div>
+                    <div className="s">
+                      {shortDate(t.created_at)}
+                      {t.rating ? ` · ★ ${t.rating}` : ''}
+                    </div>
+                  </div>
+                  <div className="end">
+                    <span className={`status ${t.status}`}>{label}</span>
+                  </div>
+                </button>
               )
             })}
           </div>
         )}
-      </section>
+      </Panel>
 
-      <section className="card stack">
-        <div className="spread">
-          <h3>Автоматизации</h3>
-          {active.length > 0 && (
+      <Panel
+        icon={Renew}
+        tone="teal"
+        title="Автоматизации"
+        count={runs.data?.length}
+        actions={
+          active.length > 0 && (
             <button className="btn ghost small" disabled={busy} onClick={() => stop(0)}>
               Остановить все ({active.length})
             </button>
-          )}
-        </div>
+          )
+        }
+      >
         {!runs.data?.length ? (
-          <p className="small muted">В цепочки не попадал</p>
+          <Empty icon={Renew}>В цепочки не попадал</Empty>
         ) : (
           <div className="list small">
             {runs.data.map((r) => (
@@ -87,7 +101,7 @@ export default function CustomerExtras({ customerId }: { customerId: number }) {
             ))}
           </div>
         )}
-      </section>
+      </Panel>
     </>
   )
 }

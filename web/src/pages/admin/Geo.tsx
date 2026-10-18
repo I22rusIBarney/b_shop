@@ -3,6 +3,8 @@ import { get, put } from '../../lib/api'
 import { dateTime, relative } from '../../lib/format'
 import { Kpi } from '../../ui/charts'
 import { Spinner, Toggle, useAction, useLoad } from '../../ui/kit'
+import { Panel } from '../../ui/admin'
+import { Globe } from '../../ui/icons'
 import type { GeoPoint } from '../../ui/geomap'
 
 // Geography of subscription requests: a globe/map plus "country → cities" lists. Used on the Statistics →
@@ -98,7 +100,11 @@ function StatusNote({ s }: { s: GeoStatus }) {
   return (
     <>
       {s.db_error && <p className="small err">{s.db_error}</p>}
-      {s.sync_error && <p className="small err">Обновление из панели: {s.sync_error}</p>}
+      {s.sync_error && (
+        <p className="soft-err" title={s.sync_error}>
+          Не удалось обновить историю из панели — показаны сохранённые данные. Повторим автоматически.
+        </p>
+      )}
     </>
   )
 }
@@ -209,11 +215,7 @@ export function CustomerGeo({ id }: { id: number }) {
   const { byCountry, points } = useMapData(d?.countries || [])
   if (data.error) return null
   return (
-    <section className="card stack">
-      <div className="card-title">
-        <h3 style={{ margin: 0 }}>География подключений</h3>
-        {d && <span className="badge accent">{d.total}</span>}
-      </div>
+    <Panel icon={Globe} tone="blue" title="География подключений" count={d?.total}>
       {!d ? (
         <div className="center" style={{ padding: 20 }}>
           <Spinner />
@@ -272,6 +274,6 @@ export function CustomerGeo({ id }: { id: number }) {
           )}
         </>
       )}
-    </section>
+    </Panel>
   )
 }

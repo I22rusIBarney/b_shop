@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { del, get, patch, post, type Customer, type Device, type Identity, type Payment, type Plan, type PlanChange, type Redemption, type ReferralBonus, type Subscription } from '../../lib/api'
 import { bytes, date, dateTime, operationName, paymentStatus, providerName, relative, rub } from '../../lib/format'
-import { Back, Copy, Trash } from '../../ui/icons'
+import { Avatar, Empty, InfoRow, Panel } from '../../ui/admin'
+import { Back, Calendar, Card, Clock, Coin, Copy, Gift, Key, Mail, Note, Plus, Send, Swap, Tag, Trash, Trend, Trial, Users, User } from '../../ui/icons'
 import { ErrorBox, Field, Sheet, Spinner, Toggle, copy, useAction, useLoad, useToast } from '../../ui/kit'
 
 interface Event {
@@ -150,39 +151,107 @@ export default function CustomerCard() {
       await data.reload()
     }, ok)
 
+  const online = !!(c.last_seen_at && Date.now() - new Date(c.last_seen_at).getTime() < 10 * 60 * 1000)
+  const copyText = async (v: string, what: string) => (await copy(v)) && toast(`${what} скопирован`)
+
   return (
     <div className="stack lg">
-      <div className="admin-head" style={{ marginBottom: 0 }}>
-        <div className="row">
-          <button className="icon-btn" onClick={() => nav(-1)} aria-label="Назад">
-            <Back />
-          </button>
-          <div>
-            <h1>{name}</h1>
-            <div className="small muted">
-              #{c.id}
-              {c.telegram_id ? ` · TG ${c.telegram_id}` : ''}
-              {c.username ? ` · @${c.username}` : ''}
-              {c.email ? ` · ${c.email}` : ''}
-            </div>
+      <div className="cc-head admin-head" style={{ marginBottom: 0 }}>
+        <button className="icon-btn" onClick={() => nav(-1)} aria-label="Назад">
+          <Back />
+        </button>
+        <Avatar name={name} seed={c.id} size={52} />
+        <div style={{ minWidth: 0 }}>
+          <h1 className="ellipsis">{name}</h1>
+          <div className="id-line">
+            <span className="num">#{c.id}</span>
+            {c.telegram_id && (
+              <span className="num">
+                TG {c.telegram_id}
+                <button className="copy-btn" onClick={() => copyText(String(c.telegram_id), 'Telegram ID')} aria-label="Скопировать Telegram ID">
+                  <Copy />
+                </button>
+              </span>
+            )}
+            {c.username && <span>@{c.username}</span>}
+            {c.email && <span>{c.email}</span>}
           </div>
         </div>
-        <div className="row wrap">
-          {c.bot_blocked && <span className="badge warn">Заблокировал бота</span>}
-          <span className="small muted">Был {relative(c.last_seen_at)}</span>
+        <div className="chips">
+          <span className={online ? 'presence on' : 'presence'}>{online ? 'в сети' : `был ${relative(c.last_seen_at)}`}</span>
+          {c.tag && <span className="badge accent">{c.tag}</span>}
+          {c.is_admin && <span className="badge">админ</span>}
+          {c.is_blocked && <span className="badge bad">заблокирован</span>}
+          {c.bot_blocked && <span className="badge warn">заблокировал бота</span>}
         </div>
       </div>
 
-      <div className="grid2">
-        <section className="card stack">
-          <div className="card-title">
-            <h3>Подписки</h3>
-            <button className="btn secondary small" onClick={() => setGrantOpen(true)}>
-              Выдать подписку
+      <div className="cc-grid">
+        <Panel icon={User} tone="blue" title="Профиль">
+          <div className="info-list">
+            <InfoRow icon={Calendar} label="Регистрация">
+              {dateTime(c.created_at)}
+            </InfoRow>
+            <InfoRow icon={Clock} label="Последний визит">
+              {c.last_seen_at ? dateTime(c.last_seen_at) : '—'}
+            </InfoRow>
+            {identities.map((i) => (
+              <InfoRow key={i.id} icon={i.provider.startsWith('telegram') ? Send : i.provider === 'email' ? Mail : Key} label={providerName[i.provider] || i.provider}>
+                {i.display}
+              </InfoRow>
+            ))}
+            <InfoRow icon={Trend} label="Источник">
+              {c.source || '—'}
+            </InfoRow>
+            <InfoRow icon={Users} label="Пригласил">
+              {referrer ? <Link to={`/admin/customers/${referrer.id}`}>{referrer.username ? `@${referrer.username}` : `#${referrer.id}`}</Link> : '—'}
+            </InfoRow>
+            <InfoRow icon={Tag} label="Реферальный код">
+              <span className="num">{c.ref_code || '—'}</span>
+            </InfoRow>
+            <InfoRow icon={Trial} label="Пробный период">
+              {c.trial_used ? 'использован' : 'не использован'}
+            </InfoRow>
+          </div>
+        </Panel>
+
+        <Panel icon={Note} tone="violet" title="Заметки администратора">
+          <div className="form-grid" style={{ gridTemplateColumns: 'minmax(0, 1fr) 140px' }}>
+            <Field label="Тег">
+              <input className="input" value={notes.tag} placeholder="VIP, проблемный, тест…" onChange={(e) => setNotes({ ...notes, tag: e.target.value })} />
+            </Field>
+            <Field label="Скидка, %">
+              <input className="input num" type="number" min={0} max={100} value={notes.personal_discount} onChange={(e) => setNotes({ ...notes, personal_discount: Number(e.target.value) })} />
+            </Field>
+          </div>
+          <Field label="Заметки">
+            <textarea className="input" value={notes.notes} placeholder="Любые заметки о клиенте…" onChange={(e) => setNotes({ ...notes, notes: e.target.value })} />
+          </Field>
+          <div className="row">
+            <button className="btn small" disabled={busy} onClick={saveNotes}>
+              Сохранить
             </button>
           </div>
+          <div className="info-list" style={{ marginTop: 4 }}>
+            <Toggle checked={c.is_blocked} onChange={(v) => setFlag('is_blocked', v)} label="Заблокировать доступ" hint="Клиент не сможет войти в кабинет и бот" />
+            <Toggle checked={c.is_admin} onChange={(v) => setFlag('is_admin', v)} label="Администратор" />
+          </div>
+        </Panel>
+
+        <Panel
+          icon={Key}
+          tone="green"
+          title="Подписки"
+          count={subscriptions.length}
+          wide
+          actions={
+            <button className="btn secondary small" onClick={() => setGrantOpen(true)}>
+              <Plus /> Выдать
+            </button>
+          }
+        >
           {subscriptions.length === 0 ? (
-            <p className="small muted">Подписок нет</p>
+            <Empty icon={Key}>Подписок нет</Empty>
           ) : (
             subscriptions.map((s) => (
               <SubBlock
@@ -203,170 +272,156 @@ export default function CustomerCard() {
               />
             ))
           )}
-        </section>
+        </Panel>
 
-        <section className="card stack">
-          <h3>Заметки администратора</h3>
-          <Field label="Тег" hint="Например: VIP, проблемный, тест">
-            <input className="input" value={notes.tag} onChange={(e) => setNotes({ ...notes, tag: e.target.value })} />
-          </Field>
-          <Field label="Персональная скидка, %">
-            <input className="input num" type="number" min={0} max={100} value={notes.personal_discount} onChange={(e) => setNotes({ ...notes, personal_discount: Number(e.target.value) })} />
-          </Field>
-          <Field label="Заметки">
-            <textarea className="input" value={notes.notes} onChange={(e) => setNotes({ ...notes, notes: e.target.value })} />
-          </Field>
-          <div className="row">
-            <button className="btn small" disabled={busy} onClick={saveNotes}>
-              Сохранить
-            </button>
-          </div>
-          <Toggle checked={c.is_blocked} onChange={(v) => setFlag('is_blocked', v)} label="Заблокировать доступ" hint="Клиент не сможет войти в кабинет и бот" />
-          <Toggle checked={c.is_admin} onChange={(v) => setFlag('is_admin', v)} label="Администратор" />
-        </section>
-
-        <section className="card stack">
-          <h3>Профиль</h3>
-          <div className="list small">
-            <div className="item">
-              <span className="grow muted">Создан</span>
-              <span>{dateTime(c.created_at)}</span>
-            </div>
-            <div className="item">
-              <span className="grow muted">Источник</span>
-              <span>{c.source || '—'}</span>
-            </div>
-            <div className="item">
-              <span className="grow muted">Пригласил</span>
-              {referrer ? <Link to={`/admin/customers/${referrer.id}`}>{referrer.username ? `@${referrer.username}` : `#${referrer.id}`}</Link> : <span>—</span>}
-            </div>
-            <div className="item">
-              <span className="grow muted">Реферальный код</span>
-              <span className="num">{c.ref_code}</span>
-            </div>
-            <div className="item">
-              <span className="grow muted">Пробный период</span>
-              <span>{c.trial_used ? 'использован' : 'не использован'}</span>
-            </div>
-            {identities.map((i) => (
-              <div className="item" key={i.id}>
-                <span className="grow muted">{providerName[i.provider] || i.provider}</span>
-                <span className="ellipsis" style={{ maxWidth: 200 }}>
-                  {i.display}
-                </span>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="card stack">
-          <h3>Платежи</h3>
+        <Panel icon={Coin} tone="amber" title="Платежи" count={payments.length}>
           {payments.length === 0 ? (
-            <p className="small muted">Платежей нет</p>
+            <Empty icon={Card}>Платежей нет</Empty>
           ) : (
-            <div className="list small">
+            <div className="feed">
               {payments.slice(0, 15).map((p) => (
-                <div className="item" key={p.id}>
-                  <div className="grow">
+                <div className="feed-item" key={p.id}>
+                  <span className="ic" style={{ ['--c' as string]: p.status === 'succeeded' ? 'var(--ok)' : p.status === 'pending' ? 'var(--warn)' : undefined }}>
+                    <Card />
+                  </span>
+                  <div className="main">
                     <div>
-                      {operationName[p.operation] || p.operation}: {p.title}
+                      {operationName[p.operation] || p.operation} · {p.title}
                     </div>
-                    <div className="tiny muted">
+                    <div className="s">
                       {dateTime(p.created_at)} · {p.method || p.provider}
                     </div>
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div className="num">{rub(p.amount)}</div>
+                  <div className="end">
+                    <b className="num">{rub(p.amount)}</b>
                     <span className={p.status === 'succeeded' ? 'badge ok' : p.status === 'pending' ? 'badge warn' : 'badge'}>{paymentStatus[p.status]}</span>
                   </div>
                 </div>
               ))}
             </div>
           )}
-        </section>
+        </Panel>
 
-        <section className="card stack">
-          <h3>Бонусы и промокоды</h3>
-          <div className="small muted">
-            Рефералов: {data.data.referral.invited}, оплатили: {data.data.referral.paid}, получено дней: {data.data.referral.days}
-            {c.bonus_days > 0 && <> · на балансе {c.bonus_days} дн.</>}
+        <Panel icon={Gift} tone="rose" title="Бонусы и промокоды">
+          <div className="stat-line">
+            <span>
+              Рефералов <b>{data.data.referral.invited}</b>
+            </span>
+            <span>
+              оплатили <b>{data.data.referral.paid}</b>
+            </span>
+            <span>
+              получено дней <b>{data.data.referral.days}</b>
+            </span>
+            {c.bonus_days > 0 && (
+              <span>
+                на балансе <b>{c.bonus_days} дн.</b>
+              </span>
+            )}
           </div>
-          <div className="row wrap">
-            <input className="input num" type="number" min={1} value={bonusDays} onChange={(e) => setBonusDays(Number(e.target.value))} style={{ width: 90, minHeight: 36 }} aria-label="Бонусных дней" />
+          <div className="inline-form">
+            <input className="input num" type="number" min={1} value={bonusDays} onChange={(e) => setBonusDays(Number(e.target.value))} style={{ width: 84 }} aria-label="Бонусных дней" />
             <button className="btn small" disabled={busy || bonusDays < 1} onClick={() => subAction(() => post(`/api/admin/customers/${c.id}/bonus`, { days: bonusDays }), 'Дни начислены')}>
-              Начислить бонусные дни
+              Начислить дни
             </button>
           </div>
           <form
-            className="row wrap"
+            className="inline-form"
             onSubmit={(e) => {
               e.preventDefault()
               subAction(() => post(`/api/admin/customers/${c.id}/promo`, { code: promoCode }), 'Промокод применён').then(() => setPromoCode(''))
             }}
           >
-            <input className="input" placeholder="Промокод" value={promoCode} onChange={(e) => setPromoCode(e.target.value.toUpperCase())} style={{ width: 160, minHeight: 36 }} />
+            <input className="input" placeholder="ПРОМОКОД" value={promoCode} onChange={(e) => setPromoCode(e.target.value.toUpperCase())} style={{ width: 160 }} aria-label="Промокод" />
             <button className="btn secondary small" disabled={busy || !promoCode.trim()}>
               Применить за клиента
             </button>
           </form>
-          {!!data.data.unlocked_plans?.length && <p className="small" style={{ margin: 0 }}>🔓 Открыты скрытые тарифы: {data.data.unlocked_plans.join(', ')}</p>}
-          {(promos.length > 0 || bonuses.length > 0 || changes.length > 0) && (
-            <div className="list small">
+          {!!data.data.unlocked_plans?.length && <p className="small" style={{ margin: 0 }}>Открыты скрытые тарифы: {data.data.unlocked_plans.join(', ')}</p>}
+          {promos.length + bonuses.length + changes.length === 0 ? (
+            <Empty icon={Gift}>Бонусов, промокодов и смен тарифа не было</Empty>
+          ) : (
+            <div className="feed">
               {promos.map((r) => (
-                <div className="item" key={'p' + r.id}>
-                  <span className="grow">
-                    🎟 {r.code} <span className="muted">{r.kind === 'days' ? `+${r.value} дн.` : r.kind === 'unlock' ? 'открытие тарифа' : `−${r.value}%`}</span>
+                <div className="feed-item" key={'p' + r.id}>
+                  <span className="ic" style={{ ['--c' as string]: 'var(--accent)' }}>
+                    <Tag />
                   </span>
-                  <span className={r.status === 'used' ? 'badge ok' : 'badge warn'}>{r.status === 'used' ? 'использован' : 'ждёт оплаты'}</span>
-                  <span className="tiny muted">{date(r.created_at)}</span>
+                  <div className="main">
+                    <div className="num">{r.code}</div>
+                    <div className="s">{r.kind === 'days' ? `+${r.value} дн.` : r.kind === 'unlock' ? 'открытие тарифа' : `−${r.value}%`}</div>
+                  </div>
+                  <div className="end">
+                    <span className={r.status === 'used' ? 'badge ok' : 'badge warn'}>{r.status === 'used' ? 'использован' : 'ждёт оплаты'}</span>
+                    <span className="tiny muted">{date(r.created_at)}</span>
+                  </div>
                 </div>
               ))}
               {bonuses.map((b) => (
-                <div className="item" key={'b' + b.id}>
-                  <span className="grow">
-                    🎁 +{b.days} дн. <span className="muted">{bonusKind[b.kind]}{b.kind === 'first' || b.kind === 'recurring' ? ` · ${b.referral_name}` : ''}</span>
+                <div className="feed-item" key={'b' + b.id}>
+                  <span className="ic" style={{ ['--c' as string]: '#ff7a8a' }}>
+                    <Gift />
                   </span>
-                  {b.pending && <span className="badge">на баланс</span>}
-                  <span className="tiny muted">{date(b.created_at)}</span>
+                  <div className="main">
+                    <div>+{b.days} дн.</div>
+                    <div className="s">
+                      {bonusKind[b.kind]}
+                      {b.kind === 'first' || b.kind === 'recurring' ? ` · ${b.referral_name}` : ''}
+                    </div>
+                  </div>
+                  <div className="end">
+                    {b.pending && <span className="badge">на баланс</span>}
+                    <span className="tiny muted">{date(b.created_at)}</span>
+                  </div>
                 </div>
               ))}
               {changes.map((x) => (
-                <div className="item" key={'c' + x.id}>
-                  <span className="grow">
-                    🔄 {x.from_name} → {x.to_name}{' '}
-                    <span className="muted">
-                      {modeLabel[x.mode]}, {x.days_before} → {x.days_after} дн.
-                    </span>
+                <div className="feed-item" key={'c' + x.id}>
+                  <span className="ic" style={{ ['--c' as string]: '#a98bff' }}>
+                    <Swap />
                   </span>
-                  <span className="tiny muted">{date(x.created_at)}</span>
+                  <div className="main">
+                    <div>
+                      {x.from_name} → {x.to_name}
+                    </div>
+                    <div className="s">
+                      {modeLabel[x.mode]}, {x.days_before} → {x.days_after} дн.
+                    </div>
+                  </div>
+                  <div className="end">
+                    <span className="tiny muted">{date(x.created_at)}</span>
+                  </div>
                 </div>
               ))}
             </div>
           )}
-        </section>
+        </Panel>
 
         <CustomerExtras customerId={c.id} />
 
-        <div style={{ gridColumn: '1 / -1' }}>
+        <div className="wide" style={{ gridColumn: '1 / -1' }}>
           <CustomerGeo id={c.id} />
         </div>
 
-        <section className="card stack" style={{ gridColumn: '1 / -1' }}>
-          <h3>История</h3>
-          <div className="list small">
-            {events.map((e) => (
-              <div className="item" key={e.id}>
-                <span className="muted num" style={{ width: 110, flex: 'none' }}>
-                  {dateTime(e.created_at)}
-                </span>
-                <span className="grow">
-                  {eventName[e.kind] || e.kind} <span className="muted">{eventText(e)}</span>
-                </span>
-                {e.actor_id && <span className="badge">админ</span>}
-              </div>
-            ))}
-          </div>
-        </section>
+        <Panel icon={Clock} tone="slate" title="История" count={events.length} wide>
+          {events.length === 0 ? (
+            <Empty icon={Clock}>Событий пока нет</Empty>
+          ) : (
+            <div className="feed timeline">
+              {events.map((e) => (
+                <div className="feed-item" key={e.id}>
+                  <span className="when num">{dateTime(e.created_at)}</span>
+                  <div className="main">
+                    <div>
+                      {eventName[e.kind] || e.kind} <span className="muted">{eventText(e)}</span>
+                    </div>
+                  </div>
+                  <div className="end">{e.actor_id && <span className="badge">админ</span>}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Panel>
       </div>
 
       <GrantSheet open={grantOpen} onClose={() => setGrantOpen(false)} plans={plans.data || []} onGrant={(plan_id, days, kind) => subAction(() => post(`/api/admin/customers/${c.id}/subscriptions`, { plan_id, days, kind }), 'Подписка выдана').then(() => setGrantOpen(false))} busy={busy} />
@@ -399,60 +454,83 @@ function SubBlock(p: {
   const [days, setDays] = useState(7)
   const expired = new Date(s.expires_at) < new Date()
   const disabled = s.status !== 'active'
+  const devLimit = s.device_limit ? s.device_limit + s.extra_devices : 0
+  const pct = s.traffic_limit_bytes > 0 ? Math.min(100, (s.used_traffic_bytes / s.traffic_limit_bytes) * 100) : 0
   return (
-    <div className="card flat stack">
-      <div className="spread">
-        <div>
-          <strong>{s.plan_name || s.title}</strong>
-          {s.is_primary && <span className="badge accent" style={{ marginLeft: 8 }}>основная</span>}
-          {s.kind === 'trial' && <span className="badge" style={{ marginLeft: 6 }}>пробная</span>}
-          {disabled && <span className="badge bad" style={{ marginLeft: 6 }}>отключена</span>}
-          {s.autopay && <span className="badge ok" style={{ marginLeft: 6 }}>автопродление</span>}
+    <div className="sub-item">
+      <div className="head">
+        <strong>{s.plan_name || s.title}</strong>
+        {s.is_primary && <span className="badge accent">основная</span>}
+        {s.kind === 'trial' && <span className="badge">пробная</span>}
+        {disabled && <span className="badge bad">отключена</span>}
+        {s.autopay && <span className="badge ok">автопродление</span>}
+        <span className="ids num">
+          #{s.id} · rw {s.rw_user_id ?? '—'}
+          <button className="copy-btn" aria-label="Скопировать ссылку подписки" title="Скопировать ссылку подписки" onClick={p.onCopy}>
+            <Copy />
+          </button>
+        </span>
+      </div>
+      <div className="sub-stats">
+        <div className="sub-stat">
+          <span className="k">Срок</span>
+          <span className={expired ? 'v bad' : 'v'}>
+            {expired ? 'истекла ' : 'до '}
+            {date(s.expires_at)}
+          </span>
         </div>
-        <span className="tiny muted num">
-          #{s.id} · rw:{s.rw_user_id ?? '—'}
-        </span>
+        <div className="sub-stat">
+          <span className="k">Трафик</span>
+          <span className="v num">
+            {bytes(s.used_traffic_bytes)}
+            {s.traffic_limit_bytes > 0 ? ` / ${bytes(s.traffic_limit_bytes)}` : ''}
+          </span>
+          {s.traffic_limit_bytes > 0 && (
+            <div className={pct > 90 ? 'meter bad' : pct > 75 ? 'meter warn' : 'meter'}>
+              <i style={{ width: `${pct}%` }} />
+            </div>
+          )}
+        </div>
+        <div className="sub-stat">
+          <span className="k">Устройства</span>
+          <span className="v num">
+            {s.devices_used}
+            {devLimit ? ` / ${devLimit}` : ''}
+          </span>
+        </div>
       </div>
-      <div className="small">
-        <span style={{ color: expired ? 'var(--danger)' : undefined }}>до {date(s.expires_at)}</span>
-        <span className="muted">
-          {' '}
-          · трафик {bytes(s.used_traffic_bytes)}
-          {s.traffic_limit_bytes > 0 ? ` из ${bytes(s.traffic_limit_bytes)}` : ''} · устройства {s.devices_used}
-          {s.device_limit ? `/${s.device_limit + s.extra_devices}` : ''}
-        </span>
-      </div>
-      <div className="row wrap">
-        <input className="input num" type="number" value={days} onChange={(e) => setDays(Number(e.target.value))} style={{ width: 90, minHeight: 36 }} aria-label="Дней" />
-        <button className="btn small" disabled={p.busy || !days} onClick={() => p.onDays(days)}>
-          {days >= 0 ? 'Добавить дни' : 'Убрать дни'}
-        </button>
+      <div className="sub-actions-row">
+        <div className="days-group">
+          <input className="input num" type="number" value={days} onChange={(e) => setDays(Number(e.target.value))} aria-label="Дней" />
+          <button className="btn small" disabled={p.busy || !days} onClick={() => p.onDays(days)}>
+            {days >= 0 ? 'Добавить дни' : 'Убрать дни'}
+          </button>
+        </div>
         <button className="btn secondary small" disabled={p.busy} onClick={p.onDevices}>
           Устройства
         </button>
         <button className="btn secondary small" disabled={p.busy} onClick={p.onChange}>
           Сменить тариф
         </button>
-        {s.autopay && (
-          <button className="btn secondary small" disabled={p.busy} onClick={p.onAutopay}>
-            Запустить автооплату
-          </button>
-        )}
         <button className="btn secondary small" disabled={p.busy} onClick={p.onReset}>
           Сбросить трафик
         </button>
         <button className="btn secondary small" disabled={p.busy} onClick={p.onRevoke}>
           Новая ссылка
         </button>
-        <button className="btn secondary small" disabled={p.busy} onClick={() => p.onToggle(disabled)}>
-          {disabled ? 'Включить' : 'Отключить'}
-        </button>
-        <button className="icon-btn" aria-label="Скопировать ссылку" onClick={p.onCopy}>
-          <Copy />
-        </button>
-        <button className="icon-btn" aria-label="Удалить подписку" onClick={p.onDelete}>
-          <Trash />
-        </button>
+        {s.autopay && (
+          <button className="btn secondary small" disabled={p.busy} onClick={p.onAutopay}>
+            Запустить автооплату
+          </button>
+        )}
+        <div className="sub-danger">
+          <button className="btn danger-ghost small" disabled={p.busy} onClick={() => p.onToggle(disabled)}>
+            {disabled ? 'Включить' : 'Отключить'}
+          </button>
+          <button className="icon-btn" aria-label="Удалить подписку" title="Удалить подписку" onClick={p.onDelete}>
+            <Trash />
+          </button>
+        </div>
       </div>
     </div>
   )
