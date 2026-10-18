@@ -95,6 +95,7 @@ export interface LinkItem {
 
 export interface PublicConfig {
   shop_name: string
+  days_in_month: number
   bot_username: string
   auth: { telegram: boolean; email: boolean; yandex: boolean; vk: boolean }
   trial: { enabled: boolean; days: number }

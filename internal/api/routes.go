@@ -94,6 +94,7 @@ func (s *Server) publicConfig(w http.ResponseWriter, r *http.Request) {
 		},
 		"trial":           map[string]any{"enabled": st.Trial.Enabled, "days": st.Trial.Days},
 		"maintenance":     st.General.MaintenanceMode,
+		"days_in_month":   st.General.DaysInMonth,
 		"payment_methods": paymentMethods(st.YooKassa),
 		"save_card":       st.YooKassa.SaveCard && st.Payments.ShowSaveCard,
 		"branding":        s.publicBranding(r.Context(), st.Branding),

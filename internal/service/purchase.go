@@ -117,6 +117,7 @@ type BuyRequest struct {
 	PlanID         int64  `json:"plan_id"`
 	PeriodID       int64  `json:"period_id"`
 	SubscriptionID int64  `json:"subscription_id"` // renew this subscription; 0 = new subscription
+	ExtraDevices   int    `json:"extra_devices"`   // new subscription only: device slots on top of the plan (slider)
 	Method         string `json:"method"`          // yookassa method code, e.g. sbp
 	SaveCard       bool   `json:"save_card"`
 	ReturnURL      string `json:"return_url"`
@@ -180,9 +181,21 @@ func (s *Service) Buy(ctx context.Context, c *store.Customer, req BuyRequest) (*
 	if sub != nil && sub.ExtraDevices > 0 && plan.ExtraDevicesAllowed && sub.PlanID != nil && *sub.PlanID == plan.ID {
 		base += plan.ExtraDevicePrice * int64(sub.ExtraDevices) * int64(days) / int64(dim)
 	}
+	extra := 0
+	if req.ExtraDevices != 0 {
+		if sub != nil {
+			return nil, userErr("при продлении количество устройств не меняется — докупите их на главной")
+		}
+		if !plan.ExtraDevicesAllowed || plan.DeviceLimit == 0 || req.ExtraDevices < 0 ||
+			(plan.MaxExtraDevices > 0 && req.ExtraDevices > plan.MaxExtraDevices) {
+			return nil, userErr("столько устройств для этого тарифа выбрать нельзя")
+		}
+		extra = req.ExtraDevices
+		base += plan.ExtraDevicePrice * int64(extra) * int64(days) / int64(dim)
+	}
 	p := &store.Payment{
 		CustomerID: c.ID, PlanID: &plan.ID, PeriodID: &per.ID, Operation: op,
-		Title: plan.Name, Days: days, Months: per.Months(dim),
+		Title: plan.Name, Days: days, Months: per.Months(dim), ExtraDevices: extra,
 		Amount: applyDiscount(base, disc), BaseAmount: base, DiscountPercent: disc, PromoCode: code,
 		Provider: "yookassa", Method: req.Method,
 		SaveMethod: req.SaveCard && s.set().YooKassa.SaveCard,

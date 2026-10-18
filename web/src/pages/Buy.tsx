@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useApp } from '../lib/app'
 import { get, post, type BuyResult, type CatalogPlan, type RedeemResult } from '../lib/api'
 import { periodLabel, rub, rubRound } from '../lib/format'
 import { Back, Check, Gift, Tag, User } from '../ui/icons'
@@ -13,6 +14,7 @@ function limitsLine(p: CatalogPlan) {
 }
 
 export default function Buy() {
+  const { config } = useApp()
   const toast = useToast()
   const [params] = useSearchParams()
   const nav = useNavigate()
@@ -28,6 +30,7 @@ export default function Buy() {
   const [periodID, setPeriodID] = useState<number>(0)
   const pay = usePayMethod()
   const { busy, run } = useAction()
+  const [extra, setExtra] = useState(0)
   const [promoOpen, setPromoOpen] = useState(false)
   const [promo, setPromo] = useState('')
 
@@ -54,6 +57,15 @@ export default function Buy() {
     )
 
   const offer = plan?.offers.find((o) => o.period_id === periodID)
+  // Device slider: new subscriptions of plans with extra devices; the price follows the server formula
+  // (monthly slot price × days / days in month, then the same discount as the period).
+  const slider = !!plan && !subID && !gift && !forOther && plan.extra_devices_allowed && plan.device_limit > 0
+  const maxExtra = plan ? (plan.max_extra_devices > 0 ? plan.max_extra_devices : 20) : 0
+  const extraN = slider ? Math.min(extra, maxExtra) : 0
+  const dim = config.days_in_month || 31
+  const extraBase = offer && plan ? Math.floor((plan.extra_device_price * extraN * offer.days) / dim) : 0
+  const extraCost = offer && plan ? Math.round(extraBase * (1 - (plan.discount_percent || 0) / 100)) : 0
+  const total = offer ? offer.price + extraCost : 0
 
   const checkout = () =>
     run(async () => {
@@ -71,6 +83,7 @@ export default function Buy() {
         plan_id: planID,
         period_id: periodID,
         subscription_id: subID,
+        extra_devices: extraN,
         method: pay.method,
         save_card: pay.save,
       })
@@ -145,6 +158,29 @@ export default function Buy() {
             ))}
           </div>
 
+          {slider && (
+            <div className="card stack">
+              <div className="spread">
+                <h3>Устройств</h3>
+                <b className="num accent-text">{plan.device_limit + extraN}</b>
+              </div>
+              <input
+                type="range"
+                className="dev-slider"
+                min={0}
+                max={maxExtra}
+                step={1}
+                value={extraN}
+                onChange={(e) => setExtra(Number(e.target.value))}
+                aria-label="Количество устройств"
+                aria-valuetext={`${plan.device_limit + extraN} устройств`}
+              />
+              <p className="tiny muted">
+                {plan.device_limit} включено в тариф, каждое следующее — +{rub(plan.extra_device_price)} в месяц, максимум {plan.device_limit + maxExtra}
+              </p>
+            </div>
+          )}
+
           <div className="card stack choice">
             {offer && (
               <>
@@ -153,7 +189,7 @@ export default function Buy() {
                   <span>
                     {plan.name} <span className="muted">на {periodLabel(offer.unit, offer.amount)}</span>
                   </span>
-                  <b className="num accent-text">{rub(offer.price)}</b>
+                  <b className="num accent-text">{rub(total)}</b>
                 </div>
               </>
             )}
@@ -200,7 +236,7 @@ export default function Buy() {
             )}
           </div>
 
-          {offer && offer.price > 0 && <MethodPicker state={pay} autopay={!gift && !forOther} />}
+          {offer && total > 0 && <MethodPicker state={pay} autopay={!gift && !forOther} />}
 
           {offer && (
             <div className="paybar card">
@@ -209,11 +245,11 @@ export default function Buy() {
                   {offer.base_price > offer.price && <div className="strike small num">{rub(offer.base_price)}</div>}
                   <div className="row" style={{ gap: 8, alignItems: 'baseline' }}>
                     <span className="small muted">Итого</span>
-                    <span className="paybar-sum num">{rub(offer.price)}</span>
+                    <span className="paybar-sum num">{rub(total)}</span>
                   </div>
                 </div>
-                <button className="pill-btn paybar-btn" disabled={busy || (offer.price > 0 && !pay.method)} onClick={checkout}>
-                  {offer.price > 0 ? 'Оплатить' : 'Получить'}
+                <button className="pill-btn paybar-btn" disabled={busy || (total > 0 && !pay.method)} onClick={checkout}>
+                  {total > 0 ? 'Оплатить' : 'Получить'}
                 </button>
               </div>
             </div>

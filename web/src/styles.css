@@ -998,3 +998,6 @@ button.am-item { background: none; border: 1px solid transparent; color: var(--t
 .banner-order { display: grid; gap: 2px; flex: none; }
 .banner-order .icon-btn { width: 28px; height: 22px; }
 .banner-row .toggle { flex: none; }
+
+/* ---- device slider on the buy page ---- */
+.dev-slider { width: 100%; height: 32px; accent-color: var(--accent); cursor: pointer; touch-action: pan-y; }
