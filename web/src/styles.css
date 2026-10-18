@@ -1262,3 +1262,40 @@ button.am-item { background: none; border: 1px solid transparent; color: var(--t
   .t.stack-sm td.sub-cell { grid-column: 1 / -1; }
   .sub-state { white-space: nowrap; }
 }
+
+/* ---- plan cards (reference 48): accent hairline on top, price grid by period, specs, default action at the bottom ---- */
+.plan-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 14px; align-items: stretch; }
+.plan-card { position: relative; display: flex; flex-direction: column; gap: 14px; padding: 14px 16px 16px; border-radius: 16px; background: var(--panel); border: 1px solid var(--hair); overflow: hidden; transition: border-color .15s ease; }
+.plan-card::before { content: ''; position: absolute; inset: 0 0 auto; height: 2px; background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 80%, transparent), color-mix(in srgb, var(--ok) 55%, transparent)); }
+.plan-card:hover { border-color: var(--line-strong); }
+.plan-card.off { opacity: .55; }
+.plan-card.off::before { background: var(--line-strong); }
+.plan-card-head { display: flex; align-items: center; gap: 6px; }
+.plan-order { display: grid; gap: 0; margin-left: -6px; }
+.plan-order .tool-btn { width: 26px; height: 20px; border-radius: 6px; }
+.plan-order .tool-btn svg { width: 15px; height: 15px; }
+.plan-card-name { flex: 1; min-width: 0; font-weight: 800; font-size: 1.02rem; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plan-card-name:hover { color: var(--accent); text-decoration: none; }
+.plan-card-tools { display: flex; gap: 2px; }
+.tool-btn.danger:hover:not(:disabled) { color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent); }
+a.tool-btn { text-decoration: none; }
+.plan-flags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: -4px; }
+.plan-prices { display: grid; grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); gap: 6px; }
+.plan-price .v { white-space: nowrap; }
+.plan-price { display: grid; gap: 2px; padding: 9px 10px; border-radius: 12px; background: color-mix(in srgb, var(--text) 4%, transparent); }
+.plan-price.best { background: color-mix(in srgb, var(--accent) 12%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent); }
+.plan-price .k { font-size: .72rem; color: var(--muted); }
+.plan-price .v { font-size: .98rem; font-weight: 800; }
+.plan-specs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 0; padding-top: 12px; border-top: 1px solid var(--hair); }
+.plan-specs div { min-width: 0; }
+.plan-specs dt { font-size: .7rem; color: var(--muted); }
+.plan-specs dd { margin: 2px 0 0; font-size: .86rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plan-default { margin-top: auto; height: 36px; border-radius: 10px; border: 0; font: inherit; font-size: .84rem; font-weight: 700; cursor: pointer;
+  color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); transition: background .15s ease; }
+.plan-default:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 20%, transparent); }
+
+/* ---- tactile feedback: controls answer the press, quickly and without bounce ---- */
+.admin .btn, .admin .tool-btn, .admin .icon-btn, .plan-default, .send-btn, .tk-row, .feed-link {
+  transition: transform .12s cubic-bezier(.2, .8, .2, 1), background-color .15s ease, border-color .15s ease, color .15s ease; }
+.admin .btn:not(:disabled):active, .admin .tool-btn:not(:disabled):active, .admin .icon-btn:not(:disabled):active, .plan-default:not(:disabled):active { transform: scale(.96); }
+.tk-row:active, .feed-link:active { transform: scale(.995); }
