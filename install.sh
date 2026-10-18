@@ -384,6 +384,61 @@ for i in $(seq 1 60); do
 	if [ "$i" = 60 ]; then echo; docker compose logs --tail 40 shop; die "Бот не запустился — выше последние строки лога"; fi
 done
 
+# ---------------------------------------------------------------- защита сервера
+# Один раз: firewall (открыты только SSH, 80, 443 и то, что админ назовёт), fail2ban от подбора пароля SSH,
+# автоматические обновления безопасности. Настройки SSH не трогаем — так нельзя потерять доступ к серверу.
+HARDEN_MARK=/etc/bshop-hardened
+if [ ! -f "$HARDEN_MARK" ]; then
+	step "Защита сервера"
+	say "Firewall пропустит только SSH, 80 и 443; fail2ban заблокирует подбор пароля SSH;"
+	say "обновления безопасности Ubuntu будут ставиться сами."
+	if yes_no "Включить защиту сервера?" y; then
+		wait_apt
+		"${APT[@]}" install -y -qq ufw fail2ban unattended-upgrades >/dev/null
+		# Порты SSH: из настроек sshd и тот, через который вы подключены сейчас.
+		ssh_ports="$(sshd -T 2>/dev/null | awk '$1=="port"{print $2}' | sort -u | tr '\n' ' ' || true)"
+		[ -n "${SSH_CONNECTION:-}" ] && ssh_ports="$ssh_ports $(echo "$SSH_CONNECTION" | awk '{print $4}')"
+		ssh_ports="$(echo "${ssh_ports:-22}" | tr ' ' '\n' | grep -E '^[0-9]+$' | sort -un | tr '\n' ' ' || true)"
+		# Другие службы, которые сейчас слушают снаружи (не Docker — его порты firewall не закрывает).
+		others="$(ss -ltnH 2>/dev/null | awk '{print $4}' | grep -vE '^(127\.|\[::1\]|\[::ffff:127)' | sed 's/.*://' | grep -E '^[0-9]+$' | sort -un |
+			grep -vxE "$(echo "$ssh_ports 80 443" | tr ' ' '\n' | grep . | paste -sd'|' -)" | while read -r p; do
+				ss -ltnpH "sport = :$p" 2>/dev/null | grep -q docker-proxy || echo "$p"
+			done | tr '\n' ' ' || true)"
+		extra=""
+		if [ -n "${others// /}" ]; then
+			warn "Сейчас снаружи слушают ещё порты: $others"
+			ask extra "Какие из них оставить открытыми (через пробел, пусто — закрыть все)" "$others"
+		fi
+		ufw --force reset >/dev/null
+		ufw default deny incoming >/dev/null
+		ufw default allow outgoing >/dev/null
+		for p in $ssh_ports; do ufw allow "$p/tcp" comment 'SSH' >/dev/null; done
+		ufw allow 80/tcp comment 'HTTP' >/dev/null
+		ufw allow 443/tcp comment 'HTTPS' >/dev/null
+		ufw allow 443/udp comment 'HTTP/3' >/dev/null
+		for p in $extra; do [[ "$p" =~ ^[0-9]+$ ]] && ufw allow "$p/tcp" >/dev/null; done
+		ufw --force enable >/dev/null
+		ok "Firewall: открыты SSH (${ssh_ports% }), 80, 443${extra:+, $extra}"
+		cat >/etc/fail2ban/jail.d/bshop.local <<'JAIL'
+[sshd]
+enabled = true
+backend = systemd
+maxretry = 5
+findtime = 10m
+bantime = 1h
+JAIL
+		systemctl enable --now fail2ban >/dev/null 2>&1 && systemctl restart fail2ban >/dev/null 2>&1 && ok "fail2ban: 5 неверных входов по SSH — бан на час" ||
+			warn "fail2ban не запустился — проверьте: systemctl status fail2ban"
+		printf 'APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgrade "1";\n' >/etc/apt/apt.conf.d/20auto-upgrades
+		systemctl enable --now unattended-upgrades >/dev/null 2>&1 || true
+		ok "Обновления безопасности ставятся автоматически"
+		date +%F >"$HARDEN_MARK"
+	else
+		echo skipped >"$HARDEN_MARK"
+		say "Пропущено. Включить позже: rm $HARDEN_MARK и запустите установку ещё раз."
+	fi
+fi
+
 # ---------------------------------------------------------------- команда bshop и резервные копии
 ln -sf "$DIR/scripts/bshop.sh" /usr/local/bin/bshop
 chmod +x "$DIR/scripts/bshop.sh"
@@ -420,4 +475,5 @@ ${B}Что сделать дальше (в админке):${N}
 ${B}Управление:${N}  bshop status | logs | restart | update | backup | restore | env
 
   Сохраните себе SECRET_KEY из $DIR/.env — без него не расшифровать ключи в базе.
+  Копии вне сервера: Безопасность → Резервные копии — зашифрованный файл каждую ночь вам в Telegram.
 EOF
