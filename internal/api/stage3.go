@@ -160,6 +160,16 @@ func (s *Server) stage3Routes(mux *http.ServeMux) {
 	}) (any, error) {
 		return nil, store.ReorderBanners(r.Context(), s.svc.Store.Pool, in.IDs)
 	}))))
+	mux.HandleFunc("PUT /api/subscriptions/{id}/traffic/auto", s.authed(s.handle(withBody(func(r *http.Request, in struct {
+		On      bool `json:"on"`
+		Package int  `json:"package"`
+	}) (any, error) {
+		id, err := pathID(r, "id")
+		if err != nil {
+			return nil, err
+		}
+		return s.svc.SetAutoTopup(r.Context(), customer(r), id, in.On, in.Package)
+	}))))
 	mux.HandleFunc("GET /api/locations", s.authed(s.handle(func(r *http.Request) (any, error) {
 		return s.svc.Locations(r.Context())
 	})))

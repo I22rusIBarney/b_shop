@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 
 	"bshop/internal/remnawave"
 	"bshop/internal/store"
+	"bshop/internal/yookassa"
 )
 
 // TrafficOffer is what the customer can do with the traffic of a limited subscription.
@@ -24,6 +26,12 @@ type TrafficOffer struct {
 	ExtraBytes  int64                  `json:"extra_bytes"`
 	UsedBytes   int64                  `json:"used_bytes"`
 	Unavailable string                 `json:"unavailable,omitempty"`
+	// Auto top-up: buy the chosen package with a saved card when AutoTopupAt % of the limit is used.
+	AutoAvailable    bool                       `json:"auto_available"` // packages exist and automatic charges are allowed
+	AutoTopup        bool                       `json:"auto_topup"`
+	AutoTopupPackage int                        `json:"auto_topup_package"`
+	AutoTopupAt      int                        `json:"auto_topup_at"`
+	SavedMethods     []store.PaymentMethod      `json:"saved_methods"`
 	// Until is when traffic bought now (or already bought) ends: the next reset of the plan.
 	Until      time.Time  `json:"until"`
 	ExtraUntil *time.Time `json:"extra_until,omitempty"`
@@ -61,6 +69,16 @@ func (s *Service) TrafficOptions(ctx context.Context, c *store.Customer, subID i
 		Until: nextTrafficReset(plan.TrafficResetStrategy, time.Now(), sub.CreatedAt, sub.ExpiresAt)}
 	if o.ExtraBytes > 0 {
 		o.ExtraUntil = sub.ExtraTrafficUntil
+	}
+	o.AutoAvailable = o.Topup && s.set().Payments.AutopayEnabled
+	o.AutoTopup, o.AutoTopupPackage, o.AutoTopupAt = sub.AutoTopup && o.AutoAvailable, sub.AutoTopupPackage, autoTopupAt
+	if o.Topup {
+		if o.SavedMethods, err = store.ListPaymentMethods(ctx, s.Store.Pool, c.ID); err != nil {
+			return nil, err
+		}
+	}
+	if o.SavedMethods == nil {
+		o.SavedMethods = []store.PaymentMethod{}
 	}
 	if !o.Topup {
 		o.Packages = []store.TrafficPackage{}
@@ -229,4 +247,119 @@ func (s *Service) endTopup(ctx context.Context, id int64) error {
 		sb.ExtraTrafficUntil = nil
 		return store.UpdateSubscription(ctx, tx, sb)
 	})
+}
+
+// autoTopupAt is the used-traffic percent at which the chosen package is bought automatically.
+const autoTopupAt = 90
+
+// SetAutoTopup turns automatic top-up on (needs a saved payment method) or off.
+func (s *Service) SetAutoTopup(ctx context.Context, c *store.Customer, subID int64, on bool, pkg int) (*TrafficOffer, error) {
+	sub, plan, err := s.trafficSub(ctx, c, subID)
+	if err != nil {
+		return nil, err
+	}
+	if !on {
+		if err := store.SetAutoTopup(ctx, s.Store.Pool, sub.ID, false, sub.AutoTopupPackage, nil); err != nil {
+			return nil, err
+		}
+		return s.TrafficOptions(ctx, c, subID)
+	}
+	if !plan.TrafficTopupEnabled || pkg < 0 || pkg >= len(plan.TrafficPackages) {
+		return nil, userErr("докупка трафика для этого тарифа недоступна")
+	}
+	if !s.set().Payments.AutopayEnabled {
+		return nil, userErr("автоматические списания отключены")
+	}
+	methods, err := store.ListPaymentMethods(ctx, s.Store.Pool, c.ID)
+	if err != nil {
+		return nil, err
+	}
+	if len(methods) == 0 {
+		return nil, userErr("нет сохранённого способа оплаты — оплатите подписку с включённым автопродлением")
+	}
+	mid := methods[0].ID
+	if sub.AutopayMethodID != nil {
+		mid = *sub.AutopayMethodID
+	}
+	if err := store.SetAutoTopup(ctx, s.Store.Pool, sub.ID, true, pkg, &mid); err != nil {
+		return nil, err
+	}
+	_ = store.AddEvent(ctx, s.Store.Pool, c.ID, "auto_topup_on", map[string]any{"subscription": sub.ID, "package": pkg}, nil)
+	return s.TrafficOptions(ctx, c, subID)
+}
+
+// RunAutoTopups buys the chosen package for subscriptions that used autoTopupAt % of their traffic.
+func (s *Service) RunAutoTopups(ctx context.Context) {
+	if !s.set().Payments.AutopayEnabled {
+		return
+	}
+	subs, err := store.AutoTopupCandidates(ctx, s.Store.Pool)
+	if err != nil {
+		s.Log.Warn("auto topup", "err", err)
+		return
+	}
+	for i := range subs {
+		if err := s.autoTopup(ctx, &subs[i]); err != nil {
+			s.Log.Warn("auto topup", "sub", subs[i].ID, "err", err)
+		}
+	}
+}
+
+func (s *Service) autoTopup(ctx context.Context, sub *store.Subscription) error {
+	if sub.PlanID == nil {
+		return nil
+	}
+	plan, err := store.GetPlan(ctx, s.Store.Pool, *sub.PlanID)
+	if err != nil {
+		return err
+	}
+	c, err := store.GetCustomer(ctx, s.Store.Pool, sub.CustomerID)
+	if err != nil {
+		return err
+	}
+	if plan.TrafficLimitGB <= 0 || !plan.TrafficTopupEnabled || sub.AutoTopupPackage >= len(plan.TrafficPackages) {
+		return store.SetAutoTopup(ctx, s.Store.Pool, sub.ID, false, 0, nil)
+	}
+	u, err := s.Panel.GetUser(ctx, *sub.RWUserID)
+	if err != nil {
+		return err
+	}
+	if u.TrafficLimitBytes <= 0 || u.UserTraffic.UsedTrafficBytes*100 < u.TrafficLimitBytes*autoTopupAt {
+		return nil
+	}
+	if pending, err := store.HasPendingPayment(ctx, s.Store.Pool, sub.ID, "traffic"); err != nil || pending {
+		return err
+	}
+	if ok, err := store.TryAutoTopup(ctx, s.Store.Pool, sub.ID); err != nil || !ok {
+		return err
+	}
+	method, err := store.GetPaymentMethod(ctx, s.Store.Pool, *sub.AutoTopupMethodID)
+	if err != nil || method.CustomerID != c.ID {
+		return store.SetAutoTopup(ctx, s.Store.Pool, sub.ID, false, 0, nil)
+	}
+	gw, err := s.gateway()
+	if err != nil {
+		return err
+	}
+	pk := plan.TrafficPackages[sub.AutoTopupPackage]
+	p := &store.Payment{CustomerID: c.ID, SubscriptionID: &sub.ID, PlanID: &plan.ID, Operation: "traffic", Title: plan.Name,
+		TrafficGB: pk.GB, Amount: pk.Price, BaseAmount: pk.Price, Provider: "yookassa", Method: method.Provider, Autopay: true}
+	if err := store.InsertPayment(ctx, s.Store.Pool, p); err != nil {
+		return err
+	}
+	yp, err := gw.CreatePayment(ctx, p.ID.String(), yookassa.CreatePayment{
+		Amount: yookassa.Kopecks(p.Amount), Capture: true,
+		Description:     fmt.Sprintf("Доп. трафик %d ГБ — %s", pk.GB, plan.Name),
+		Metadata:        map[string]string{"payment_id": p.ID.String(), "customer_id": strconv.FormatInt(c.ID, 10), "autopay": "1"},
+		PaymentMethodID: method.ProviderRef,
+	})
+	if err != nil {
+		_ = store.MarkCanceled(ctx, s.Store.Pool, p.ID, "provider_error")
+		s.autopayFailed(ctx, p, err.Error())
+		return err
+	}
+	if err := store.SetPaymentProvider(ctx, s.Store.Pool, p.ID, yp.ID, ""); err != nil {
+		return err
+	}
+	return s.syncProviderPayment(ctx, yp)
 }

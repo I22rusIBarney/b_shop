@@ -26,6 +26,10 @@ type Subscription struct {
 	// ExtraTrafficBytes is bought traffic on top of the plan limit for the current period.
 	ExtraTrafficBytes int64      `db:"extra_traffic_bytes" json:"extra_traffic_bytes"`
 	ExtraTrafficUntil *time.Time `db:"extra_traffic_until" json:"extra_traffic_until"`
+	AutoTopup         bool       `db:"auto_topup" json:"auto_topup"`
+	AutoTopupPackage  int        `db:"auto_topup_package" json:"auto_topup_package"`
+	AutoTopupMethodID *int64     `db:"auto_topup_method_id" json:"-"`
+	AutoTopupLastTry  *time.Time `db:"auto_topup_last_try" json:"-"`
 	Status            string     `db:"status" json:"status"`
 	CreatedAt         time.Time  `db:"created_at" json:"created_at"`
 	UpdatedAt         time.Time  `db:"updated_at" json:"updated_at"`
@@ -143,4 +147,32 @@ func (s *Subscription) ActiveExtraTraffic(t time.Time) int64 {
 func SubsWithEndedTopup(ctx context.Context, db DB) ([]Subscription, error) {
 	return many[Subscription](db.Query(ctx, `SELECT * FROM subscriptions
 		WHERE extra_traffic_bytes > 0 AND extra_traffic_until IS NOT NULL AND extra_traffic_until <= now() LIMIT 500`))
+}
+
+func SetAutoTopup(ctx context.Context, db DB, subID int64, on bool, pkg int, methodID *int64) error {
+	_, err := db.Exec(ctx, `UPDATE subscriptions SET auto_topup=$2, auto_topup_package=$3, auto_topup_method_id=$4 WHERE id=$1`,
+		subID, on, pkg, methodID)
+	return err
+}
+
+// AutoTopupCandidates lists active subscriptions with auto top-up on that were not tried in the last 30 minutes.
+func AutoTopupCandidates(ctx context.Context, db DB) ([]Subscription, error) {
+	return many[Subscription](db.Query(ctx, `SELECT * FROM subscriptions WHERE auto_topup AND auto_topup_method_id IS NOT NULL
+		AND status='active' AND expires_at > now() AND rw_user_id IS NOT NULL
+		AND (auto_topup_last_try IS NULL OR auto_topup_last_try < now() - interval '30 minutes') LIMIT 500`))
+}
+
+// TryAutoTopup marks an attempt; false if another worker took it within the last 30 minutes.
+func TryAutoTopup(ctx context.Context, db DB, subID int64) (bool, error) {
+	tag, err := db.Exec(ctx, `UPDATE subscriptions SET auto_topup_last_try=now() WHERE id=$1
+		AND (auto_topup_last_try IS NULL OR auto_topup_last_try < now() - interval '30 minutes')`, subID)
+	return err == nil && tag.RowsAffected() == 1, err
+}
+
+// HasPendingPayment reports an unfinished payment of this operation for the subscription.
+func HasPendingPayment(ctx context.Context, db DB, subID int64, op string) (bool, error) {
+	var ok bool
+	err := db.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM payments WHERE subscription_id=$1 AND operation=$2 AND status='pending'
+		AND created_at > now() - interval '1 day')`, subID, op).Scan(&ok)
+	return ok, err
 }

@@ -270,6 +270,19 @@ func (s *Service) autopayFailed(ctx context.Context, p *store.Payment, reason st
 	if human == "" {
 		human = "платёж отклонён"
 	}
+	if p.Operation == "traffic" {
+		// A failed automatic top-up switches itself off so the card is not retried every half hour.
+		if p.SubscriptionID != nil {
+			_ = store.SetAutoTopup(ctx, s.Store.Pool, *p.SubscriptionID, false, 0, nil)
+		}
+		s.Notify.Customer(ctx, c, Message{
+			Text: fmt.Sprintf("⚠️ Не удалось автоматически докупить трафик для подписки <b>%s</b> (%s, %s). Автодокупка отключена — купите пакет вручную в кабинете.",
+				escape(p.Title), rub(p.Amount), human),
+			ButtonText: "Открыть кабинет", ButtonURL: s.Cfg.PublicURL + "/", EmailSubject: "Не удалось докупить трафик",
+		})
+		_ = store.AddEvent(ctx, s.Store.Pool, c.ID, "auto_topup_failed", map[string]any{"payment": p.ID, "reason": reason}, nil)
+		return
+	}
 	if reason == "permission_revoked" && p.SubscriptionID != nil {
 		_ = store.SetAutopay(ctx, s.Store.Pool, *p.SubscriptionID, false, nil, nil)
 	}

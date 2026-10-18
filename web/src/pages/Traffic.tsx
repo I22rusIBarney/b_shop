@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { get, post, type BuyResult, type Subscription, type TrafficOffer } from '../lib/api'
+import { get, post, put, type BuyResult, type Subscription, type TrafficOffer } from '../lib/api'
 import { bytes, date, rub } from '../lib/format'
 import { Renew, Trend } from '../ui/icons'
-import { ErrorBox, Sheet, Spinner, useAction, useLoad } from '../ui/kit'
+import { ErrorBox, Sheet, Spinner, Toggle, useAction, useLoad } from '../ui/kit'
 import { MethodPicker, followPayment, usePayMethod } from '../ui/pay'
 
 /** Buy extra traffic or reset the used traffic of a limited subscription (options come from the plan). */
@@ -27,6 +27,12 @@ export function TrafficSheet({ sub, open, onClose }: { sub: Subscription; open: 
       onClose()
       followPayment(r, nav)
     }, o?.reset_price ? undefined : 'Трафик обнулён')
+
+  const setAuto = (on: boolean) =>
+    run(async () => {
+      await put(`/api/subscriptions/${sub.id}/traffic/auto`, { on, package: pkg })
+      await offer.reload()
+    }, on ? 'Автодокупка включена' : 'Автодокупка выключена')
 
   const needsPay = !!o && ((o.topup && o.packages.length > 0) || (o.can_reset && o.reset_price > 0))
 
@@ -80,6 +86,24 @@ export function TrafficSheet({ sub, open, onClose }: { sub: Subscription; open: 
             <button className="btn block" disabled={busy || !pay.method} onClick={buy}>
               Оплатить {o.packages[pkg] ? rub(o.packages[pkg].price) : ''}
             </button>
+          )}
+
+          {o.auto_available && (
+            <div className="card stack">
+              <Toggle
+                checked={o.auto_topup}
+                disabled={busy || (!o.auto_topup && o.saved_methods.length === 0)}
+                onChange={setAuto}
+                label="Докупать автоматически"
+                hint={
+                  o.auto_topup
+                    ? `Когда израсходовано ${o.auto_topup_at}%, спишем ${rub(o.packages[o.auto_topup_package]?.price || 0)} с сохранённой карты и добавим +${o.packages[o.auto_topup_package]?.gb || 0} ГБ`
+                    : o.saved_methods.length
+                      ? `Выбранный выше пакет купится сам, когда израсходовано ${o.auto_topup_at}% — с карты ${o.saved_methods[0].title}`
+                      : 'Нужна сохранённая карта: оплатите подписку с включённым автопродлением'
+                }
+              />
+            </div>
           )}
 
           {o.reset && (

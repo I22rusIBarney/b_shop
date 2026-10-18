@@ -699,6 +699,11 @@ export interface TrafficOffer {
   used_bytes: number
   until: string
   extra_until?: string
+  auto_available: boolean
+  auto_topup: boolean
+  auto_topup_package: number
+  auto_topup_at: number
+  saved_methods: { id: number; provider: string; title: string }[]
 }
 
 export interface Location {
