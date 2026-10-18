@@ -365,11 +365,14 @@ esac
 # ---------------------------------------------------------------- запуск
 step "Запуск"
 chmod 600 .env
-if docker compose pull -q shop 2>/dev/null; then
+# Готовый образ (≈15 МБ) вместо сборки на сервере (~2 ГБ, минуты). Собрать самому: BSHOP_BUILD=1 bash install.sh
+if [ "${BSHOP_BUILD:-}" = 1 ]; then
+	docker compose build shop
+elif err=$(docker compose pull -q shop 2>&1); then
 	ok "Образ скачан"
 else
-	warn "Готового образа нет — собираю на сервере (несколько минут, нужно ~2 ГБ памяти)"
-	docker compose build shop
+	die "Не удалось скачать образ: $err
+Проверьте интернет на сервере. Собрать образ на сервере (долго, ~2 ГБ): BSHOP_BUILD=1 bash install.sh"
 fi
 docker compose up -d --remove-orphans
 

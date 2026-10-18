@@ -38,7 +38,10 @@ stop)
 update)
 	"$0" backup --quiet || true
 	if [ -d .git ]; then git fetch -q origin && git reset -q --hard "origin/$(git rev-parse --abbrev-ref HEAD)"; ok "Код обновлён: $(git log -1 --format='%h %s')"; fi
-	if dc pull -q shop 2>/dev/null; then ok "Новый образ скачан"; else printf '%s! Образа нет — собираю на сервере%s\n' "$Y" "$N"; dc build shop; fi
+	# Только готовый образ (≈15 МБ). Сборка на сервере качает ~2 ГБ и идёт минуты — лишь по явной просьбе: BSHOP_BUILD=1 bshop update
+	if [ "${BSHOP_BUILD:-}" = 1 ]; then dc build shop
+	elif err=$(dc pull -q shop 2>&1); then ok "Новый образ скачан"
+	else printf '%s✗ Не удалось скачать образ:%s %s\nПроверьте интернет и что пакет на GitHub публичный. Собрать на сервере: BSHOP_BUILD=1 bshop update\n' "$R" "$N" "$err"; exit 1; fi
 	dc up -d --remove-orphans
 	wait_up
 	docker image prune -f >/dev/null 2>&1 || true
