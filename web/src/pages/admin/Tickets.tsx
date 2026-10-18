@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { get, patch, post, type AdminTicketView, type SupportTemplate, type TicketMessage, type TicketRow } from '../../lib/api'
 import { refreshBadges } from '../../lib/badges'
 import { date, relative, shortDate } from '../../lib/format'
-import { Avatar, Empty } from '../../ui/admin'
+import { Avatar, Empty, Switcher } from '../../ui/admin'
 import { Back, Bolt, Chat, ChevronDown, Copy } from '../../ui/icons'
 import { Composer, Messages, ticketStatus } from '../../ui/chat'
 import { ErrorBox, Spinner, Toggle, copy, useAction, useLoad, usePolling, useToast } from '../../ui/kit'
@@ -36,22 +36,22 @@ export function TicketList() {
           Шаблоны и база знаний
         </Link>
       </div>
-      <div className="chips">
-        {tabs.map(([id, label]) => (
-          <button key={id} className={status === id ? 'chip on' : 'chip'} onClick={() => (setStatus(id), setOffset(0))}>
-            {label}
-          </button>
-        ))}
+      <div className="filters toolbar">
+        <Switcher
+          label="Статус обращений"
+          options={tabs.map(([value, label]) => ({ value, label }))}
+          value={status}
+          onChange={(v) => (setStatus(v as typeof status), setOffset(0))}
+        />
+        <input
+          className="input grow"
+          type="search"
+          placeholder="Поиск: номер, тема, клиент, Telegram ID"
+          value={q}
+          onChange={(e) => (setQ(e.target.value), setOffset(0))}
+          aria-label="Поиск обращений"
+        />
       </div>
-      <input
-        className="input"
-        type="search"
-        placeholder="Поиск: номер, тема, клиент, Telegram ID"
-        value={q}
-        onChange={(e) => (setQ(e.target.value), setOffset(0))}
-        style={{ maxWidth: 420, marginBottom: 12 }}
-        aria-label="Поиск обращений"
-      />
       {data.error ? (
         <ErrorBox text={data.error} retry={data.reload} />
       ) : !data.data ? (

@@ -1500,3 +1500,101 @@ button.group-row:active, .group-row.pick:active { background: var(--fill); }
   transition: transform .16s var(--ease-out), background-color .15s ease; }
 .sub-actions .pill-btn:first-child { background: var(--accent); color: var(--accent-ink); }
 .sub-actions .pill-btn:not(:disabled):active { transform: scale(.97); }
+
+/* ---- Switcher: segmented control with a sliding thumb; collapses to a menu button when it would not fit ---- */
+.switcher { position: relative; min-width: 0; max-width: 100%; }
+.switcher { display: flex; }
+.stats-bar .switcher, .filters .switcher { flex: 0 1 auto; min-width: 0; }
+.filters .switcher.sw-quiet { flex: none; }
+.filters.toolbar .input.grow { flex: 1 1 220px; min-width: 0; }
+/* Statistics header: title + sections on top, period + step under them; on a phone sections and step share a row, period gets its own. */
+.stats-head { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "title sec" "per step"; gap: 14px 16px; align-items: center; }
+.stats-head > h1 { grid-area: title; }
+.stats-head .sw-sections { grid-area: sec; justify-content: flex-end; }
+.stats-head .sw-sections .sw-pop, .stats-head .sw-step .sw-pop { left: auto; right: 0; transform-origin: top right; }
+.stats-tools { display: contents; }
+.stats-head .sw-period { grid-area: per; }
+.stats-head .sw-step { grid-area: step; justify-self: end; }
+.stats-head .sw-step .sw-menu-btn { background: none; color: var(--label-2); }
+.stats-head .sw-step .sw-menu-btn:hover { background: var(--fill); color: var(--text); }
+@media (max-width: 760px) {
+  .stats-head { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "title title" "sec step" "per per"; gap: 10px 8px; }
+  .stats-head .sw-sections { justify-content: flex-start; }
+  .stats-head .sw-sections .sw-pop { left: 0; right: auto; transform-origin: top left; }
+  .stats-head .sw-sections .sw-menu-btn { width: 100%; justify-content: space-between; }
+  .stats-head .sw-period .sw-track { display: flex; width: 100%; }
+  .stats-head .sw-period .sw-opt { flex: 1; justify-content: center; padding: 0 6px; }
+  .stats-head .sw-step .sw-menu-btn { background: var(--fill); color: var(--text); }
+}
+.switcher.is-menu .sw-track { position: absolute; visibility: hidden; pointer-events: none; height: 0; overflow: hidden; }
+.sw-track { position: relative; display: inline-flex; align-items: center; gap: 2px; padding: 3px; border-radius: 12px; background: var(--fill); white-space: nowrap; }
+.sw-thumb { position: absolute; top: 3px; bottom: 3px; left: 0; border-radius: 9px; background: color-mix(in srgb, var(--text) 13%, var(--surface-solid));
+  box-shadow: 0 1px 2px rgba(0,0,0,.35), 0 0 0 .5px color-mix(in srgb, var(--text) 8%, transparent); transition: transform .32s var(--ease-out), width .32s var(--ease-out); }
+.sw-opt { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 13px; border: 0; border-radius: 9px; background: none;
+  color: var(--label-2); font: inherit; font-size: .84rem; font-weight: 600; cursor: pointer; transition: color .2s ease; }
+.sw-opt:hover { color: var(--text); }
+.sw-opt[aria-checked="true"] { color: var(--text); }
+.sw-count { min-width: 18px; height: 18px; padding: 0 5px; display: inline-grid; place-items: center; border-radius: 999px; font-size: .68rem; font-weight: 800; color: var(--accent-ink); background: var(--accent); }
+.sw-menu-btn { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px 0 14px; border: 0; border-radius: 12px; background: var(--fill);
+  color: var(--text); font: inherit; font-size: .88rem; font-weight: 600; cursor: pointer; transition: background-color .15s ease; max-width: 100%; }
+.sw-menu-btn span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sw-menu-btn:hover { background: var(--fill-2); }
+.sw-menu-btn svg { width: 15px; height: 15px; flex: none; color: var(--label-2); transition: transform .25s var(--ease-out); }
+.sw-menu-btn[aria-expanded="true"] svg { transform: rotate(180deg); }
+.sw-pop { position: absolute; z-index: 40; top: calc(100% + 6px); left: 0; min-width: 220px; max-width: min(320px, calc(100vw - 32px)); padding: 6px; border-radius: 14px;
+  background: color-mix(in srgb, var(--surface-solid) 88%, transparent); -webkit-backdrop-filter: blur(24px) saturate(1.4); backdrop-filter: blur(24px) saturate(1.4);
+  box-shadow: 0 0 0 .5px color-mix(in srgb, var(--text) 12%, transparent), 0 18px 48px rgba(0,0,0,.5); transform-origin: top left; animation: pop-menu .22s var(--ease-out); }
+@keyframes pop-menu { from { opacity: 0; transform: scale(.94) translateY(-4px); } to { opacity: 1; transform: none; } }
+.sw-pop-item { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 40px; padding: 0 10px 0 12px; border: 0; border-radius: 9px; background: none;
+  color: var(--text); font: inherit; font-size: .9rem; text-align: left; cursor: pointer; }
+.sw-pop-item:hover, .sw-pop-item:focus-visible { background: var(--fill-2); outline: none; }
+.sw-pop-item .grow { flex: 1; }
+.sw-pop-item svg { width: 16px; height: 16px; color: var(--accent); stroke-width: 2.6; }
+@media (prefers-reduced-motion: reduce) { .sw-thumb, .sw-pop { transition: none; animation: none; } }
+
+/* ---- charts: headline + view toggle on top, glass tooltip, kpi strip that never leaves a lone tile ---- */
+.chart-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; min-height: 30px; }
+.chart-head .legend { padding-top: 6px; }
+.chart-total { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.chart-total b { font-size: 1.6rem; font-weight: 700; letter-spacing: -.02em; line-height: 1.1; }
+.chart-total span { font-size: .8rem; color: var(--label-2); }
+.chart-view { flex: none; width: 30px; height: 30px; display: grid; place-items: center; border: 0; border-radius: 9px; background: none; color: var(--label-2); cursor: pointer; transition: background-color .15s ease, color .15s ease; }
+.chart-view:hover { background: var(--fill); color: var(--text); }
+.chart-view svg { width: 17px; height: 17px; }
+.chart .grid { stroke: color-mix(in srgb, var(--text) 9%, transparent); }
+.chart .crosshair { stroke: color-mix(in srgb, var(--text) 28%, transparent); stroke-dasharray: none; }
+.chart .axis { fill: var(--label-2); font-variant-numeric: tabular-nums; }
+.chart path, .chart circle { transition: opacity .18s ease; }
+.area-line { stroke-dasharray: 2400; stroke-dashoffset: 2400; animation: draw-line 1.1s var(--ease-out) .05s forwards; }
+.area-fill { opacity: 0; animation: fade-in .6s ease .45s forwards; }
+@keyframes draw-line { to { stroke-dashoffset: 0; } }
+@keyframes fade-in { to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .area-line { animation: none; stroke-dasharray: none; stroke-dashoffset: 0; } .area-fill { animation: none; opacity: 1; } }
+.tip { width: 176px; padding: 10px 12px; border: 0; border-radius: 12px; gap: 5px;
+  background: color-mix(in srgb, var(--surface-solid) 86%, transparent); -webkit-backdrop-filter: blur(20px) saturate(1.4); backdrop-filter: blur(20px) saturate(1.4);
+  box-shadow: 0 0 0 .5px color-mix(in srgb, var(--text) 14%, transparent), 0 14px 36px rgba(0,0,0,.45); }
+.tip > b { font-size: .8rem; color: var(--label-2); font-weight: 600; }
+.tip div b { color: var(--text); }
+.kpis { display: flex; flex-wrap: wrap; gap: 12px; }
+.kpis > .kpi { flex: 1 1 calc((100% - (var(--cols, 4) - 1) * 12px) / var(--cols, 4)); }
+.kpi { gap: 6px; padding: 14px 16px 15px; }
+.kpi-label { color: var(--label-2); font-size: .8rem; font-weight: 500; }
+.kpi b { font-size: 1.5rem; letter-spacing: -.02em; }
+.stats-note { margin: -4px 0 14px; }
+@media (max-width: 720px) {
+  .kpis { gap: 10px; }
+  .kpis > .kpi { flex-basis: calc((100% - (var(--cols, 2) - 1) * 10px) / var(--cols, 2)); padding: 12px 14px 13px; border-radius: 16px; gap: 3px; }
+  .kpi b { font-size: 1.25rem; }
+  .kpi-label, .kpi-sub { font-size: .76rem; }
+  .stats-head:not(:has(.sw-step)) .sw-sections { grid-column: 1 / -1; }
+}
+/* Desktop: only the title/section row clears the ☰ and sign-out buttons; the period row starts at the content edge. */
+@media (min-width: 900px) {
+  .admin-bar + .admin-head.stats-head { padding-left: 0; padding-right: 0; }
+  .admin-bar + .stats-head > h1 { padding-left: 34px; }
+  .admin-bar + .stats-head > .sw-sections { padding-right: 40px; }
+}
+.filters.toolbar .sw-track { padding: 4px; border-radius: 12px; }
+.filters.toolbar .sw-thumb { top: 4px; bottom: 4px; }
+.filters.toolbar .sw-opt { height: 32px; }
+.filters.toolbar .sw-menu-btn { height: 40px; }

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { del, get, post, put } from '../../lib/api'
+import { Switcher } from '../../ui/admin'
 import { Pencil, Plus, Trash } from '../../ui/icons'
 import { ErrorBox, Field, Sheet, Spinner, Toggle, useAction, useLoad, useToast } from '../../ui/kit'
 
@@ -38,16 +39,12 @@ export default function Knowledge() {
   return (
     <div className="stack lg" style={{ maxWidth: 900 }}>
       <h1>Шаблоны и база знаний</h1>
-      <div className="chips">
-        {(Object.keys(meta) as Kind[]).map((k) => (
-          <button key={k} className={k === kind ? 'chip on' : 'chip'} onClick={() => setKind(k)}>
-            {meta[k].title}
-          </button>
-        ))}
-        <button className={kind === 'proposals' ? 'chip on' : 'chip'} onClick={() => setKind('proposals')}>
-          Предложения ИИ
-        </button>
-      </div>
+      <Switcher
+        label="Раздел"
+        options={[...(Object.keys(meta) as Kind[]).map((k) => ({ value: k, label: meta[k].title })), { value: 'proposals', label: 'Предложения ИИ' }]}
+        value={kind}
+        onChange={(v) => setKind(v as Kind | 'proposals')}
+      />
       {kind === 'proposals' ? <Proposals /> : <Editor key={kind} kind={kind} />}
     </div>
   )

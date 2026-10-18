@@ -1,8 +1,10 @@
-import { useEffect, useState, type ReactNode } from 'react'
-import { NavLink, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { get, post } from '../../lib/api'
 import { relative, rubRound, shortDate } from '../../lib/format'
-import { HBars, Kpi, TimeChart, bucketLabel, type Point } from '../../ui/charts'
+import { HBars, Kpi, Kpis, TimeChart, bucketLabel, type Point } from '../../ui/charts'
+import { Switcher, type SwitchOption } from '../../ui/admin'
 import { ErrorBox, Spinner, useAction, useLoad, pressable } from '../../ui/kit'
 import { GeoSettings, GeoView, type GeoReport } from './Geo'
 
@@ -21,29 +23,29 @@ interface Range {
   Period: string
 }
 
-const tabs = [
-  ['overview', 'Обзор'],
-  ['economics', 'Юнит-экономика'],
-  ['payments', 'Платежи'],
-  ['referrals', 'Рефералы'],
-  ['support', 'Поддержка'],
-  ['analytics', 'Аналитика'],
-  ['geo', 'География'],
-] as const
-
-const periods = [
-  ['7d', '7 дней'],
-  ['1m', 'Месяц'],
-  ['3m', '3 месяца'],
-  ['6m', '6 месяцев'],
-  ['12m', 'Год'],
-  ['all', 'Всё время'],
+const tabs: SwitchOption[] = [
+  { value: 'overview', label: 'Обзор' },
+  { value: 'economics', label: 'Юнит-экономика', short: 'Экономика' },
+  { value: 'payments', label: 'Платежи' },
+  { value: 'referrals', label: 'Рефералы' },
+  { value: 'support', label: 'Поддержка' },
+  { value: 'analytics', label: 'Аналитика' },
+  { value: 'geo', label: 'География' },
 ]
-const groups = [
-  ['', 'Авто'],
-  ['day', 'Дни'],
-  ['week', 'Недели'],
-  ['month', 'Месяцы'],
+
+const periods: SwitchOption[] = [
+  { value: '7d', label: '7 дней', short: '7 дн' },
+  { value: '1m', label: 'Месяц', short: 'Месяц' },
+  { value: '3m', label: '3 месяца', short: '3 мес' },
+  { value: '6m', label: '6 месяцев', short: '6 мес' },
+  { value: '12m', label: 'Год', short: 'Год' },
+  { value: 'all', label: 'Всё время', short: 'Всё' },
+]
+const groups: SwitchOption[] = [
+  { value: '', label: 'Шаг: авто' },
+  { value: 'day', label: 'По дням' },
+  { value: 'week', label: 'По неделям' },
+  { value: 'month', label: 'По месяцам' },
 ]
 
 const n = (v: number) => v.toLocaleString('ru-RU')
@@ -62,7 +64,15 @@ function Card({ title, wide, children, action }: { title: ReactNode; wide?: bool
   )
 }
 
-function usePeriod(def = '1m') {
+// The period controls live in the page header next to the section switcher; each tab renders them there through a portal.
+const ToolsSlot = createContext<HTMLElement | null>(null)
+
+function HeaderTools({ children }: { children: ReactNode }) {
+  const slot = useContext(ToolsSlot)
+  return slot ? createPortal(children, slot) : null
+}
+
+function usePeriod(def = '1m', withGroup = true) {
   const [params, setParams] = useSearchParams()
   const period = params.get('period') || def
   const group = params.get('group') || ''
@@ -73,22 +83,10 @@ function usePeriod(def = '1m') {
     setParams(p, { replace: true })
   }
   const bar = (
-    <div className="stats-bar">
-      <div className="chips">
-        {periods.map(([k, l]) => (
-          <button key={k} className={period === k ? 'chip on' : 'chip'} onClick={() => set('period', k)}>
-            {l}
-          </button>
-        ))}
-      </div>
-      <select className="input" style={{ width: 'auto', minHeight: 38 }} value={group} onChange={(e) => set('group', e.target.value)} aria-label="Группировка">
-        {groups.map(([k, l]) => (
-          <option key={k} value={k}>
-            {l}
-          </option>
-        ))}
-      </select>
-    </div>
+    <HeaderTools>
+      <Switcher label="Период" options={periods} value={period} onChange={(v) => set('period', v)} className="sw-period" />
+      {withGroup && <Switcher label="Группировка" options={groups} value={group} onChange={(v) => set('group', v)} menu className="sw-step" />}
+    </HeaderTools>
   )
   return { period, group, qs: `period=${period}&group=${group}`, bar, set }
 }
@@ -106,17 +104,14 @@ function Loaded<T>({ load, children }: { load: { data?: T | null; error?: string
 
 export default function Stats() {
   const { tab = 'overview' } = useParams()
+  const go = useNavigate()
+  const [slot, setSlot] = useState<HTMLElement | null>(null)
   return (
-    <>
-      <div className="admin-head">
+    <ToolsSlot.Provider value={slot}>
+      <div className="admin-head stats-head">
         <h1>Статистика</h1>
-      </div>
-      <div className="chips" role="tablist">
-        {tabs.map(([k, l]) => (
-          <NavLink key={k} to={`/admin/stats/${k}`} className={({ isActive }) => (isActive ? 'chip on' : 'chip')}>
-            {l}
-          </NavLink>
-        ))}
+        <Switcher label="Раздел статистики" options={tabs} value={tab} onChange={(v) => go(`/admin/stats/${v}`)} className="sw-sections" />
+        <div className="stats-tools" ref={setSlot} />
       </div>
       {tab === 'overview' && <Overview />}
       {tab === 'economics' && <Economics />}
@@ -125,7 +120,7 @@ export default function Stats() {
       {tab === 'support' && <Support />}
       {tab === 'analytics' && <Analytics />}
       {tab === 'geo' && <GeoTab />}
-    </>
+    </ToolsSlot.Provider>
   )
 }
 
@@ -168,7 +163,7 @@ function Overview() {
           const segTotal = o.segments.reduce((a, s) => a + s.all, 0)
           return (
             <>
-              <div className="kpis">
+              <Kpis>
                 <Kpi label="Доход сегодня" value={rubRound(o.revenue.Today.cur)} delta={o.revenue.Today} hint="к вчера" />
                 <Kpi label="За 7 дней" value={rubRound(o.revenue.Week.cur)} delta={o.revenue.Week} hint="к прошлым 7 дням" />
                 <Kpi label="С начала месяца" value={rubRound(o.revenue.Month.cur)} delta={o.revenue.Month} hint="к тому же дню прошлого" />
@@ -176,13 +171,13 @@ function Overview() {
                 <Kpi label="Пользователей" value={n(o.users.Total)} hint={`+${n(o.users.NewToday)} сегодня · +${n(o.users.NewWeek)} за неделю`} />
                 <Kpi label="DAU / MAU" value={`${n(o.users.DAU)} / ${n(o.users.MAU)}`} hint={pctOf(o.users.DAU, o.users.MAU)} />
                 <Kpi label="Истекают без автопродления" value={`${n(o.revenue.Expiring7)} / ${n(o.revenue.Expiring30)}`} hint={`за 7 / 30 дней · под риском ${rubRound(o.revenue.Expiring30Sum)}`} />
-              </div>
+              </Kpis>
               <div className="stats-grid">
                 <Card title="Доходы" wide>
-                  <TimeChart points={o.income.map((x) => ({ t: x.t, v: [x.v[0]] }))} series={[{ name: 'Доход' }]} group={g} format={rubRound} money />
+                  <TimeChart points={o.income.map((x) => ({ t: x.t, v: [x.v[0]] }))} series={[{ name: 'Доход' }]} group={g} format={rubRound} money summary="sum" />
                 </Card>
                 <Card title="Новые пользователи" wide>
-                  <TimeChart points={o.new_users} series={[{ name: 'Новые' }]} group={g} />
+                  <TimeChart points={o.new_users} series={[{ name: 'Новые' }]} group={g} summary="sum" format={n} />
                 </Card>
                 <Card title="Пользователи по подписке" wide>
                   <div className="table-wrap">
@@ -351,23 +346,23 @@ function Economics() {
   const r1 = (x: number) => Math.round(x * 10) / 10
   return (
     <>
-      <div className="stats-bar">
-        <div className="chips">
-          {[3, 6, 12].map((m) => (
-            <button key={m} className={months === m ? 'chip on' : 'chip'} onClick={() => setMonths(m)}>
-              {m} мес.
-            </button>
-          ))}
-        </div>
-        <span className="muted tiny">MRR считается из оплат: сумма делится на оплаченные месяцы и учитывается, пока подписка оплачена</span>
-      </div>
+      <HeaderTools>
+        <Switcher
+          label="Глубина"
+          options={[3, 6, 12].map((m) => ({ value: String(m), label: `${m} месяцев`, short: `${m} мес` }))}
+          value={String(months)}
+          onChange={(v) => setMonths(Number(v))}
+          className="sw-period"
+        />
+      </HeaderTools>
+      <p className="muted tiny stats-note">MRR считается из оплат: сумма делится на оплаченные месяцы и учитывается, пока подписка оплачена</p>
       <Loaded load={load}>
         {(e) => {
           const c = e.cards
           const pts = (f: (m: MonthE) => number[]) => e.months.slice(1).map((m) => ({ t: `${m.month}-01`, v: f(m) }))
           return (
             <>
-              <div className="kpis">
+              <Kpis>
                 <Kpi label="MRR" value={rubRound(c.MRR)} delta={{ cur: c.MRR, prev: c.MRRPrev }} hint="к прошлому месяцу" />
                 <Kpi label="ARR" value={rubRound(c.ARR)} />
                 <Kpi label="Платящих сейчас" value={n(c.Active)} />
@@ -377,10 +372,10 @@ function Economics() {
                 <Kpi label="LTV" value={c.LTV ? rubRound(c.LTV) : '—'} hint="ARPPU × срок жизни" />
                 <Kpi label="NRR" value={c.NRR ? `${r1(c.NRR)}%` : '—'} hint="удержание выручки" />
                 <Kpi label="Quick Ratio" value={c.QuickRatio ? r1(c.QuickRatio) : '—'} hint="приток / потери" />
-              </div>
+              </Kpis>
               <div className="stats-grid">
                 <Card title="MRR по месяцам" wide>
-                  <TimeChart points={pts((m) => [m.mrr])} series={[{ name: 'MRR' }]} group="month" format={rubRound} money />
+                  <TimeChart points={pts((m) => [m.mrr])} series={[{ name: 'MRR' }]} group="month" format={rubRound} money kind="area" summary="last" />
                 </Card>
                 <Card title="Прирост MRR" wide>
                   <TimeChart
@@ -535,14 +530,14 @@ function PaymentsTab() {
           const ok = Object.fromEntries(s.methods_ok.map((m) => [m.key, m.count]))
           return (
             <>
-              <div className="kpis">
+              <Kpis>
                 <Kpi label="Попыток оплаты" value={n(s.attempts)} />
                 <Kpi label="Успешных" value={n(s.succeeded)} hint={`конверсия ${pctOf(s.succeeded + s.refunded, s.attempts)}`} />
                 <Kpi label="Неудачных" value={n(s.failed)} hint={s.pending ? `ещё ждут ${n(s.pending)}` : undefined} />
                 <Kpi label="Возвратов" value={n(s.refunded)} />
                 <Kpi label="Оплатили после неудачи" value={`${s.retry_success}%`} hint="в течение суток" />
                 <Kpi label="Доля автоплатежей" value={`${s.autopay_share}%`} />
-              </div>
+              </Kpis>
               <div className="stats-grid">
                 <Card title="Оплаты и отказы" wide>
                   <TimeChart points={s.conversion} series={[{ name: 'Успешные' }, { name: 'Неудачные' }]} group={s.range.Group} />
@@ -589,7 +584,7 @@ interface RefStats {
 }
 
 function GeoTab() {
-  const p = usePeriod('1m')
+  const p = usePeriod('1m', false)
   const load = useLoad(() => get<GeoReport>(`/api/admin/stats/geo?period=${p.period}`), [p.period])
   // While the geolocation database is still being downloaded, check again every few seconds.
   const waiting = load.data && load.data.status.enabled && !load.data.status.ready && !load.data.status.db_error
@@ -600,15 +595,7 @@ function GeoTab() {
   }, [waiting, load.refresh])
   return (
     <>
-      <div className="stats-bar">
-        <div className="chips">
-          {periods.map(([k, l]) => (
-            <button key={k} className={p.period === k ? 'chip on' : 'chip'} onClick={() => p.set('period', k)}>
-              {l}
-            </button>
-          ))}
-        </div>
-      </div>
+      {p.bar}
       <Loaded load={load}>
         {(r) => (
           <div className="stack lg">
@@ -631,14 +618,14 @@ function Referrals() {
       <Loaded load={load}>
         {(s) => (
           <>
-            <div className="kpis">
+            <Kpis>
               <Kpi label="Приглашено" value={n(s.invited)} />
               <Kpi label="Оплатили" value={n(s.paid)} hint="приглашённых с оплатой за период" />
               <Kpi label="Выдано дней" value={n(s.bonus_days)} />
               <Kpi label="Выручка от приглашённых" value={rubRound(s.revenue)} />
               <Kpi label="Стоимость бонусов" value={rubRound(s.bonus_cost)} hint={`день ≈ ${rubRound(s.day_price)}`} />
               <Kpi label="ROI" value={s.bonus_cost ? `${s.roi}%` : '—'} />
-            </div>
+            </Kpis>
             <div className="stats-grid">
               <Card title="Приглашённые и их оплаты" wide>
                 <TimeChart points={s.series} series={[{ name: 'Новые приглашённые' }, { name: 'Оплаты приглашённых' }]} group={s.range.Group} kind="line" />
@@ -769,14 +756,14 @@ function Support() {
       <Loaded load={load}>
         {(s) => (
           <>
-            <div className="kpis">
+            <Kpis>
               <Kpi label="Обращений за период" value={n(s.total)} hint={`${s.per_day} в день · ${s.per_user} на клиента`} />
               <Kpi label="В этом месяце" value={n(s.this_month.cur)} delta={s.this_month} invert hint="к тому же дню прошлого" />
               <Kpi label="Первый ответ" value={minutes(s.first_avg)} hint={`медиана ${minutes(s.first_median)}`} />
               <Kpi label="Решение" value={minutes(s.resolve_avg)} hint={`медиана ${minutes(s.resolve_median)}`} />
               <Kpi label="Оценка" value={s.rated ? `${s.rating} ★` : '—'} hint={s.rated ? `${n(s.rated)} оценок` : undefined} />
               <Kpi label="Отвечал ИИ" value={`${s.ai_share}%`} hint="обращений" />
-            </div>
+            </Kpis>
             <div className="stats-grid">
               <Card title="Обращения" wide>
                 <TimeChart points={s.series.map((x) => ({ t: x.t, v: [x.v[0]] }))} series={[{ name: 'Обращений' }]} group={s.range.Group} />

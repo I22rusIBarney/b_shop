@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { del, get, post, put, type Plan, type Promo, type Redemption } from '../../lib/api'
 import { date, dateTime } from '../../lib/format'
+import { Switcher } from '../../ui/admin'
 import { Copy, Plus, Trash } from '../../ui/icons'
 import { ErrorBox, Field, Sheet, Spinner, Toggle, copy, useAction, useLoad, useToast } from '../../ui/kit'
 
@@ -73,36 +74,33 @@ export default function Promos() {
         </button>
       </div>
 
-      <div className="row wrap" style={{ marginBottom: 12 }}>
-        <input className="input" placeholder="Поиск по коду или описанию" value={q} onChange={(e) => setQ(e.target.value)} style={{ maxWidth: 280 }} />
-        <select className="input" value={kind} onChange={(e) => setKind(e.target.value)} style={{ maxWidth: 180 }} aria-label="Тип">
-          <option value="">Все типы</option>
-          <option value="discount">Скидка</option>
-          <option value="days">Бонусные дни</option>
-          <option value="unlock">Открытие тарифа</option>
-        </select>
+      <div className="filters toolbar">
+        <Switcher label="Состояние" options={tabs.map((t) => ({ value: t.id, label: t.label }))} value={tab} onChange={(v) => setTab(v as typeof tab)} />
+        <input className="input grow" type="search" placeholder="Поиск по коду или описанию" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Поиск промокодов" />
+        <Switcher
+          label="Тип"
+          menu
+          className="sw-quiet"
+          options={[
+            { value: '', label: 'Все типы' },
+            { value: 'discount', label: 'Скидка' },
+            { value: 'days', label: 'Бонусные дни' },
+            { value: 'unlock', label: 'Открытие тарифа' },
+          ]}
+          value={kind}
+          onChange={setKind}
+        />
+        {!!data.data?.folders?.length && (
+          <Switcher
+            label="Папка"
+            menu
+            className="sw-quiet"
+            options={[{ value: '*', label: 'Все папки' }, { value: '', label: 'Без папки' }, ...data.data.folders.map((f) => ({ value: f, label: f }))]}
+            value={folder === null ? '*' : folder}
+            onChange={(v) => setFolder(v === '*' ? null : v)}
+          />
+        )}
       </div>
-      <div className="chips">
-        <button className={folder === null ? 'chip on' : 'chip'} onClick={() => setFolder(null)}>
-          Все папки
-        </button>
-        <button className={folder === '' ? 'chip on' : 'chip'} onClick={() => setFolder('')}>
-          Без папки
-        </button>
-        {(data.data?.folders || []).map((f) => (
-          <button key={f} className={folder === f ? 'chip on' : 'chip'} onClick={() => setFolder(f)}>
-            📁 {f}
-          </button>
-        ))}
-      </div>
-      <div className="chips">
-        {tabs.map((t) => (
-          <button key={t.id} className={tab === t.id ? 'chip on' : 'chip'} onClick={() => setTab(t.id)}>
-            {t.label}
-          </button>
-        ))}
-      </div>
-
       {!data.data ? (
         <div className="center" style={{ padding: 40 }}>
           <Spinner />
