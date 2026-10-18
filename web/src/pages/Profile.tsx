@@ -91,7 +91,7 @@ export default function Profile() {
   )
 }
 
-function PaymentsSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function PaymentsSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const data = useLoad(() => (open ? get<Paged<Payment>>('/api/payments') : Promise.resolve(undefined)), [open])
   return (
     <Sheet open={open} onClose={onClose} title="Платежи">
@@ -123,7 +123,7 @@ function PaymentsSheet({ open, onClose }: { open: boolean; onClose: () => void }
   )
 }
 
-function LoginsSheet({ open, onClose, onChanged }: { open: boolean; onClose: () => void; onChanged: () => Promise<void> }) {
+export function LoginsSheet({ open, onClose, onChanged }: { open: boolean; onClose: () => void; onChanged: () => Promise<void> }) {
   const { me, config } = useApp()
   const { busy, run } = useAction()
   const [email, setEmail] = useState('')
@@ -210,7 +210,7 @@ function LoginsSheet({ open, onClose, onChanged }: { open: boolean; onClose: () 
   )
 }
 
-function AutopaySheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function AutopaySheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const subs = useLoad(() => (open ? get<Subscription[]>('/api/subscriptions?live=0') : Promise.resolve(undefined)), [open])
   const methods = useLoad(() => (open ? get<PaymentMethodInfo[]>('/api/payment-methods') : Promise.resolve(undefined)), [open])
   const { busy, run } = useAction()
@@ -300,7 +300,7 @@ function AutopayRow({ sub, first, hasMethods, onChanged }: { sub: Subscription; 
   )
 }
 
-function PromoSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function PromoSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const active = useLoad(() => (open ? get<{ active: Redemption[] }>('/api/promo') : Promise.resolve(undefined)), [open])
   const [code, setCode] = useState('')
   const [done, setDone] = useState('')

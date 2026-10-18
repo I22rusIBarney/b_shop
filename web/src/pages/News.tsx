@@ -42,10 +42,12 @@ export default function News() {
         items.map((n) => (
           <article key={n.id} className="card news-item stack">
             {n.image && <img className="cover" src={n.image} alt="" loading="lazy" />}
-            <div className="spread">
-              <span className="tiny muted">{date(n.date)}</span>
-              {n.unread && <span className="badge accent">новое</span>}
-            </div>
+            {(n.title || n.unread) && (
+              <div className="spread">
+                {n.title && <h3 className="news-title">{n.title}</h3>}
+                {n.unread && <span className="badge accent">новое</span>}
+              </div>
+            )}
             <div className="body" dangerouslySetInnerHTML={{ __html: safeHTML(n.body) }} />
             {n.buttons?.length > 0 && (
               <div className="row wrap">
@@ -56,6 +58,7 @@ export default function News() {
                 ))}
               </div>
             )}
+            <span className="tiny muted news-date">{date(n.date)}</span>
           </article>
         ))
       )}

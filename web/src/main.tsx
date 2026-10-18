@@ -12,7 +12,7 @@ import Buy from './pages/Buy'
 import PaymentStatus from './pages/PaymentStatus'
 import Install from './pages/Install'
 import Profile from './pages/Profile'
-import Support from './pages/Support'
+import Support, { Faq } from './pages/Support'
 import ChangePlan from './pages/ChangePlan'
 import Referral from './pages/Referral'
 import TicketPage from './pages/Ticket'
@@ -82,6 +82,7 @@ createRoot(document.getElementById('root')!).render(
               <Route path="profile" element={<Profile />} />
               <Route path="support" element={<Support />} />
               <Route path="support/:id" element={<TicketPage />} />
+              <Route path="faq" element={<Faq />} />
               <Route path="news" element={<News />} />
               <Route path="change/:id" element={<ChangePlan />} />
               <Route path="referral" element={<Referral />} />

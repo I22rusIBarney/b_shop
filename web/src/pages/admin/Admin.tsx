@@ -1,8 +1,8 @@
 import { type ComponentType, useEffect, useRef, useState } from 'react'
-import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { useApp } from '../../lib/app'
 import {
-  Bars, Bell, Book, Card, Chat, ChevronDown, Coin, Download, Fingerprint, Globe, Headset, Hook, List, Megaphone, Menu,
+  Bars, Bell, Book, Card, Chat, ChevronDown, Coin, Download, Exit, Fingerprint, Globe, Headset, Hook, List, Megaphone, Menu, PanelLeft,
   Palette, People, Receipt, Renew, Settings as SettingsIcon, Sliders, Star, Swap, Ticket, Trend, Trial, Users, Wallet,
 } from '../../ui/icons'
 import Customers from './Customers'
@@ -139,9 +139,29 @@ function AdminMenu({ open }: { open: boolean }) {
   )
 }
 
+function readCollapsed() {
+  try {
+    return localStorage.getItem('bshop.admin.nav') === 'hidden'
+  } catch {
+    return false
+  }
+}
+
 export default function Admin() {
-  const { config } = useApp()
+  const { config, signOut } = useApp()
+  const nav = useNavigate()
   const [open, setOpen] = useState(false)
+  // Desktop: the side menu can be hidden for wide tables (reference: panel button left of the title).
+  const [collapsed, setCollapsed] = useState(readCollapsed)
+  const toggleNav = () =>
+    setCollapsed((v) => {
+      try {
+        localStorage.setItem('bshop.admin.nav', v ? '' : 'hidden')
+      } catch {
+        /* storage blocked — keep it for this visit only */
+      }
+      return !v
+    })
   const loc = useLocation()
   useEffect(() => setOpen(false), [loc.pathname])
   useEffect(() => {
@@ -149,7 +169,7 @@ export default function Admin() {
   }, [config.branding.title])
 
   return (
-    <div className="admin">
+    <div className={collapsed ? 'admin collapsed' : 'admin'}>
       <header className="admin-top">
         <button className="icon-btn" onClick={() => setOpen(true)} aria-label="Меню">
           <Menu />
@@ -159,6 +179,23 @@ export default function Admin() {
       <div className={open ? 'admin-scrim open' : 'admin-scrim'} onClick={() => setOpen(false)} aria-hidden="true" />
       <AdminMenu open={open} />
       <main className="admin-main">
+        <div className="admin-bar">
+          <button className="icon-btn" onClick={toggleNav} aria-label={collapsed ? 'Показать меню' : 'Скрыть меню'} aria-pressed={!collapsed}>
+            <PanelLeft />
+          </button>
+          <span className="grow" />
+          <button
+            className="icon-btn"
+            aria-label="Выйти"
+            title="Выйти"
+            onClick={async () => {
+              await signOut()
+              nav('/login')
+            }}
+          >
+            <Exit />
+          </button>
+        </div>
         <Routes>
           <Route index element={<Navigate to="stats" replace />} />
           <Route path="stats" element={<Navigate to="overview" replace />} />
