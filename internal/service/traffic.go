@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -23,6 +24,9 @@ type TrafficOffer struct {
 	ExtraBytes  int64                  `json:"extra_bytes"`
 	UsedBytes   int64                  `json:"used_bytes"`
 	Unavailable string                 `json:"unavailable,omitempty"`
+	// Until is when traffic bought now (or already bought) ends: the next reset of the plan.
+	Until      time.Time  `json:"until"`
+	ExtraUntil *time.Time `json:"extra_until,omitempty"`
 }
 
 func (s *Service) trafficSub(ctx context.Context, c *store.Customer, subID int64) (*store.Subscription, *store.Plan, error) {
@@ -53,7 +57,11 @@ func (s *Service) TrafficOptions(ctx context.Context, c *store.Customer, subID i
 	}
 	o := &TrafficOffer{Topup: plan.TrafficTopupEnabled && len(plan.TrafficPackages) > 0, Packages: plan.TrafficPackages,
 		Reset: plan.TrafficResetEnabled, ResetPrice: plan.TrafficResetPrice, Threshold: s.set().General.TrafficResetThreshold,
-		LimitBytes: sub.TrafficLimitBytes, ExtraBytes: sub.ExtraTrafficBytes}
+		LimitBytes: sub.TrafficLimitBytes, ExtraBytes: sub.ActiveExtraTraffic(time.Now()),
+		Until: nextTrafficReset(plan.TrafficResetStrategy, time.Now(), sub.CreatedAt, sub.ExpiresAt)}
+	if o.ExtraBytes > 0 {
+		o.ExtraUntil = sub.ExtraTrafficUntil
+	}
 	if !o.Topup {
 		o.Packages = []store.TrafficPackage{}
 	}
@@ -116,7 +124,10 @@ func (s *Service) applyTraffic(ctx context.Context, tx pgx.Tx, pay *store.Paymen
 	}
 	switch pay.Operation {
 	case "traffic":
-		sub.ExtraTrafficBytes += int64(pay.TrafficGB) << 30
+		now := time.Now()
+		until := nextTrafficReset(plan.TrafficResetStrategy, now, sub.CreatedAt, sub.ExpiresAt)
+		sub.ExtraTrafficBytes = sub.ActiveExtraTraffic(now) + int64(pay.TrafficGB)<<30
+		sub.ExtraTrafficUntil = &until
 		limit := plan.TrafficBytes() + sub.ExtraTrafficBytes
 		u, err := s.Panel.UpdateUser(ctx, remnawave.UpdateUser{ID: *sub.RWUserID, TrafficLimitBytes: &limit})
 		if err != nil {
@@ -129,4 +140,93 @@ func (s *Service) applyTraffic(ctx context.Context, tx pgx.Tx, pay *store.Paymen
 		}
 	}
 	return sub, store.UpdateSubscription(ctx, tx, sub)
+}
+
+// nextTrafficReset is when the panel next zeroes used traffic for the strategy (UTC calendar boundaries);
+// without resets it is the end of the paid period.
+func nextTrafficReset(strategy string, now, anchor, expires time.Time) time.Time {
+	now = now.UTC()
+	day := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	switch rwStrategy(strategy) {
+	case "DAY":
+		return day.AddDate(0, 0, 1)
+	case "WEEK":
+		d := (8 - int(day.Weekday())) % 7 // days to next Monday
+		if d == 0 {
+			d = 7
+		}
+		return day.AddDate(0, 0, d)
+	case "MONTH_ROLLING":
+		a := anchor.UTC().Day()
+		for m := 0; m < 3; m++ {
+			y, mo, _ := now.AddDate(0, m, 0).Date()
+			last := time.Date(y, mo+1, 0, 0, 0, 0, 0, time.UTC).Day()
+			t := time.Date(y, mo, min(a, last), 0, 0, 0, 0, time.UTC)
+			if t.After(now) {
+				return t
+			}
+		}
+		return day.AddDate(0, 1, 0)
+	case "NO_RESET":
+		return expires
+	default: // MONTH
+		return time.Date(now.Year(), now.Month()+1, 1, 0, 0, 0, 0, time.UTC)
+	}
+}
+
+// topupGrace: if the panel has not reported its own reset by then, the bought traffic is removed anyway.
+const topupGrace = 6 * time.Hour
+
+// EndTrafficTopups removes bought traffic whose period has ended. With periodic resets it waits until the panel
+// has actually reset used traffic, so the lower limit never cuts off a customer who used the package.
+func (s *Service) EndTrafficTopups(ctx context.Context) {
+	subs, err := store.SubsWithEndedTopup(ctx, s.Store.Pool)
+	if err != nil {
+		s.Log.Warn("traffic topups", "err", err)
+		return
+	}
+	for i := range subs {
+		sb := &subs[i]
+		if err := s.endTopup(ctx, sb.ID); err != nil {
+			s.Log.Warn("end traffic topup", "sub", sb.ID, "err", err)
+		}
+	}
+}
+
+func (s *Service) endTopup(ctx context.Context, id int64) error {
+	return s.Store.Tx(ctx, func(tx pgx.Tx) error {
+		sb, err := store.GetSubscriptionForUpdate(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		// A package bought meanwhile moved the end time forward: nothing to do yet.
+		if sb.ExtraTrafficBytes <= 0 || sb.ExtraTrafficUntil == nil || time.Now().Before(*sb.ExtraTrafficUntil) {
+			return nil
+		}
+		var plan *store.Plan
+		if sb.PlanID != nil {
+			plan, _ = store.GetPlan(ctx, tx, *sb.PlanID)
+		}
+		if sb.RWUserID != nil && plan != nil && plan.TrafficLimitGB > 0 {
+			u, err := s.Panel.GetUser(ctx, *sb.RWUserID)
+			if err != nil && !errors.Is(err, remnawave.ErrNotFound) {
+				return err
+			}
+			if u != nil {
+				periodic := rwStrategy(plan.TrafficResetStrategy) != "NO_RESET"
+				resetDone := u.LastTrafficResetAt != nil && !u.LastTrafficResetAt.Before(sb.ExtraTrafficUntil.Add(-time.Hour))
+				if periodic && !resetDone && time.Since(*sb.ExtraTrafficUntil) < topupGrace {
+					return nil // wait for the panel's own reset
+				}
+				limit := plan.TrafficBytes()
+				if _, err := s.Panel.UpdateUser(ctx, remnawave.UpdateUser{ID: *sb.RWUserID, TrafficLimitBytes: &limit}); err != nil {
+					return err
+				}
+				sb.TrafficLimitBytes = limit
+			}
+		}
+		sb.ExtraTrafficBytes = 0
+		sb.ExtraTrafficUntil = nil
+		return store.UpdateSubscription(ctx, tx, sb)
+	})
 }

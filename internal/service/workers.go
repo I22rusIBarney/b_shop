@@ -160,6 +160,7 @@ func (s *Service) RunWorkers(ctx context.Context) {
 		s.CleanGeo(ctx)
 	})
 	every(5*time.Minute, "geo", s.SyncGeo)
+	every(5*time.Minute, "traffic-topups", s.EndTrafficTopups)
 	every(10*time.Second, "ai", s.ProcessAI)
 	every(15*time.Second, "reply-notices", s.ProcessReplyNotices)
 	every(5*time.Minute, "ticket-timers", s.ProcessTicketTimers)

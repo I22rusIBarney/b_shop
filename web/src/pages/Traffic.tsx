@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { get, post, type BuyResult, type Subscription, type TrafficOffer } from '../lib/api'
-import { bytes, rub } from '../lib/format'
+import { bytes, date, rub } from '../lib/format'
 import { Renew, Trend } from '../ui/icons'
 import { ErrorBox, Sheet, Spinner, useAction, useLoad } from '../ui/kit'
 import { MethodPicker, followPayment, usePayMethod } from '../ui/pay'
@@ -48,7 +48,11 @@ export function TrafficSheet({ sub, open, onClose }: { sub: Subscription; open: 
             <div className="meter">
               <i style={{ width: `${o.limit_bytes ? Math.min(100, (o.used_bytes / o.limit_bytes) * 100) : 0}%` }} />
             </div>
-            {o.extra_bytes > 0 && <div className="tiny muted">Включая докупленные {bytes(o.extra_bytes)} — до конца оплаченного периода</div>}
+            {o.extra_bytes > 0 && (
+              <div className="tiny muted">
+                Включая докупленные {bytes(o.extra_bytes)} — действуют до {date(o.extra_until)}
+              </div>
+            )}
           </div>
 
           {o.topup && (
@@ -64,7 +68,9 @@ export function TrafficSheet({ sub, open, onClose }: { sub: Subscription; open: 
                   </button>
                 ))}
               </div>
-              <p className="tiny muted">Добавится к лимиту сразу после оплаты и действует до продления подписки.</p>
+              <p className="tiny muted">
+                Добавится к лимиту сразу после оплаты и действует до {date(o.until)} — в этот день трафик обнуляется вместе с пакетом.
+              </p>
             </div>
           )}
 

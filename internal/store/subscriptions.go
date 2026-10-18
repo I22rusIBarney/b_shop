@@ -25,6 +25,7 @@ type Subscription struct {
 	ExtraDevices      int        `db:"extra_devices" json:"extra_devices"`
 	// ExtraTrafficBytes is bought traffic on top of the plan limit for the current period.
 	ExtraTrafficBytes int64      `db:"extra_traffic_bytes" json:"extra_traffic_bytes"`
+	ExtraTrafficUntil *time.Time `db:"extra_traffic_until" json:"extra_traffic_until"`
 	Status            string     `db:"status" json:"status"`
 	CreatedAt         time.Time  `db:"created_at" json:"created_at"`
 	UpdatedAt         time.Time  `db:"updated_at" json:"updated_at"`
@@ -82,9 +83,9 @@ func InsertSubscription(ctx context.Context, db DB, s *Subscription) error {
 func UpdateSubscription(ctx context.Context, db DB, s *Subscription) error {
 	_, err := db.Exec(ctx, `UPDATE subscriptions SET plan_id=$2, kind=$3, title=$4, rw_user_id=$5, rw_uuid=$6,
 		rw_short_uuid=$7, rw_username=$8, subscription_url=$9, expires_at=$10, traffic_limit_bytes=$11, device_limit=$12,
-		extra_devices=$13, status=$14, extra_traffic_bytes=$15, updated_at=now() WHERE id=$1`,
+		extra_devices=$13, status=$14, extra_traffic_bytes=$15, extra_traffic_until=$16, updated_at=now() WHERE id=$1`,
 		s.ID, s.PlanID, s.Kind, s.Title, s.RWUserID, s.RWUUID, s.RWShortUUID, s.RWUsername, s.SubscriptionURL,
-		s.ExpiresAt, s.TrafficLimitBytes, s.DeviceLimit, s.ExtraDevices, s.Status, s.ExtraTrafficBytes)
+		s.ExpiresAt, s.TrafficLimitBytes, s.DeviceLimit, s.ExtraDevices, s.Status, s.ExtraTrafficBytes, s.ExtraTrafficUntil)
 	return err
 }
 
@@ -128,4 +129,18 @@ func MarkAutopayNotified(ctx context.Context, db DB, id int64, expires time.Time
 func MarkAutopayTry(ctx context.Context, db DB, id int64) error {
 	_, err := db.Exec(ctx, `UPDATE subscriptions SET autopay_last_try=now() WHERE id=$1`, id)
 	return err
+}
+
+// ActiveExtraTraffic is the bought traffic still valid at t.
+func (s *Subscription) ActiveExtraTraffic(t time.Time) int64 {
+	if s.ExtraTrafficBytes <= 0 || (s.ExtraTrafficUntil != nil && !t.Before(*s.ExtraTrafficUntil)) {
+		return 0
+	}
+	return s.ExtraTrafficBytes
+}
+
+// SubsWithEndedTopup lists subscriptions whose bought traffic has reached its end time.
+func SubsWithEndedTopup(ctx context.Context, db DB) ([]Subscription, error) {
+	return many[Subscription](db.Query(ctx, `SELECT * FROM subscriptions
+		WHERE extra_traffic_bytes > 0 AND extra_traffic_until IS NOT NULL AND extra_traffic_until <= now() LIMIT 500`))
 }

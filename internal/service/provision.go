@@ -80,7 +80,7 @@ func (s *Service) applyPlanToPanel(ctx context.Context, sub *store.Subscription,
 	devices := sub.TotalDevices()
 	traffic := plan.TrafficBytes()
 	if traffic > 0 {
-		traffic += sub.ExtraTrafficBytes // bought traffic survives re-applying the plan
+		traffic += sub.ActiveExtraTraffic(time.Now()) // bought traffic survives re-applying the plan until it ends
 	}
 	up := remnawave.UpdateUser{
 		ID:                   *sub.RWUserID,

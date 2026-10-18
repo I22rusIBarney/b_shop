@@ -254,6 +254,7 @@ export interface Subscription {
   traffic_topup: boolean
   traffic_reset: boolean
   extra_traffic_bytes: number
+  extra_traffic_until: string | null
   autopay: boolean
   autopay_method_id: number | null
   autopay_period_id: number | null
@@ -694,6 +695,8 @@ export interface TrafficOffer {
   limit_bytes: number
   extra_bytes: number
   used_bytes: number
+  until: string
+  extra_until?: string
 }
 
 export interface Location {

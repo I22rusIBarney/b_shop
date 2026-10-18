@@ -3,6 +3,7 @@ package service_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"bshop/internal/remnawave"
 	"bshop/internal/service"
@@ -72,15 +73,41 @@ func TestTrafficTopupAndReset(t *testing.T) {
 		t.Fatalf("panel resets = %d, want 1", e.panel.resets)
 	}
 
-	// Renewal clears the bought traffic: back to the plan's 50 GB.
+	// The package lasts until the next monthly reset (1st of next month, UTC), renewal does not remove it.
+	o, _ = e.svc.TrafficOptions(ctx, c, sub.ID)
+	now := time.Now().UTC()
+	if want := time.Date(now.Year(), now.Month()+1, 1, 0, 0, 0, 0, time.UTC); !o.Until.Equal(want) || o.ExtraUntil == nil || !o.ExtraUntil.Equal(want) {
+		t.Fatalf("until = %v / %v, want %v", o.Until, o.ExtraUntil, want)
+	}
 	if _, err := e.svc.Buy(ctx, c, service.BuyRequest{PlanID: plan.ID, PeriodID: plan.Periods[0].ID, SubscriptionID: sub.ID, Method: "sbp"}); err != nil {
 		t.Fatal(err)
 	}
 	e.gw.succeed("yk-4", "sbp")
 	notify(t, e, "yk-4")
-	u, _ = e.panel.GetUser(ctx, *sub.RWUserID)
-	if u.TrafficLimitBytes != 50<<30 {
-		t.Fatalf("limit after renewal = %d GB, want 50", u.TrafficLimitBytes>>30)
+	if u, _ = e.panel.GetUser(ctx, *sub.RWUserID); u.TrafficLimitBytes != 150<<30 {
+		t.Fatalf("limit after renewal = %d GB, want 150 (package still valid)", u.TrafficLimitBytes>>30)
+	}
+
+	// Month is over but the panel has not reset yet: the package stays, so the customer is not cut off.
+	past := time.Now().Add(-time.Minute)
+	if _, err := e.pool.Exec(ctx, `UPDATE subscriptions SET extra_traffic_until=$2 WHERE id=$1`, sub.ID, past); err != nil {
+		t.Fatal(err)
+	}
+	e.svc.EndTrafficTopups(ctx)
+	if u, _ = e.panel.GetUser(ctx, *sub.RWUserID); u.TrafficLimitBytes != 150<<30 {
+		t.Fatalf("package removed before the panel reset: %d GB", u.TrafficLimitBytes>>30)
+	}
+	// The panel reset happened: back to the plan's 50 GB and the package is gone.
+	e.panel.mu.Lock()
+	resetAt := time.Now()
+	e.panel.users[*sub.RWUserID].LastTrafficResetAt = &resetAt
+	e.panel.mu.Unlock()
+	e.svc.EndTrafficTopups(ctx)
+	if u, _ = e.panel.GetUser(ctx, *sub.RWUserID); u.TrafficLimitBytes != 50<<30 {
+		t.Fatalf("limit after reset = %d GB, want 50", u.TrafficLimitBytes>>30)
+	}
+	if got, _ := store.GetSubscription(ctx, e.pool, sub.ID); got.ExtraTrafficBytes != 0 || got.ExtraTrafficUntil != nil {
+		t.Fatalf("package left in subscription: %+v", got)
 	}
 }
 

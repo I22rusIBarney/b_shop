@@ -109,7 +109,9 @@
 - 18.10.2026: решения по концептам (`~/Projects/con`): стиль остаётся по эталону RWP, нижние вкладки прежние.
   Трафик (миграция 0010, service/traffic.go): в тарифе с лимитом — пакеты докупки [{gb, price}] и сброс (цена, 0 = бесплатно),
   оба выключаются. Докупка → subscriptions.extra_traffic_bytes, лимит в панели = тариф + докупка, сохраняется при повторном
-  применении тарифа, обнуляется при продлении/смене тарифа. Сброс доступен от порога general.traffic_reset_threshold.
+  применении тарифа и продлении; действует до ближайшего сброса по стратегии тарифа (MONTH — 1-е число, UTC;
+  NO_RESET — до конца оплаченного периода), subscriptions.extra_traffic_until (миграция 0011). Воркер traffic-topups
+  снимает пакет только после сброса в панели (lastTrafficResetAt), запасной срок 6 ч. Сброс — от порога general.traffic_reset_threshold.
   Операции оплаты traffic / traffic_reset; окно «Трафик» (pages/Traffic.tsx) с карточки подписки.
   «Локации» (service/locations.go, settings.locations: enabled, show_offline): ноды из панели без адресов, кэш 1 мин,
   только просмотр — сервер выбирают в VPN-приложении. Тесты: service/traffic_test.go.

@@ -514,7 +514,6 @@ func (s *Service) ApplyPayment(ctx context.Context, id uuid.UUID) error {
 				if sub.PlanID == nil || *sub.PlanID != plan.ID {
 					sub.ExtraDevices = 0 // trial/free turned into another plan
 				}
-				sub.ExtraTrafficBytes = 0 // bought traffic lasts until the paid period is renewed
 				err = s.provisionExtend(ctx, tx, cust, sub, g)
 			}
 		case "change":
@@ -524,7 +523,6 @@ func (s *Service) ApplyPayment(ctx context.Context, id uuid.UUID) error {
 			sub, err = store.GetSubscriptionForUpdate(ctx, tx, *pay.SubscriptionID)
 			if err == nil {
 				before := daysLeft(sub.ExpiresAt)
-				sub.ExtraTrafficBytes = 0
 				err = s.switchPlan(ctx, tx, cust, sub, plan, sub.ExpiresAt, g.Username)
 				if err == nil {
 					pid := pay.ID
