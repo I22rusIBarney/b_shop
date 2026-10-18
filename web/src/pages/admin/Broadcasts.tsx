@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api, del, get, post, type Broadcast, type Plan } from '../../lib/api'
 import { dateTime } from '../../lib/format'
+import { Switcher } from '../../ui/admin'
 import { Close, Plus, Trash } from '../../ui/icons'
 import { ErrorBox, Field, Spinner, Toggle, useAction, useLoad, pressable } from '../../ui/kit'
 import { safeHTML } from '../News'
@@ -35,6 +36,40 @@ const blank = (): Broadcast => ({
 
 // Server-side fields stay out of the request: an empty created_at isn't a valid time for the server.
 const out = ({ created_at: _c, started_at: _s, finished_at: _f, ...rest }: Broadcast) => rest
+
+// Quick picks for the send time: in an hour, this evening, tomorrow morning/evening (local time, whole hours).
+function presets(): { label: string; at: Date }[] {
+  const now = new Date()
+  const at = (dayShift: number, h: number) => {
+    const d = new Date(now)
+    d.setDate(d.getDate() + dayShift)
+    d.setHours(h, 0, 0, 0)
+    return d
+  }
+  // An hour from now, rounded up to the next 5 minutes.
+  const hour = new Date(Math.ceil((now.getTime() + 3600000) / 300000) * 300000)
+  const out = [{ label: 'Через час', at: hour }]
+  if (at(0, 19) > hour) out.push({ label: 'Сегодня в 19:00', at: at(0, 19) })
+  out.push({ label: 'Завтра в 10:00', at: at(1, 10) }, { label: 'Завтра в 19:00', at: at(1, 19) })
+  return out
+}
+
+const whenText = (iso: string) =>
+  new Date(iso).toLocaleString('ru-RU', { weekday: 'short', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
+
+function inText(iso: string) {
+  const m = Math.round((new Date(iso).getTime() - Date.now()) / 60000)
+  if (m < 1) return 'время уже прошло'
+  if (m < 60) return `через ${m} мин`
+  const h = Math.floor(m / 60)
+  if (h < 48) return `через ${h} ч${m % 60 ? ` ${m % 60} мин` : ''}`
+  return `через ${Math.round(h / 24)} дн`
+}
+
+const zone = (() => {
+  const off = -new Date().getTimezoneOffset()
+  return `UTC${off >= 0 ? '+' : '−'}${Math.floor(Math.abs(off) / 60)}${off % 60 ? ':' + String(Math.abs(off) % 60).padStart(2, '0') : ''}`
+})()
 
 function toLocal(iso: string | null) {
   if (!iso) return ''
@@ -94,13 +129,15 @@ export default function Broadcasts() {
       setB({ ...b, image: r.url })
     })
 
+  const past = !!b?.scheduled_at && new Date(b.scheduled_at).getTime() < Date.now() + 30000
   const send = () =>
     run(async () => {
-      if (!confirm(b!.scheduled_at ? 'Запланировать рассылку?' : `Отправить ${count ?? ''} получателям сейчас?`)) return
+      if (past) throw new Error('Время отправки уже прошло — выберите другое')
+      if (!confirm(b!.scheduled_at ? `Запланировать рассылку на ${whenText(b!.scheduled_at)}?` : `Отправить ${count ?? ''} получателям сейчас?`)) return
       await post('/api/admin/broadcasts/send', out(b!))
       setB(null)
       await list.reload()
-    }, 'Рассылка поставлена в очередь')
+    }, b?.scheduled_at ? 'Рассылка запланирована' : 'Рассылка поставлена в очередь')
 
   if (b)
     return (
@@ -188,10 +225,47 @@ export default function Broadcasts() {
                 <option value="all">Telegram, а если нет — почта</option>
               </select>
             </Field>
-            <Field label="Отправить" hint="Пусто — сразу">
-              <input className="input" type="datetime-local" value={toLocal(b.scheduled_at)} onChange={(e) => setB({ ...b, scheduled_at: e.target.value ? new Date(e.target.value).toISOString() : null })} />
-            </Field>
           </div>
+          <div className="field">
+            <label>Когда отправить</label>
+            <Switcher
+              label="Когда отправить"
+              options={[
+                { value: 'now', label: 'Сейчас' },
+                { value: 'later', label: 'По расписанию' },
+              ]}
+              value={b.scheduled_at ? 'later' : 'now'}
+              onChange={(v) => setB({ ...b, scheduled_at: v === 'later' ? (b.scheduled_at ?? presets()[0].at.toISOString()) : null })}
+            />
+          </div>
+          {b.scheduled_at && (
+            <div className="schedule">
+              <div className="chips-row">
+                {presets().map((p) => (
+                  <button
+                    key={p.label}
+                    type="button"
+                    className={b.scheduled_at && Math.abs(new Date(b.scheduled_at).getTime() - p.at.getTime()) < 60000 ? 'chip on' : 'chip'}
+                    onClick={() => setB({ ...b, scheduled_at: p.at.toISOString() })}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+              <Field label={`Дата и время (${zone})`}>
+                <input
+                  className="input"
+                  type="datetime-local"
+                  min={toLocal(new Date().toISOString())}
+                  value={toLocal(b.scheduled_at)}
+                  onChange={(e) => e.target.value && setB({ ...b, scheduled_at: new Date(e.target.value).toISOString() })}
+                />
+              </Field>
+              <p className={past ? 'small danger-text' : 'small muted'}>
+                {past ? 'Это время уже прошло — выберите другое.' : `Уйдёт ${whenText(b.scheduled_at)} · ${inText(b.scheduled_at)}. До отправки рассылку можно изменить или отменить.`}
+              </p>
+            </div>
+          )}
           <Toggle checked={b.show_in_news} onChange={(v) => setB({ ...b, show_in_news: v })} label="Показать в ленте «Новости» в кабинете" />
           <p className="small">
             Получателей: <b>{count ?? '…'}</b>
@@ -213,8 +287,8 @@ export default function Broadcasts() {
             <button className="btn secondary small" disabled={busy} onClick={() => run(() => post('/api/admin/broadcasts/test', out(b)), 'Тест отправлен вам')}>
               Тест себе
             </button>
-            <button className="btn small" disabled={busy || !b.body.trim()} onClick={send}>
-              {b.scheduled_at ? 'Запланировать' : 'Отправить'}
+            <button className="btn small" disabled={busy || !b.body.trim() || past} onClick={send}>
+              {b.scheduled_at ? 'Запланировать' : 'Отправить сейчас'}
             </button>
           </div>
         </section>
@@ -264,14 +338,23 @@ export default function Broadcasts() {
                       {x.sent}/{x.total}
                       {x.failed > 0 && <span className="tiny muted"> · ошибок {x.failed}</span>}
                     </td>
-                    <td className="muted" data-label="Когда">{dateTime(x.finished_at || x.scheduled_at || x.created_at)}</td>
+                    <td className="muted" data-label="Когда">
+                      {x.status === 'scheduled' && x.scheduled_at ? (
+                        <span title={dateTime(x.scheduled_at)}>
+                          {whenText(x.scheduled_at)}
+                          <span className="tiny"> · {inText(x.scheduled_at)}</span>
+                        </span>
+                      ) : (
+                        dateTime(x.finished_at || x.started_at || x.scheduled_at || x.created_at)
+                      )}
+                    </td>
                     <td data-label="В новостях" onClick={(e) => e.stopPropagation()}>
                       <Toggle checked={x.show_in_news} onChange={(v) => run(async () => (await post(`/api/admin/broadcasts/${x.id}/news`, { on: v }), await list.reload()))} label="" />
                     </td>
                     <td className="actions" onClick={(e) => e.stopPropagation()}>
                       {x.status === 'sending' || x.status === 'scheduled' ? (
-                        <button className="btn ghost small" disabled={busy} onClick={() => run(async () => (await post(`/api/admin/broadcasts/${x.id}/cancel`), await list.reload()), 'Остановлено')}>
-                          Остановить
+                        <button className="btn ghost small" disabled={busy} onClick={() => run(async () => (await post(`/api/admin/broadcasts/${x.id}/cancel`), await list.reload()), x.status === 'scheduled' ? 'Рассылка отменена' : 'Остановлено')}>
+                          {x.status === 'scheduled' ? 'Отменить' : 'Остановить'}
                         </button>
                       ) : (
                         <button className="icon-btn" disabled={busy} aria-label="Удалить" onClick={() => confirm('Удалить рассылку? Она пропадёт и из новостей.') && run(async () => (await del(`/api/admin/broadcasts/${x.id}`), await list.reload()))}>

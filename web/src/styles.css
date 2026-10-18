@@ -1598,3 +1598,10 @@ button.group-row:active, .group-row.pick:active { background: var(--fill); }
 .filters.toolbar .sw-thumb { top: 4px; bottom: 4px; }
 .filters.toolbar .sw-opt { height: 32px; }
 .filters.toolbar .sw-menu-btn { height: 40px; }
+
+/* ---- broadcast schedule ---- */
+.schedule { display: flex; flex-direction: column; gap: 12px; padding: 14px; border-radius: 14px; background: var(--fill); animation: fade-in .2s ease; }
+.schedule .field { margin: 0; max-width: 280px; }
+.chips-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.chips-row .chip { margin: 0; }
+.danger-text { color: var(--danger); }
