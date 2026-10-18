@@ -351,6 +351,8 @@ export interface ChangeInfo {
   price_per_month: number
   days_left: number
   discount_percent: number
+  penalty: number
+  blocked?: string
   targets: ChangeTarget[]
 }
 

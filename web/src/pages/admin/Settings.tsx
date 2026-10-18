@@ -30,6 +30,8 @@ const pages: Record<string, { title: string; sections: SectionSpec[] }> = {
           { k: 'days_in_month', label: 'Дней в месяце', hint: 'Сколько дней даёт «1 месяц» подписки', type: 'number' },
           { k: 'max_subs_per_customer', label: 'Подписок на клиента', hint: '0 — без ограничений', type: 'number' },
           { k: 'traffic_reset_threshold', label: 'Порог кнопки «Сбросить трафик», %', type: 'number' },
+          { k: 'plan_change_penalty', label: 'Штраф за смену тарифа, %', hint: 'Уменьшает стоимость оставшихся дней при переходе: доплата больше, при конвертации дней меньше. 0 — без штрафа', type: 'number' },
+          { k: 'plan_changes_per_day', label: 'Смен тарифа в сутки', hint: 'Сколько раз клиент может сменить тариф за 24 часа. 0 — без лимита, смены админом не считаются', type: 'number' },
           { k: 'blocked_telegram_ids', label: 'Заблокированные Telegram ID', hint: 'Через запятую', type: 'ids' },
           { k: 'maintenance_mode', label: 'Режим обслуживания', hint: 'Клиенты увидят заглушку, администраторы — всё как обычно', type: 'bool' },
         ],

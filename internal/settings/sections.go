@@ -120,11 +120,21 @@ type General struct {
 	TrafficResetThreshold int     `json:"traffic_reset_threshold"`
 	BlockedTelegramIDs    []int64 `json:"blocked_telegram_ids"`
 	MaintenanceMode       bool    `json:"maintenance_mode"`
+	// PlanChangePenalty (%) lowers the value of the remaining days carried to the new plan (0 = none).
+	PlanChangePenalty int `json:"plan_change_penalty"`
+	// PlanChangesPerDay limits customer plan changes in 24 hours (0 = unlimited; admin changes do not count).
+	PlanChangesPerDay int `json:"plan_changes_per_day"`
 }
 
 func (g *General) Validate() error {
 	if _, err := time.LoadLocation(g.Timezone); err != nil {
 		return fmt.Errorf("неизвестный часовой пояс %q", g.Timezone)
+	}
+	if g.PlanChangePenalty < 0 || g.PlanChangePenalty > 90 {
+		return errors.New("штраф за смену тарифа: от 0 до 90%")
+	}
+	if g.PlanChangesPerDay < 0 {
+		return errors.New("лимит смен тарифа не может быть отрицательным")
 	}
 	if g.DaysInMonth < 28 || g.DaysInMonth > 31 {
 		return errors.New("дней в месяце: от 28 до 31")

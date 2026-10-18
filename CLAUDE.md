@@ -121,6 +121,8 @@
   5 слайдер устройств. Баннеры кабинета (миграция 0012, service/banners.go, ui/banners.tsx, pages/admin/Banners.tsx):
   сегменты all/active/trial/expired/no_sub, даты показа, «можно скрыть» (banner_dismissals), порядок; системные
   link_email/link_telegram показываются только без привязки и открывают «Способы входа», удалить их нельзя.
+  Смена тарифа: general.plan_change_penalty (% от стоимости оставшихся дней — доплата больше / дней меньше) и
+  general.plan_changes_per_day (за 24 ч, mode='admin' не считается); ChangeInfo.penalty/blocked.
 
 ## Дальше
 - Боевой переезд по docs/MIGRATION.md на тестовом стенде Алексея; проверить на реальных ЮKassa/Remnawave.

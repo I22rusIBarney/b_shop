@@ -67,26 +67,46 @@ type ChangeInfo struct {
 	PricePerMonth   int64          `json:"price_per_month"`
 	DaysLeft        int            `json:"days_left"`
 	DiscountPercent int            `json:"discount_percent"`
+	Penalty         int            `json:"penalty"`           // % taken from the value of the remaining days
+	Blocked         string         `json:"blocked,omitempty"` // daily limit reached
 	Targets         []ChangeTarget `json:"targets"`
 }
 
+// changeLimitReached explains why the customer cannot change plans right now ("" = can).
+func (s *Service) changeLimitReached(ctx context.Context, db store.DB, customerID int64) (string, error) {
+	limit := s.set().General.PlanChangesPerDay
+	if limit <= 0 {
+		return "", nil
+	}
+	n, err := store.CountRecentPlanChanges(ctx, db, customerID)
+	if err != nil {
+		return "", err
+	}
+	if n >= limit {
+		return fmt.Sprintf("Сменить тариф можно не чаще %d %s в сутки — попробуйте завтра", limit, plural(limit, "раза", "раз", "раз")), nil
+	}
+	return "", nil
+}
+
 // changeQuotes computes how a subscription with daysLeft on oldPlan can move to newPlan.
-func changeQuotes(oldPlan, newPlan *store.Plan, days, dim, discount int) []ChangeQuote {
+// penalty (%) lowers the value of the remaining days: more to pay on upgrade, fewer days on convert/downgrade.
+func changeQuotes(oldPlan, newPlan *store.Plan, days, dim, discount, penalty int) []ChangeQuote {
 	oldM, newM := oldPlan.MonthlyPrice(dim), newPlan.MonthlyPrice(dim)
 	if newM <= 0 || days <= 0 {
 		return nil
 	}
+	credit := oldM * int64(100-penalty) / 100 // monthly value of the remaining days after the penalty
 	noConvert := oldPlan.ConversionDisabled || newPlan.ConversionDisabled
 	converted := days
 	if oldM > 0 {
-		converted = int(int64(days) * oldM / newM)
+		converted = int(int64(days) * credit / newM)
 		if converted < 1 {
 			converted = 1
 		}
 	}
 	var out []ChangeQuote
 	if newM > oldM {
-		base := (newM - oldM) * int64(days) / int64(dim)
+		base := (newM - credit) * int64(days) / int64(dim)
 		amount := ceilRub(applyDiscount(base, discount))
 		out = append(out, ChangeQuote{Mode: "upgrade", DaysBefore: days, DaysAfter: days, Amount: amount, BaseAmount: base})
 		if !noConvert && oldM > 0 {
@@ -95,7 +115,7 @@ func changeQuotes(oldPlan, newPlan *store.Plan, days, dim, discount int) []Chang
 		return out
 	}
 	if noConvert {
-		converted = days
+		converted = max(1, days*(100-penalty)/100)
 	}
 	return append(out, ChangeQuote{Mode: "downgrade", DaysBefore: days, DaysAfter: converted})
 }
@@ -157,7 +177,10 @@ func (s *Service) ChangeOptions(ctx context.Context, c *store.Customer, subID in
 	days := daysLeft(sub.ExpiresAt)
 	info := &ChangeInfo{SubscriptionID: sub.ID, PlanID: cur.ID, PlanName: cur.Name, TrafficLimitGB: cur.TrafficLimitGB,
 		DeviceLimit: cur.DeviceLimit, PricePerMonth: cur.MonthlyPrice(dim), DaysLeft: days,
-		DiscountPercent: c.PersonalDiscount, Targets: []ChangeTarget{}}
+		DiscountPercent: c.PersonalDiscount, Penalty: s.set().General.PlanChangePenalty, Targets: []ChangeTarget{}}
+	if info.Blocked, err = s.changeLimitReached(ctx, s.Store.Pool, c.ID); err != nil {
+		return nil, err
+	}
 	for i := range plans {
 		p := &plans[i]
 		problem := s.targetProblem(ctx, c, cur, p)
@@ -168,7 +191,7 @@ func (s *Service) ChangeOptions(ctx context.Context, c *store.Customer, subID in
 			TrafficLimitGB: p.TrafficLimitGB, DeviceLimit: p.DeviceLimit,
 			PricePerMonth: applyDiscount(p.MonthlyPrice(dim), c.PersonalDiscount), Unavailable: problem}
 		if problem == "" {
-			t.Quotes = changeQuotes(cur, p, days, dim, c.PersonalDiscount)
+			t.Quotes = changeQuotes(cur, p, days, dim, c.PersonalDiscount, s.set().General.PlanChangePenalty)
 			if len(t.Quotes) == 0 {
 				continue
 			}
@@ -202,9 +225,14 @@ func (s *Service) ChangePlan(ctx context.Context, c *store.Customer, subID int64
 		}
 		return nil, userErr(p)
 	}
+	if msg, err := s.changeLimitReached(ctx, s.Store.Pool, c.ID); err != nil {
+		return nil, err
+	} else if msg != "" {
+		return nil, userErr(msg)
+	}
 	dim := s.set().General.DaysInMonth
 	var q *ChangeQuote
-	for _, x := range changeQuotes(cur, target, daysLeft(sub.ExpiresAt), dim, c.PersonalDiscount) {
+	for _, x := range changeQuotes(cur, target, daysLeft(sub.ExpiresAt), dim, c.PersonalDiscount, s.set().General.PlanChangePenalty) {
 		if x.Mode == req.Mode {
 			x := x
 			q = &x
@@ -236,10 +264,15 @@ func (s *Service) ChangePlan(ctx context.Context, c *store.Customer, subID int64
 		if locked.PlanID == nil || *locked.PlanID != cur.ID {
 			return userErr("тариф подписки уже изменился, обновите страницу")
 		}
+		if msg, err := s.changeLimitReached(ctx, tx, cust.ID); err != nil {
+			return err
+		} else if msg != "" {
+			return userErr(msg)
+		}
 		// Recalculate under the lock with fresh data.
 		days := daysLeft(locked.ExpiresAt)
 		var fresh *ChangeQuote
-		for _, x := range changeQuotes(cur, target, days, dim, cust.PersonalDiscount) {
+		for _, x := range changeQuotes(cur, target, days, dim, cust.PersonalDiscount, s.set().General.PlanChangePenalty) {
 			if x.Mode == req.Mode {
 				x := x
 				fresh = &x

@@ -114,6 +114,10 @@ export default function ChangePlan() {
         {d.discount_percent > 0 && <span className="badge accent">Ваша скидка {d.discount_percent}%</span>}
       </div>
       {help && <p className="small muted">{modeInfo.help}</p>}
+      {d.penalty > 0 && (
+        <p className="small muted">Комиссия за смену тарифа — {d.penalty}% от стоимости оставшихся дней, она уже учтена в расчёте.</p>
+      )}
+      {d.blocked && <div className="glass panel err">{d.blocked}</div>}
 
       {list.length === 0 ? (
         <div className="glass panel empty">Для этого способа подходящих тарифов нет</div>
@@ -175,7 +179,7 @@ export default function ChangePlan() {
                 <div className="pay-total">{days(q.days_after)}</div>
               )}
             </div>
-            <button className="btn" disabled={busy || (q.mode === 'upgrade' && !pay.method)} onClick={submit}>
+            <button className="btn" disabled={busy || !!d.blocked || (q.mode === 'upgrade' && !pay.method)} onClick={submit}>
               {q.mode === 'upgrade' ? 'Оплатить' : 'Перейти'}
             </button>
           </div>

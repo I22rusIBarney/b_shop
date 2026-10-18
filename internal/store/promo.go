@@ -265,6 +265,14 @@ type PlanChange struct {
 	ToName         string     `db:"to_name" json:"to_name"`
 }
 
+// CountRecentPlanChanges counts the customer's own plan changes in the last 24 hours (admin changes excluded).
+func CountRecentPlanChanges(ctx context.Context, db DB, customerID int64) (int, error) {
+	var n int
+	err := db.QueryRow(ctx, `SELECT count(*) FROM plan_changes WHERE customer_id=$1 AND mode <> 'admin'
+		AND created_at > now() - interval '24 hours'`, customerID).Scan(&n)
+	return n, err
+}
+
 func InsertPlanChange(ctx context.Context, db DB, c *PlanChange) error {
 	return db.QueryRow(ctx, `INSERT INTO plan_changes (customer_id, subscription_id, from_plan_id, to_plan_id, mode,
 		days_before, days_after, payment_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, created_at`,
