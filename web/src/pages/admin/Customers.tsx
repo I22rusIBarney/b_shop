@@ -4,11 +4,26 @@ import { get, type CustomerRow, type Paged, type Plan } from '../../lib/api'
 import { relative, rub, shortDate } from '../../lib/format'
 import { ErrorBox, Spinner, useLoad, pressable } from '../../ui/kit'
 import PanelSync from './PanelSync'
+import { Avatar } from '../../ui/admin'
 
 const PAGE = 50
 
 function name(c: CustomerRow) {
   return [c.first_name, c.last_name].filter(Boolean).join(' ') || (c.username ? `@${c.username}` : '') || c.email || `#${c.id}`
+}
+
+/** Subscription state in one glance: coloured pill plus the date it ends or ended. */
+function SubState({ c }: { c: CustomerRow }) {
+  if (!c.expires_at) return <span className="sub-state none">нет подписки</span>
+  const left = Math.ceil((new Date(c.expires_at).getTime() - Date.now()) / 86400000)
+  const cls = left <= 0 ? 'expired' : left <= 3 ? 'soon' : 'active'
+  const label = left <= 0 ? 'истекла' : left <= 3 ? `${left} дн.` : 'активна'
+  return (
+    <span className="sub-state-wrap">
+      <span className={`sub-state ${cls}`}>{label}</span>
+      <span className="sub-state-date num">{shortDate(c.expires_at)}</span>
+    </span>
+  )
 }
 
 export default function Customers() {
@@ -54,8 +69,15 @@ export default function Customers() {
           <PanelSync onDone={data.reload} />
         </div>
       </div>
-      <div className="filters">
-        <input className="input grow" placeholder="Имя, @username, почта, Telegram ID, ссылка подписки" value={q} onChange={(e) => setQ(e.target.value)} />
+      <div className="filters toolbar">
+        <input
+          className="input grow"
+          type="search"
+          placeholder="Имя, @username, почта, Telegram ID, ссылка подписки"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          aria-label="Поиск клиентов"
+        />
         <select className="input" value={status} onChange={(e) => set('status', e.target.value)}>
           <option value="">Все</option>
           <option value="active">С активной подпиской</option>
@@ -98,7 +120,7 @@ export default function Customers() {
               <thead>
                 <tr>
                   <th>Клиент</th>
-                  <th>Подписка до</th>
+                  <th>Подписка</th>
                   <th>Оплачено</th>
                   <th>Рефералы</th>
                   <th>Активность</th>
@@ -109,17 +131,22 @@ export default function Customers() {
                 {data.data.items.map((c) => (
                   <tr key={c.id} className="click" {...pressable(() => nav(`/admin/customers/${c.id}`))}>
                     <td className="wide">
-                      <div className="row wrap" style={{ gap: 6 }}>
-                        <span className="cell-title">{name(c)}</span>
-                        {c.is_admin && <span className="badge accent">админ</span>}
-                        {c.bot_blocked && <span className="badge warn">бот заблокирован</span>}
-                        {c.is_blocked && <span className="badge bad">заблокирован</span>}
-                        {c.tag && <span className="badge">{c.tag}</span>}
+                      <div className="person">
+                        <Avatar name={name(c)} seed={c.id} size={36} />
+                        <div className="person-text">
+                          <div className="person-name">
+                            <span className="cell-title">{name(c)}</span>
+                            {c.is_admin && <span className="badge accent">админ</span>}
+                            {c.bot_blocked && <span className="badge warn">бот заблокирован</span>}
+                            {c.is_blocked && <span className="badge bad">заблокирован</span>}
+                            {c.tag && <span className="badge">{c.tag}</span>}
+                          </div>
+                          <div className="person-sub num">{[c.telegram_id, c.username && `@${c.username}`, c.email].filter(Boolean).join(' · ') || '—'}</div>
+                        </div>
                       </div>
-                      <div className="tiny muted">{[c.telegram_id, c.username && `@${c.username}`, c.email].filter(Boolean).join(' · ')}</div>
                     </td>
-                    <td className="num" data-label="Подписка до">
-                      {c.expires_at ? <span style={{ color: new Date(c.expires_at) < new Date() ? 'var(--danger)' : undefined }}>{shortDate(c.expires_at)}</span> : <span className="muted">—</span>}
+                    <td className="sub-cell" data-label="Подписка">
+                      <SubState c={c} />
                     </td>
                     <td className="num" data-label="Оплачено">
                       {rub(c.paid_total)} <span className="tiny muted">({c.payments_count})</span>

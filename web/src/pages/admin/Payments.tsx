@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { get, type Paged, type Payment } from '../../lib/api'
 import { dateTime, operationName, paymentStatus, rub } from '../../lib/format'
 import { ErrorBox, Sheet, Spinner, useLoad, pressable } from '../../ui/kit'
+import { Avatar } from '../../ui/admin'
 
 const PAGE = 50
 const receiptName: Record<string, string> = { none: '—', pending: 'в очереди', done: 'отправлен', failed: 'ошибка', cancel_pending: 'аннулируется', canceled: 'аннулирован' }
@@ -47,7 +48,7 @@ export default function Payments() {
           </span>
         )}
       </div>
-      <div className="filters">
+      <div className="filters toolbar">
         <input className="input grow" placeholder="ID ЮKassa, @username, почта, Telegram ID" value={q} onChange={(e) => setQ(e.target.value)} />
         <select className="input" value={params.get('status') || ''} onChange={(e) => set('status', e.target.value)}>
           <option value="">Все статусы</option>
@@ -87,14 +88,19 @@ export default function Payments() {
                 {data.data.items.map((p) => (
                   <tr key={p.id} className="click" {...pressable(() => setOpen(p))}>
                     <td className="num muted wide small">{dateTime(p.created_at)}</td>
-                    <td className="wide lead cell-title">{p.customer_name || `#${p.customer_id}`}</td>
+                    <td className="wide lead">
+                      <div className="person">
+                        <Avatar name={p.customer_name || `#${p.customer_id}`} seed={p.customer_id} size={30} />
+                        <span className="cell-title">{p.customer_name || `#${p.customer_id}`}</span>
+                      </div>
+                    </td>
                     <td className="wide">
                       {operationName[p.operation] || p.operation}: {p.title}
                       <div className="tiny muted">{p.days} дн. · {p.method || p.provider}</div>
                     </td>
-                    <td className="num" data-label="Сумма">{rub(p.amount)}</td>
+                    <td className="num amount" data-label="Сумма">{rub(p.amount)}</td>
                     <td data-label="Статус">
-                      <span className={p.status === 'succeeded' ? 'badge ok' : p.status === 'pending' ? 'badge warn' : p.status === 'refunded' ? 'badge bad' : 'badge'}>{paymentStatus[p.status]}</span>
+                      <span className={`sub-state ${p.status === 'succeeded' ? 'active' : p.status === 'pending' ? 'soon' : p.status === 'refunded' ? 'expired' : 'none'}`}>{paymentStatus[p.status]}</span>
                     </td>
                     <td className={p.receipt_status === 'failed' ? 'err' : 'muted'} data-label="Чек">{receiptName[p.receipt_status] || p.receipt_status}</td>
                   </tr>

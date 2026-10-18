@@ -946,7 +946,11 @@ button.am-item { background: none; border: 1px solid transparent; color: var(--t
   .admin-bar { display: flex; position: absolute; left: 6px; top: calc(10px + var(--top-inset)); pointer-events: none; }
   .admin-bar .icon-btn { pointer-events: auto; }
   .admin-bar .icon-btn[aria-label="Выйти"] { display: none; }
-  .admin-bar + :not(.admin-head, h1) > :first-child, .admin-bar + h1, .admin-bar + .admin-head { padding-left: 38px; min-height: 40px; }
+  .admin-bar + :not(.admin-head, h1) > :first-child, .admin-bar + h1 { padding-left: 38px; min-height: 40px; }
+  /* Only the title row makes room for ☰; actions that wrap below start at the page edge. */
+  .admin-bar + .admin-head { padding-left: 0; padding-right: 0; }
+  .admin-bar + .admin-head > :first-child { padding-left: 38px; min-height: 40px; display: flex; align-items: center; }
+  .admin-bar + .admin-head > :not(:first-child) { flex-basis: 100%; }
   .admin-main h1 { font-size: 1.15rem; }
 }
 
@@ -1226,3 +1230,35 @@ button.am-item { background: none; border: 1px solid transparent; color: var(--t
 .feed-link:hover .main div:first-child { color: var(--accent); }
 .feed + .feed { border-top: 1px solid var(--hair); }
 .panel .list .item { border-color: var(--hair); }
+
+/* ---- admin lists: person cell, subscription state, filter toolbar ---- */
+.person { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.person-text { min-width: 0; display: grid; gap: 2px; }
+.person-name { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.person-name .cell-title { font-weight: 700; }
+.person-sub { font-size: .76rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sub-state-wrap { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.sub-state { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 999px; font-size: .72rem; font-weight: 800; letter-spacing: .02em;
+  color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); }
+.sub-state::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.sub-state.active { --c: var(--ok); } .sub-state.soon { --c: var(--warn); } .sub-state.expired { --c: var(--danger); } .sub-state.none { --c: var(--muted); }
+.sub-state-date { font-size: .8rem; color: var(--muted); }
+.admin .table-wrap { border-color: var(--hair); background: var(--panel); border-radius: 16px; }
+.admin .t th { font-size: .74rem; font-weight: 700; letter-spacing: .02em; color: var(--muted); border-color: var(--hair); padding-top: 12px; padding-bottom: 12px; }
+.admin .t td { border-color: var(--hair); }
+.admin .t tr.click { transition: background .15s ease; }
+.filters.toolbar { padding: 8px; border-radius: 16px; background: var(--panel); border: 1px solid var(--hair); gap: 8px; }
+.filters.toolbar .input { min-height: 40px; border-color: transparent; background: color-mix(in srgb, var(--text) 5%, transparent); }
+.filters.toolbar .input:hover { background: color-mix(in srgb, var(--text) 7%, transparent); }
+.filters.toolbar .input:focus { border-color: color-mix(in srgb, var(--accent) 55%, transparent); background: color-mix(in srgb, var(--bg) 50%, transparent); }
+@media (max-width: 720px) {
+  .t.stack-sm .person-sub { white-space: normal; }
+  .filters.toolbar { padding: 6px; }
+}
+.admin .t td.amount { font-weight: 800; }
+
+@media (max-width: 720px) {
+  .t.stack-sm td:first-child { padding-left: 0; }
+  .t.stack-sm td.sub-cell { grid-column: 1 / -1; }
+  .sub-state { white-space: nowrap; }
+}
