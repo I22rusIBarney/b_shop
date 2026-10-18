@@ -204,6 +204,7 @@ export interface Plan {
   traffic_packages: TrafficPackage[]
   traffic_reset_enabled: boolean
   traffic_reset_price: number
+  notice: string
   created_at?: string
   periods: Period[]
 }

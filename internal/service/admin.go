@@ -34,6 +34,10 @@ func ValidatePlan(p *store.Plan) error {
 	if p.TrafficLimitGB < 0 || p.DeviceLimit < 0 || p.MaxPerCustomer < 0 || p.ExtraDevicePrice < 0 || p.MaxExtraDevices < 0 {
 		return userErr("лимиты не могут быть отрицательными")
 	}
+	p.Notice = strings.TrimSpace(p.Notice)
+	if len([]rune(p.Notice)) > 1000 {
+		return userErr("«Важно знать перед покупкой» — до 1000 символов")
+	}
 	if p.TrafficResetPrice < 0 {
 		return userErr("цена сброса трафика не может быть отрицательной")
 	}

@@ -118,6 +118,7 @@ type BuyRequest struct {
 	PeriodID       int64  `json:"period_id"`
 	SubscriptionID int64  `json:"subscription_id"` // renew this subscription; 0 = new subscription
 	ExtraDevices   int    `json:"extra_devices"`   // new subscription only: device slots on top of the plan (slider)
+	NoticeAck      bool   `json:"notice_ack"`      // the customer confirmed the plan's notice
 	Method         string `json:"method"`          // yookassa method code, e.g. sbp
 	SaveCard       bool   `json:"save_card"`
 	ReturnURL      string `json:"return_url"`
@@ -143,6 +144,9 @@ func (s *Service) Buy(ctx context.Context, c *store.Customer, req BuyRequest) (*
 	}
 	if !plan.IsActive || plan.IsTrial {
 		return nil, userErr("этот тариф сейчас недоступен")
+	}
+	if strings.TrimSpace(plan.Notice) != "" && !req.NoticeAck {
+		return nil, userErr("подтвердите, что ознакомились с условиями тарифа")
 	}
 	op := "buy"
 	var sub *store.Subscription

@@ -20,6 +20,7 @@ type GiftRequest struct {
 	PeriodID  int64  `json:"period_id"`
 	Method    string `json:"method"`
 	ReturnURL string `json:"return_url"`
+	NoticeAck bool   `json:"notice_ack"`
 }
 
 // Recipient is what the payer sees about the person they pay for: enough to recognise them, nothing more.
@@ -63,7 +64,7 @@ func maskName(c *store.Customer) string {
 	return string(r[:keep]) + strings.Repeat("•", min(utf8.RuneCountInString(src)-keep, 6))
 }
 
-func (s *Service) giftPlan(ctx context.Context, c *store.Customer, planID, periodID int64) (*store.Plan, *store.Period, error) {
+func (s *Service) giftPlan(ctx context.Context, c *store.Customer, planID, periodID int64, ack bool) (*store.Plan, *store.Period, error) {
 	plan, err := store.GetPlan(ctx, s.Store.Pool, planID)
 	if err != nil {
 		return nil, nil, userErr("тариф не найден")
@@ -74,6 +75,9 @@ func (s *Service) giftPlan(ctx context.Context, c *store.Customer, planID, perio
 	}
 	if !plan.IsActive || plan.IsTrial || s.planHidden(ctx, c, plan) {
 		return nil, nil, userErr("этот тариф сейчас недоступен")
+	}
+	if strings.TrimSpace(plan.Notice) != "" && !ack {
+		return nil, nil, userErr("подтвердите, что ознакомились с условиями тарифа")
 	}
 	return plan, per, nil
 }
@@ -124,7 +128,7 @@ func (s *Service) BuyForOther(ctx context.Context, c *store.Customer, req GiftRe
 	if err != nil {
 		return nil, err
 	}
-	plan, per, err := s.giftPlan(ctx, c, req.PlanID, req.PeriodID)
+	plan, per, err := s.giftPlan(ctx, c, req.PlanID, req.PeriodID, req.NoticeAck)
 	if err != nil {
 		return nil, err
 	}
@@ -141,7 +145,7 @@ func (s *Service) BuyGift(ctx context.Context, c *store.Customer, req GiftReques
 	if !s.set().Gifts.Enabled {
 		return nil, userErr("подарочные подписки отключены")
 	}
-	plan, per, err := s.giftPlan(ctx, c, req.PlanID, req.PeriodID)
+	plan, per, err := s.giftPlan(ctx, c, req.PlanID, req.PeriodID, req.NoticeAck)
 	if err != nil {
 		return nil, err
 	}

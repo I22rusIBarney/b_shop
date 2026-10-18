@@ -16,7 +16,7 @@ const blank: Plan = {
   required_plan_id: null, max_per_customer: 0, traffic_limit_gb: 0, device_limit: 3, extra_devices_allowed: false,
   extra_device_price: 0, max_extra_devices: 0, rw_tag: '', rw_internal_squads: [], rw_external_squad: null,
   traffic_reset_strategy: 'MONTH', reset_traffic_on_buy: false, trial_days: 0,
-  traffic_topup_enabled: false, traffic_packages: [], traffic_reset_enabled: false, traffic_reset_price: 0,
+  traffic_topup_enabled: false, traffic_packages: [], traffic_reset_enabled: false, traffic_reset_price: 0, notice: '',
   periods: [
     { id: 0, unit: 'month', amount: 1, price: 0, is_best: false },
     { id: 0, unit: 'month', amount: 3, price: 0, is_best: true },
@@ -103,6 +103,9 @@ export default function PlanEditor() {
         </Field>
         <Field label="Что входит" hint="Каждый пункт с новой строки">
           <textarea className="input" value={features} onChange={(e) => setFeatures(e.target.value)} placeholder={'Безлимитный трафик\nДо 3 устройств\nYouTube без рекламы'} />
+        </Field>
+        <Field label="Важно знать перед покупкой" hint="Ограничения тарифа. Если заполнено, клиент перед оплатой отмечает «Понятно» — без этого оплатить нельзя">
+          <textarea className="input" value={p.notice} onChange={(e) => set('notice', e.target.value)} maxLength={1000} placeholder="Например: не обходит белые списки мобильных операторов" />
         </Field>
         <div className="form-grid">
           <Toggle checked={p.is_active} onChange={(v) => set('is_active', v)} label="Активен" hint="Неактивный тариф нельзя купить" />

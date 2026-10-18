@@ -8,6 +8,12 @@ import { haptic } from '../lib/tg'
 import { Card, Chevron, Tag, Trash } from '../ui/icons'
 import { Field, Sheet, Toggle, useAction, useLoad } from '../ui/kit'
 
+// iOS Settings-style coloured tiles, one hue per kind of action.
+const tone: Record<string, string> = {
+  news: 'orange', locations: 'blue', buy: 'green', promo: 'pink', buyfor: 'indigo', gifts: 'red', ref: 'purple',
+  support: 'green', faq: 'teal', logins: 'gray', payments: 'blue', cards: 'green', exit: 'red',
+}
+
 /** Phone "Профиль" tab (reference 3555–3556): the cabinet sections as grouped row cards. */
 export default function Profile() {
   const { me } = useApp()
@@ -18,40 +24,57 @@ export default function Profile() {
 
   return (
     <div className="menu-page">
-      <div className="menu-who">
-        <b>{name}</b>
-        {c.personal_discount > 0 && <span className="badge accent">Ваша скидка {c.personal_discount}%</span>}
-      </div>
-      {groups.map((g) => (
-        <section key={g.title} className="menu-group">
-          <div className="am-title">{g.title}</div>
-          {g.items
-            .filter((it) => it.only !== 'desktop')
-            .map((it) => {
-              const inner = (
-                <>
-                  <it.icon className="menu-ico" />
-                  <span className="grow">{it.label}</span>
-                  {!!it.badge && <span className="am-badge">{it.badge}</span>}
-                  <Chevron className="chev" />
-                </>
-              )
-              return it.to ? (
-                <Link key={it.key} className="menu-row" to={it.to}>
-                  {inner}
-                </Link>
-              ) : it.href ? (
-                <a key={it.key} className="menu-row" href={it.href} target="_blank" rel="noopener noreferrer" onClick={(e) => openExternal(e, it.href!)}>
-                  {inner}
-                </a>
-              ) : (
-                <button key={it.key} type="button" className="menu-row" onClick={it.onClick}>
-                  {inner}
-                </button>
-              )
-            })}
-        </section>
-      ))}
+      <header className="large-title">
+        <h1>{name}</h1>
+      </header>
+      {c.personal_discount > 0 && (
+        <div className="callout">
+          <span className="callout-ico">
+            <Tag />
+          </span>
+          <div>
+            <b>Ваша скидка {c.personal_discount}%</b>
+            <p>Применяется ко всем покупкам автоматически.</p>
+          </div>
+        </div>
+      )}
+      {groups.map((g) => {
+        const items = g.items.filter((it) => it.only !== 'desktop')
+        if (!items.length) return null
+        return (
+          <section key={g.title} className="group">
+            <h3 className="group-title">{g.title}</h3>
+            <div className="group-card">
+              {items.map((it) => {
+                const inner = (
+                  <>
+                    <span className={`set-ico ${tone[it.key] || 'gray'}`} aria-hidden="true">
+                      <it.icon />
+                    </span>
+                    <span className="grow">{it.label}</span>
+                    {!!it.badge && <span className="am-badge">{it.badge}</span>}
+                    <Chevron className="chev" />
+                  </>
+                )
+                const cls = it.key === 'exit' ? 'group-row nav-row danger' : 'group-row nav-row'
+                return it.to ? (
+                  <Link key={it.key} className={cls} to={it.to}>
+                    {inner}
+                  </Link>
+                ) : it.href ? (
+                  <a key={it.key} className={cls} href={it.href} target="_blank" rel="noopener noreferrer" onClick={(e) => openExternal(e, it.href!)}>
+                    {inner}
+                  </a>
+                ) : (
+                  <button key={it.key} type="button" className={cls} onClick={it.onClick}>
+                    {inner}
+                  </button>
+                )
+              })}
+            </div>
+          </section>
+        )
+      })}
       {sheets}
     </div>
   )
