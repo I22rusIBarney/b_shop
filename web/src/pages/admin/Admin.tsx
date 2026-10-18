@@ -20,6 +20,7 @@ import Automations from './Automations'
 import Notifications from './Notifications'
 import Stats from './Stats'
 import Webhooks from './Webhooks'
+import Banners from './Banners'
 import ImportRWP from './ImportRWP'
 import { useBadges } from '../../lib/badges'
 
@@ -45,6 +46,7 @@ const groups: Group[] = [
       { to: '/admin/broadcasts', label: 'Рассылки', icon: Megaphone },
       { to: '/admin/promos', label: 'Промокоды', icon: Ticket },
       { to: '/admin/automations', label: 'Автоматизации', icon: Renew },
+      { to: '/admin/banners', label: 'Баннеры кабинета', icon: Bars },
       { to: '/admin/settings/automations', label: 'Триггеры и рассылки', icon: Sliders },
     ],
   },
@@ -217,6 +219,7 @@ export default function Admin() {
           <Route path="tickets/:id" element={<TicketChat />} />
           <Route path="support/knowledge" element={<Knowledge />} />
           <Route path="broadcasts" element={<Broadcasts />} />
+          <Route path="banners" element={<Banners />} />
           <Route path="automations" element={<Automations />} />
           <Route path="notifications" element={<Notifications />} />
           <Route path="webhooks" element={<Webhooks />} />

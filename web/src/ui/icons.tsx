@@ -72,3 +72,4 @@ export const Trial = I(['M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z', 'M12 9v4l2.5 1.
 export const External = I(['M14 4h6v6', 'M20 4 11 13', 'M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5'])
 export const Send = I(['M21 3 3 10.5l7 2.5 2.5 7z', 'm10 13 4.5-4.5'])
 export const PanelLeft = I(['M4 5h16v14H4z', 'M9 5v14'])
+export const Warn = I(['M12 3 2 20h20z', 'M12 10v4', 'M12 17h.01'])

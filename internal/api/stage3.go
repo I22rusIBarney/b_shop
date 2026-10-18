@@ -107,6 +107,59 @@ func (s *Server) stage3Routes(mux *http.ServeMux) {
 		}
 		return s.svc.ResetTrafficPaid(r.Context(), customer(r), id, in.Method, in.ReturnURL)
 	})))))
+	mux.HandleFunc("GET /api/banners", s.authed(s.handle(func(r *http.Request) (any, error) {
+		return s.svc.BannersFor(r.Context(), customer(r))
+	})))
+	mux.HandleFunc("POST /api/banners/{id}/dismiss", s.authed(s.handle(func(r *http.Request) (any, error) {
+		id, err := pathID(r, "id")
+		if err != nil {
+			return nil, err
+		}
+		return nil, s.svc.DismissBanner(r.Context(), customer(r), id)
+	})))
+	mux.HandleFunc("GET /api/admin/banners", s.admin(s.handle(func(r *http.Request) (any, error) {
+		return store.ListBanners(r.Context(), s.svc.Store.Pool)
+	})))
+	saveBanner := func(r *http.Request, id int64) (any, error) {
+		var b store.Banner
+		if err := decode(r, &b); err != nil {
+			return nil, err
+		}
+		b.ID = id
+		if id != 0 {
+			old, err := store.GetBanner(r.Context(), s.svc.Store.Pool, id)
+			if err != nil {
+				return nil, err
+			}
+			b.Kind = old.Kind // system banners keep their logic
+		} else {
+			b.Kind = ""
+		}
+		if err := service.ValidateBanner(&b); err != nil {
+			return nil, err
+		}
+		return b, store.SaveBanner(r.Context(), s.svc.Store.Pool, &b)
+	}
+	mux.HandleFunc("POST /api/admin/banners", s.admin(s.handle(func(r *http.Request) (any, error) { return saveBanner(r, 0) })))
+	mux.HandleFunc("PUT /api/admin/banners/{id}", s.admin(s.handle(func(r *http.Request) (any, error) {
+		id, err := pathID(r, "id")
+		if err != nil {
+			return nil, err
+		}
+		return saveBanner(r, id)
+	})))
+	mux.HandleFunc("DELETE /api/admin/banners/{id}", s.admin(s.handle(func(r *http.Request) (any, error) {
+		id, err := pathID(r, "id")
+		if err != nil {
+			return nil, err
+		}
+		return nil, store.DeleteBanner(r.Context(), s.svc.Store.Pool, id)
+	})))
+	mux.HandleFunc("POST /api/admin/banners/reorder", s.admin(s.handle(withBody(func(r *http.Request, in struct {
+		IDs []int64 `json:"ids"`
+	}) (any, error) {
+		return nil, store.ReorderBanners(r.Context(), s.svc.Store.Pool, in.IDs)
+	}))))
 	mux.HandleFunc("GET /api/locations", s.authed(s.handle(func(r *http.Request) (any, error) {
 		return s.svc.Locations(r.Context())
 	})))

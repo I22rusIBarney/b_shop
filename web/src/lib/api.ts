@@ -704,3 +704,19 @@ export interface Location {
   country: string
   online: boolean
 }
+
+export interface Banner {
+  id: number
+  kind: '' | 'link_email' | 'link_telegram'
+  title: string
+  subtitle: string
+  icon: string
+  segment: 'all' | 'active' | 'trial' | 'expired' | 'no_sub'
+  button_text: string
+  button_url: string
+  starts_at: string | null
+  ends_at: string | null
+  is_active: boolean
+  dismissible: boolean
+  sort: number
+}

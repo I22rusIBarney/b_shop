@@ -971,3 +971,30 @@ button.am-item { background: none; border: 1px solid transparent; color: var(--t
 .loc-flag { width: 26px; font-size: 1.35rem; line-height: 1; text-align: center; flex: none; }
 .loc-status { flex: none; font-size: .78rem; font-weight: 600; padding: 3px 10px; border-radius: 999px; color: var(--danger); border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent); }
 .loc-status.on { color: #3fb950; border-color: color-mix(in srgb, #3fb950 45%, transparent); }
+
+/* ---- cabinet banners (above the subscription card) ---- */
+.cab-banners { display: grid; gap: 8px; }
+.cab-banner {
+  position: relative; display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 16px;
+  border: 1px solid var(--line); color: var(--text);
+  background: color-mix(in srgb, var(--surface-solid) var(--card-alpha), transparent);
+  backdrop-filter: blur(var(--card-blur)); -webkit-backdrop-filter: blur(var(--card-blur));
+}
+.cab-banner-ico { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.cab-banner.warning .cab-banner-ico { color: #f0b429; background: color-mix(in srgb, #f0b429 14%, transparent); }
+.cab-banner.telegram .cab-banner-ico, .cab-banner.mail .cab-banner-ico { color: #4ea3ff; background: color-mix(in srgb, #4ea3ff 14%, transparent); }
+.cab-banner-ico svg { width: 19px; height: 19px; }
+.cab-banner-body { flex: 1; min-width: 0; display: grid; gap: 2px; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.cab-banner-body:disabled { cursor: default; }
+.cab-banner-body b { font-size: .92rem; font-weight: 600; }
+.cab-banner-body span { font-size: .78rem; color: var(--muted); line-height: 1.35; }
+.cab-banner-btn { flex: none; min-height: 32px; padding: 0 12px; border-radius: 999px; border: 1.5px solid var(--accent); background: none; color: var(--accent); font: inherit; font-size: .8rem; font-weight: 600; cursor: pointer; }
+.cab-banner-chev { width: 18px; height: 18px; color: var(--muted); flex: none; }
+.cab-banner-x { position: absolute; top: -7px; right: -7px; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--line-strong); background: var(--surface-solid); color: var(--muted); cursor: pointer; padding: 0; }
+.cab-banner-x svg { width: 13px; height: 13px; }
+@media (pointer: coarse) { .cab-banner-x { width: 30px; height: 30px; top: -10px; right: -8px; } }
+.banner-row { display: flex; align-items: center; gap: 10px; padding: 12px 14px; }
+.banner-row.off { opacity: .6; }
+.banner-order { display: grid; gap: 2px; flex: none; }
+.banner-order .icon-btn { width: 28px; height: 22px; }
+.banner-row .toggle { flex: none; }

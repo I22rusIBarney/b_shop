@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { TrafficSheet } from './Traffic'
+import { CabinetBanners } from '../ui/banners'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { del, get, patch, post, type BuyResult, type Device, type DevicesOffer, type Subscription } from '../lib/api'
 import { useApp } from '../lib/app'
@@ -81,6 +82,7 @@ export default function Home() {
       <div className="home">
         <div className="home-fill" />
         {banner}
+        <CabinetBanners />
         <div className="glass sub-card stack lg">
           <div className="stack">
             <h2>Подписки пока нет</h2>
@@ -113,6 +115,7 @@ export default function Home() {
       </div>
       <div className="home-fill" />
       {banner}
+      <CabinetBanners />
       <div className="carousel-wrap">
         <div className="carousel" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
           {list[idx] && (
