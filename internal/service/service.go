@@ -41,6 +41,7 @@ type Panel interface {
 	SubpageConfigs(ctx context.Context) ([]remnawave.SubpageConfigInfo, error)
 	ListUsers(ctx context.Context, fn func([]remnawave.User) error) error
 	SubpageConfig(ctx context.Context, id uuid.UUID) (json.RawMessage, error)
+	Nodes(ctx context.Context) ([]remnawave.Node, error)
 }
 
 // PaymentGateway is the subset of the YooKassa client the service uses.
@@ -105,6 +106,11 @@ type Service struct {
 	nalog      *moynalog.Client
 	nalogKey   string
 	applyLocks sync.Map
+
+	// Locations shown to customers, cached briefly so the page does not hit the panel on every open.
+	locMu    sync.Mutex
+	locCache []Location
+	locAt    time.Time
 
 	guideMu       sync.Mutex
 	guides        map[string]cachedGuide // by subscription page config uuid ("" = default)

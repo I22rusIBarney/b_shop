@@ -165,7 +165,7 @@ var methodNames = map[string]string{"sbp": "СБП", "bank_card": "Карта", 
 	"yoo_money": "ЮMoney", "mir_pay": "Mir Pay", "": "Не указан", "saved": "Сохранённая карта"}
 
 var operationNames = map[string]string{"buy": "Покупка", "renew": "Продление", "change": "Смена тарифа", "devices": "Устройства",
-	"traffic": "Трафик", "autopay": "Автопродление"}
+	"traffic": "Трафик", "traffic_reset": "Сброс трафика", "autopay": "Автопродление", "gift": "Подарок", "buy_for": "Покупка другому"}
 
 var providerNames = map[string]string{"telegram": "Telegram", "telegram_bot": "Telegram", "telegram_webapp": "Telegram",
 	"email": "Почта", "yandex": "Яндекс", "vk": "VK", "google": "Google"}

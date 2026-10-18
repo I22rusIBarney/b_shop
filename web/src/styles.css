@@ -962,3 +962,12 @@ button.am-item { background: none; border: 1px solid transparent; color: var(--t
   .admin-bar + :not(.admin-head, h1) > :first-child, .admin-bar + h1, .admin-bar + .admin-head { padding-left: 38px; min-height: 40px; }
   .admin-main h1 { font-size: 1.15rem; }
 }
+
+/* ---- traffic actions and locations ---- */
+.traffic-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.traffic-now { display: grid; gap: 8px; }
+.loc-row { cursor: default; }
+.loc-row:active { transform: none; }
+.loc-flag { width: 26px; font-size: 1.35rem; line-height: 1; text-align: center; flex: none; }
+.loc-status { flex: none; font-size: .78rem; font-weight: 600; padding: 3px 10px; border-radius: 999px; color: var(--danger); border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent); }
+.loc-status.on { color: #3fb950; border-color: color-mix(in srgb, #3fb950 45%, transparent); }

@@ -514,6 +514,7 @@ func (s *Service) ApplyPayment(ctx context.Context, id uuid.UUID) error {
 				if sub.PlanID == nil || *sub.PlanID != plan.ID {
 					sub.ExtraDevices = 0 // trial/free turned into another plan
 				}
+				sub.ExtraTrafficBytes = 0 // bought traffic lasts until the paid period is renewed
 				err = s.provisionExtend(ctx, tx, cust, sub, g)
 			}
 		case "change":
@@ -523,6 +524,7 @@ func (s *Service) ApplyPayment(ctx context.Context, id uuid.UUID) error {
 			sub, err = store.GetSubscriptionForUpdate(ctx, tx, *pay.SubscriptionID)
 			if err == nil {
 				before := daysLeft(sub.ExpiresAt)
+				sub.ExtraTrafficBytes = 0
 				err = s.switchPlan(ctx, tx, cust, sub, plan, sub.ExpiresAt, g.Username)
 				if err == nil {
 					pid := pay.ID
@@ -540,6 +542,8 @@ func (s *Service) ApplyPayment(ctx context.Context, id uuid.UUID) error {
 			}
 		case "gift":
 			gift, err = createGift(ctx, tx, cust, pay, plan)
+		case "traffic", "traffic_reset":
+			sub, err = s.applyTraffic(ctx, tx, pay, plan)
 		case "devices":
 			if pay.SubscriptionID == nil {
 				return errors.New("devices without subscription")
@@ -622,6 +626,10 @@ func (s *Service) afterPurchase(ctx context.Context, c *store.Customer, p *store
 	case "devices":
 		text = fmt.Sprintf("Добавлено устройств: <b>%d</b>. Теперь в подписке <b>%s</b> до %d устройств.", p.ExtraDevices,
 			escape(sub.Title), sub.TotalDevices())
+	case "traffic":
+		text = fmt.Sprintf("Добавлено <b>%d ГБ</b> трафика к подписке <b>%s</b> до конца оплаченного периода.", p.TrafficGB, escape(sub.Title))
+	case "traffic_reset":
+		text = fmt.Sprintf("Трафик подписки <b>%s</b> обнулён — можно пользоваться дальше.", escape(sub.Title))
 	default:
 		text = fmt.Sprintf("Подписка <b>%s</b> продлена до <b>%s</b>.", escape(sub.Title), until)
 	}
@@ -632,13 +640,17 @@ func (s *Service) afterPurchase(ctx context.Context, c *store.Customer, p *store
 		EmailSubject: "Оплата получена",
 	})
 	opName := map[string]string{"buy": "Покупка", "renew": "Продление", "autopay": "Автопродление",
-		"change": "Смена тарифа", "devices": "Доп. устройства"}[p.Operation]
+		"change": "Смена тарифа", "devices": "Доп. устройства", "traffic": "Доп. трафик", "traffic_reset": "Сброс трафика"}[p.Operation]
 	detail := periodLabel(p.Days, p.Months)
 	switch p.Operation {
 	case "change":
 		detail = s.planName(ctx, p.FromPlanID) + " → " + p.Title + " · " + plural(p.Days, "день", "дня", "дней")
 	case "devices":
 		detail = fmt.Sprintf("+%d устр. на %s", p.ExtraDevices, plural(p.Days, "день", "дня", "дней"))
+	case "traffic":
+		detail = fmt.Sprintf("+%d ГБ", p.TrafficGB)
+	case "traffic_reset":
+		detail = "обнуление трафика"
 	}
 	extra := ""
 	if p.PromoCode != "" {

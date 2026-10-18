@@ -34,6 +34,14 @@ const pages: Record<string, { title: string; sections: SectionSpec[] }> = {
           { k: 'maintenance_mode', label: 'Режим обслуживания', hint: 'Клиенты увидят заглушку, администраторы — всё как обычно', type: 'bool' },
         ],
       },
+      {
+        key: 'locations',
+        title: 'Локации',
+        fields: [
+          { k: 'enabled', label: 'Показывать клиентам раздел «Локации»', hint: 'Список серверов из панели Remnawave: название, страна, работает ли. Адреса не показываются', type: 'bool' },
+          { k: 'show_offline', label: 'Показывать недоступные серверы', hint: 'Иначе в списке только работающие', type: 'bool' },
+        ],
+      },
     ],
   },
   payments: {

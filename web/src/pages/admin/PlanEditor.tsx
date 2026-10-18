@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { get, post, put, type Period, type Plan } from '../../lib/api'
 import { periodLabel } from '../../lib/format'
-import { Back, Close, Plus } from '../../ui/icons'
+import { Back, Close, Plus, Trash } from '../../ui/icons'
 import { ErrorBox, Field, Spinner, Toggle, useAction, useLoad } from '../../ui/kit'
 
 interface Squad {
@@ -16,6 +16,7 @@ const blank: Plan = {
   required_plan_id: null, max_per_customer: 0, traffic_limit_gb: 0, device_limit: 3, extra_devices_allowed: false,
   extra_device_price: 0, max_extra_devices: 0, rw_tag: '', rw_internal_squads: [], rw_external_squad: null,
   traffic_reset_strategy: 'MONTH', reset_traffic_on_buy: false, trial_days: 0,
+  traffic_topup_enabled: false, traffic_packages: [], traffic_reset_enabled: false, traffic_reset_price: 0,
   periods: [
     { id: 0, unit: 'month', amount: 1, price: 0, is_best: false },
     { id: 0, unit: 'month', amount: 3, price: 0, is_best: true },
@@ -172,6 +173,74 @@ export default function PlanEditor() {
           </Field>
         </div>
         <Toggle checked={p.reset_traffic_on_buy} onChange={(v) => set('reset_traffic_on_buy', v)} label="Сбрасывать трафик при покупке и продлении" />
+      </section>
+
+      <section className="card stack">
+        <h3>Докупка и сброс трафика</h3>
+        {p.traffic_limit_gb > 0 ? (
+          <>
+            <Toggle
+              checked={p.traffic_topup_enabled}
+              onChange={(v) => set('traffic_topup_enabled', v)}
+              label="Разрешить докупку трафика"
+              hint="Пакет добавляется к лимиту до конца оплаченного периода; при продлении или смене тарифа лимит возвращается к тарифному"
+            />
+            {p.traffic_topup_enabled && (
+              <div className="stack">
+                {(p.traffic_packages || []).map((pk, i) => (
+                  <div key={i} className="row wrap" style={{ gap: 8, alignItems: 'flex-end' }}>
+                    <Field label="Объём, ГБ">
+                      <input
+                        className="input num"
+                        type="number"
+                        min={1}
+                        value={pk.gb}
+                        onChange={(e) => set('traffic_packages', p.traffic_packages.map((x, j) => (j === i ? { ...x, gb: Number(e.target.value) } : x)))}
+                      />
+                    </Field>
+                    <Field label="Цена, ₽">
+                      <input
+                        className="input num"
+                        type="number"
+                        min={1}
+                        value={pk.price / 100}
+                        onChange={(e) =>
+                          set('traffic_packages', p.traffic_packages.map((x, j) => (j === i ? { ...x, price: Math.round(Number(e.target.value) * 100) } : x)))
+                        }
+                      />
+                    </Field>
+                    <button className="icon-btn" aria-label="Удалить пакет" onClick={() => set('traffic_packages', p.traffic_packages.filter((_, j) => j !== i))}>
+                      <Trash />
+                    </button>
+                  </div>
+                ))}
+                <button className="btn secondary small" style={{ alignSelf: 'flex-start' }} onClick={() => set('traffic_packages', [...(p.traffic_packages || []), { gb: 50, price: 0 }])}>
+                  <Plus /> Добавить пакет
+                </button>
+              </div>
+            )}
+            <Toggle
+              checked={p.traffic_reset_enabled}
+              onChange={(v) => set('traffic_reset_enabled', v)}
+              label="Разрешить сброс трафика клиентом"
+              hint="Кнопка появляется, когда израсходован порог из «Общих» настроек (по умолчанию 80%)"
+            />
+            {p.traffic_reset_enabled && (
+              <Field label="Цена сброса, ₽" hint="0 — бесплатно">
+                <input
+                  className="input num"
+                  type="number"
+                  min={0}
+                  value={p.traffic_reset_price / 100}
+                  onChange={(e) => set('traffic_reset_price', Math.round(Number(e.target.value) * 100))}
+                  style={{ maxWidth: 200 }}
+                />
+              </Field>
+            )}
+          </>
+        ) : (
+          <p className="small muted">Доступно для тарифов с лимитом трафика. Сейчас трафик безлимитный.</p>
+        )}
       </section>
 
       <section className="card stack">

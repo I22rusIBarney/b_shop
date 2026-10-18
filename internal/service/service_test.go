@@ -43,7 +43,11 @@ type fakePanel struct {
 	nextID   int64
 	failNext error
 	creates  int
+	nodes    []remnawave.Node
+	resets   int
 }
+
+func (f *fakePanel) Nodes(context.Context) ([]remnawave.Node, error) { return f.nodes, nil }
 
 func newPanel() *fakePanel { return &fakePanel{users: map[int64]*remnawave.User{}, nextID: 100} }
 
@@ -146,6 +150,12 @@ func (f *fakePanel) DeleteUser(_ context.Context, id int64) error {
 	return nil
 }
 func (f *fakePanel) ResetTraffic(ctx context.Context, id int64) (*remnawave.User, error) {
+	f.mu.Lock()
+	f.resets++
+	if u, ok := f.users[id]; ok {
+		u.UserTraffic.UsedTrafficBytes = 0
+	}
+	f.mu.Unlock()
 	return f.GetUser(ctx, id)
 }
 func (f *fakePanel) RevokeSubscription(ctx context.Context, id int64, _ bool) (*remnawave.User, error) {

@@ -34,6 +34,17 @@ func ValidatePlan(p *store.Plan) error {
 	if p.TrafficLimitGB < 0 || p.DeviceLimit < 0 || p.MaxPerCustomer < 0 || p.ExtraDevicePrice < 0 || p.MaxExtraDevices < 0 {
 		return userErr("лимиты не могут быть отрицательными")
 	}
+	if p.TrafficResetPrice < 0 {
+		return userErr("цена сброса трафика не может быть отрицательной")
+	}
+	for i, pk := range p.TrafficPackages {
+		if pk.GB <= 0 || pk.Price <= 0 {
+			return userErr(fmt.Sprintf("пакет трафика %d: укажите объём и цену больше нуля", i+1))
+		}
+	}
+	if p.TrafficTopupEnabled && len(p.TrafficPackages) == 0 {
+		return userErr("добавьте хотя бы один пакет трафика или выключите докупку")
+	}
 	p.RWTag = strings.ToUpper(strings.TrimSpace(p.RWTag))
 	if p.RWTag != "" {
 		if len(p.RWTag) > 16 {

@@ -70,11 +70,22 @@ type Plan struct {
 	TrafficResetStrategy string      `db:"traffic_reset_strategy" json:"traffic_reset_strategy"`
 	ResetTrafficOnBuy    bool        `db:"reset_traffic_on_buy" json:"reset_traffic_on_buy"`
 	TrialDays            int         `db:"trial_days" json:"trial_days"`
+	// Extra traffic packages and paid reset; only for plans with a traffic limit.
+	TrafficTopupEnabled bool             `db:"traffic_topup_enabled" json:"traffic_topup_enabled"`
+	TrafficPackages     []TrafficPackage `db:"traffic_packages" json:"traffic_packages"`
+	TrafficResetEnabled bool             `db:"traffic_reset_enabled" json:"traffic_reset_enabled"`
+	TrafficResetPrice   int64            `db:"traffic_reset_price" json:"traffic_reset_price"`
 	CreatedAt            time.Time   `db:"created_at" json:"created_at"`
 	Periods              []Period    `db:"-" json:"periods"`
 }
 
 func (p *Plan) TrafficBytes() int64 { return int64(p.TrafficLimitGB) << 30 }
+
+// TrafficPackage is an extra-traffic offer: GB added to the current period for Price kopecks.
+type TrafficPackage struct {
+	GB    int   `json:"gb"`
+	Price int64 `json:"price"`
+}
 
 // PricePerMonth is the cheapest monthly price over the plan's periods, for display.
 func (p *Plan) PricePerMonth(daysInMonth int) int64 {
@@ -167,18 +178,21 @@ func SavePlan(ctx context.Context, tx pgx.Tx, p *Plan) error {
 	if p.RWInternalSquads == nil {
 		p.RWInternalSquads = []uuid.UUID{}
 	}
+	if p.TrafficPackages == nil {
+		p.TrafficPackages = []TrafficPackage{}
+	}
 	args := []any{p.Name, p.Kind, p.Description, p.Features, p.Sort, p.IsActive, p.IsHidden, p.IsTrial,
 		p.RenewalDisabled, p.ChangeFromDisabled, p.ChangeToDisabled, p.ConversionDisabled, p.RequiredPlanID,
 		p.MaxPerCustomer, p.TrafficLimitGB, p.DeviceLimit, p.ExtraDevicesAllowed, p.ExtraDevicePrice,
 		p.MaxExtraDevices, p.RWTag, p.RWInternalSquads, p.RWExternalSquad, p.TrafficResetStrategy,
-		p.ResetTrafficOnBuy, p.TrialDays}
+		p.ResetTrafficOnBuy, p.TrialDays, p.TrafficTopupEnabled, p.TrafficPackages, p.TrafficResetEnabled, p.TrafficResetPrice}
 	if p.ID == 0 {
 		if err := tx.QueryRow(ctx, `INSERT INTO plans (name, kind, description, features, sort, is_active, is_hidden, is_trial,
 			renewal_disabled, change_from_disabled, change_to_disabled, conversion_disabled, required_plan_id,
 			max_per_customer, traffic_limit_gb, device_limit, extra_devices_allowed, extra_device_price,
 			max_extra_devices, rw_tag, rw_internal_squads, rw_external_squad, traffic_reset_strategy,
-			reset_traffic_on_buy, trial_days)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
+			reset_traffic_on_buy, trial_days, traffic_topup_enabled, traffic_packages, traffic_reset_enabled, traffic_reset_price)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29)
 			RETURNING id, created_at`, args...).Scan(&p.ID, &p.CreatedAt); err != nil {
 			return err
 		}
@@ -188,7 +202,8 @@ func SavePlan(ctx context.Context, tx pgx.Tx, p *Plan) error {
 			is_hidden=$7, is_trial=$8, renewal_disabled=$9, change_from_disabled=$10, change_to_disabled=$11,
 			conversion_disabled=$12, required_plan_id=$13, max_per_customer=$14, traffic_limit_gb=$15, device_limit=$16,
 			extra_devices_allowed=$17, extra_device_price=$18, max_extra_devices=$19, rw_tag=$20, rw_internal_squads=$21,
-			rw_external_squad=$22, traffic_reset_strategy=$23, reset_traffic_on_buy=$24, trial_days=$25 WHERE id=$26`, args...)
+			rw_external_squad=$22, traffic_reset_strategy=$23, reset_traffic_on_buy=$24, trial_days=$25,
+			traffic_topup_enabled=$26, traffic_packages=$27, traffic_reset_enabled=$28, traffic_reset_price=$29 WHERE id=$30`, args...)
 		if err != nil {
 			return err
 		}

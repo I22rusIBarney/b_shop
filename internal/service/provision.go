@@ -79,6 +79,9 @@ func (s *Service) createPanelUser(ctx context.Context, c *store.Customer, g Gran
 func (s *Service) applyPlanToPanel(ctx context.Context, sub *store.Subscription, plan *store.Plan, expire time.Time, resetTraffic bool) (*remnawave.User, error) {
 	devices := sub.TotalDevices()
 	traffic := plan.TrafficBytes()
+	if traffic > 0 {
+		traffic += sub.ExtraTrafficBytes // bought traffic survives re-applying the plan
+	}
 	up := remnawave.UpdateUser{
 		ID:                   *sub.RWUserID,
 		Status:               "ACTIVE",

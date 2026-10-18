@@ -19,6 +19,8 @@ type All struct {
 	SMTP     SMTP     `json:"smtp"`
 	Referral Referral `json:"referral"`
 	Gifts    Gifts    `json:"gifts"`
+
+	Locations Locations `json:"locations"`
 	Branding Branding `json:"branding"`
 	Links    Links    `json:"links"`
 	Install  Install  `json:"install"`
@@ -488,4 +490,10 @@ func (in *Install) Validate() error {
 type Gifts struct {
 	Enabled     bool `json:"enabled"`
 	BuyForOther bool `json:"buy_for_other"`
+}
+
+// Locations: a read-only list of servers (names, countries, online status) in the cabinet.
+type Locations struct {
+	Enabled     bool `json:"enabled"`
+	ShowOffline bool `json:"show_offline"`
 }

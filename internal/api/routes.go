@@ -295,6 +295,7 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 		"referral_enabled": st.Referral.Enabled,
 		"gifts_enabled":    st.Gifts.Enabled,
 		"buy_for_other":    st.Gifts.BuyForOther,
+		"locations":        st.Locations.Enabled,
 	})
 }
 

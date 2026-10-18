@@ -152,6 +152,7 @@ export interface Me {
   referral_enabled: boolean
   gifts_enabled: boolean
   buy_for_other: boolean
+  locations: boolean
 }
 
 export interface Session {
@@ -197,6 +198,10 @@ export interface Plan {
   traffic_reset_strategy: string
   reset_traffic_on_buy: boolean
   trial_days: number
+  traffic_topup_enabled: boolean
+  traffic_packages: TrafficPackage[]
+  traffic_reset_enabled: boolean
+  traffic_reset_price: number
   created_at?: string
   periods: Period[]
 }
@@ -246,6 +251,9 @@ export interface Subscription {
   can_renew: boolean
   can_change_plan: boolean
   can_reset_traffic: boolean
+  traffic_topup: boolean
+  traffic_reset: boolean
+  extra_traffic_bytes: number
   autopay: boolean
   autopay_method_id: number | null
   autopay_period_id: number | null
@@ -669,4 +677,27 @@ export interface Gift {
   status: 'ready' | 'redeemed'
   created_at: string
   redeemed_at: string | null
+}
+
+export interface TrafficPackage {
+  gb: number
+  price: number
+}
+
+export interface TrafficOffer {
+  topup: boolean
+  packages: TrafficPackage[]
+  reset: boolean
+  can_reset: boolean
+  reset_price: number
+  threshold: number
+  limit_bytes: number
+  extra_bytes: number
+  used_bytes: number
+}
+
+export interface Location {
+  name: string
+  country: string
+  online: boolean
 }

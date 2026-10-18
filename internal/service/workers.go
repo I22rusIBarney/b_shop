@@ -23,7 +23,7 @@ func receiptBackoff(attempt int) time.Duration {
 // ReceiptName renders the Moy Nalog service name for a payment.
 func (s *Service) ReceiptName(p *store.Payment) string {
 	op := map[string]string{"buy": "покупка", "renew": "продление", "autopay": "продление", "change": "смена тарифа",
-		"devices": "доп. устройства", "traffic": "доп. трафик"}[p.Operation]
+		"devices": "доп. устройства", "traffic": "доп. трафик", "traffic_reset": "сброс трафика"}[p.Operation]
 	months := p.Months
 	if months == 0 && p.Days > 0 {
 		months = 1

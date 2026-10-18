@@ -74,6 +74,9 @@ type SubscriptionView struct {
 	CanRenew         bool       `json:"can_renew"`
 	CanChangePlan    bool       `json:"can_change_plan"`
 	CanResetTraffic  bool       `json:"can_reset_traffic"`
+	// What the plan allows for traffic (only plans with a limit): buying packages, resetting used traffic.
+	TrafficTopup bool `json:"traffic_topup"`
+	TrafficReset bool `json:"traffic_reset"`
 }
 
 func (s *Service) Subscriptions(ctx context.Context, c *store.Customer, live bool) ([]SubscriptionView, error) {
@@ -98,6 +101,8 @@ func (s *Service) Subscriptions(ctx context.Context, c *store.Customer, live boo
 				v.PlanName = p.Name
 				v.CanRenew = !p.RenewalDisabled && p.IsActive && sb.Kind != "trial"
 				v.CanChangePlan = !p.ChangeFromDisabled && !(sb.Kind == "trial" && s.set().Trial.HidePlanChange)
+				v.TrafficTopup = p.TrafficLimitGB > 0 && p.TrafficTopupEnabled && len(p.TrafficPackages) > 0
+				v.TrafficReset = p.TrafficLimitGB > 0 && p.TrafficResetEnabled
 			}
 		}
 		if live && sb.RWUserID != nil {
@@ -114,7 +119,7 @@ func (s *Service) Subscriptions(ctx context.Context, c *store.Customer, live boo
 				v.DevicesUsed = len(devs)
 			}
 		}
-		if sb.TrafficLimitBytes > 0 && threshold > 0 {
+		if v.TrafficReset && sb.TrafficLimitBytes > 0 {
 			v.CanResetTraffic = v.UsedTrafficBytes*100 >= sb.TrafficLimitBytes*int64(threshold)
 		}
 		out = append(out, v)

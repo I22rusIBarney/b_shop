@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { TrafficSheet } from './Traffic'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { del, get, patch, post, type BuyResult, type Device, type DevicesOffer, type Subscription } from '../lib/api'
 import { useApp } from '../lib/app'
@@ -176,6 +177,7 @@ function SubCard({ sub, onChanged }: { sub: Subscription; onChanged: () => void 
   const toast = useToast()
   const nav = useNavigate()
   const [devicesOpen, setDevicesOpen] = useState(false)
+  const [trafficOpen, setTrafficOpen] = useState(false)
   const expired = new Date(sub.expires_at) < new Date()
   const limit = sub.traffic_limit_bytes
   const pct = limit > 0 ? Math.min(100, (sub.used_traffic_bytes / limit) * 100) : 0
@@ -211,6 +213,20 @@ function SubCard({ sub, onChanged }: { sub: Subscription; onChanged: () => void 
           <div className={pct > 90 ? 'meter bad' : pct > 75 ? 'meter warn' : 'meter'}>
             <i style={{ width: `${pct}%` }} />
           </div>
+          {!expired && (sub.traffic_topup || sub.can_reset_traffic) && (
+            <div className="traffic-actions">
+              {sub.traffic_topup && (
+                <button className="dev-pill" onClick={() => setTrafficOpen(true)}>
+                  + Докупить трафик
+                </button>
+              )}
+              {sub.can_reset_traffic && (
+                <button className="dev-pill" onClick={() => setTrafficOpen(true)}>
+                  Сбросить трафик
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -263,6 +279,7 @@ function SubCard({ sub, onChanged }: { sub: Subscription; onChanged: () => void 
       </div>
 
       <Devices sub={sub} open={devicesOpen} onClose={() => setDevicesOpen(false)} onChanged={onChanged} />
+      {limit > 0 && <TrafficSheet sub={sub} open={trafficOpen} onClose={() => setTrafficOpen(false)} />}
     </section>
   )
 }

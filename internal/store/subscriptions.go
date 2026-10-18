@@ -23,6 +23,8 @@ type Subscription struct {
 	TrafficLimitBytes int64      `db:"traffic_limit_bytes" json:"traffic_limit_bytes"`
 	DeviceLimit       int        `db:"device_limit" json:"device_limit"`
 	ExtraDevices      int        `db:"extra_devices" json:"extra_devices"`
+	// ExtraTrafficBytes is bought traffic on top of the plan limit for the current period.
+	ExtraTrafficBytes int64      `db:"extra_traffic_bytes" json:"extra_traffic_bytes"`
 	Status            string     `db:"status" json:"status"`
 	CreatedAt         time.Time  `db:"created_at" json:"created_at"`
 	UpdatedAt         time.Time  `db:"updated_at" json:"updated_at"`
@@ -80,9 +82,9 @@ func InsertSubscription(ctx context.Context, db DB, s *Subscription) error {
 func UpdateSubscription(ctx context.Context, db DB, s *Subscription) error {
 	_, err := db.Exec(ctx, `UPDATE subscriptions SET plan_id=$2, kind=$3, title=$4, rw_user_id=$5, rw_uuid=$6,
 		rw_short_uuid=$7, rw_username=$8, subscription_url=$9, expires_at=$10, traffic_limit_bytes=$11, device_limit=$12,
-		extra_devices=$13, status=$14, updated_at=now() WHERE id=$1`,
+		extra_devices=$13, status=$14, extra_traffic_bytes=$15, updated_at=now() WHERE id=$1`,
 		s.ID, s.PlanID, s.Kind, s.Title, s.RWUserID, s.RWUUID, s.RWShortUUID, s.RWUsername, s.SubscriptionURL,
-		s.ExpiresAt, s.TrafficLimitBytes, s.DeviceLimit, s.ExtraDevices, s.Status)
+		s.ExpiresAt, s.TrafficLimitBytes, s.DeviceLimit, s.ExtraDevices, s.Status, s.ExtraTrafficBytes)
 	return err
 }
 

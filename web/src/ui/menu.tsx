@@ -5,7 +5,7 @@ import { useBadges } from '../lib/badges'
 import { inTelegram, openLink } from '../lib/tg'
 import { BuyForSheet } from '../pages/Gifts'
 import { AutopaySheet, LoginsSheet, PaymentsSheet, PromoSheet } from '../pages/Profile'
-import { Card, Chat, Exit, Fingerprint, Gift, Help, Home, News, Send, Tag, User, Users, Wallet } from './icons'
+import { Card, Chat, Exit, Fingerprint, Gift, Globe, Help, Home, News, Send, Tag, User, Users, Wallet } from './icons'
 
 export type MenuItem = {
   key: string
@@ -40,6 +40,7 @@ export function useClientMenu() {
       items: [
         { key: 'home', label: 'Личный кабинет', icon: Home, to: '/', only: 'desktop' },
         { key: 'news', label: 'Новости', icon: News, to: '/news' },
+        ...(me.locations ? [{ key: 'locations', label: 'Локации', icon: Globe, to: '/locations' }] : []),
       ],
     })
     groups.push({

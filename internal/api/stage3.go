@@ -86,6 +86,30 @@ func (s *Server) stage3Routes(mux *http.ServeMux) {
 		}
 		return s.svc.BuyDevices(r.Context(), customer(r), id, in)
 	})))))
+	mux.HandleFunc("GET /api/subscriptions/{id}/traffic", s.authed(s.handle(func(r *http.Request) (any, error) {
+		id, err := pathID(r, "id")
+		if err != nil {
+			return nil, err
+		}
+		return s.svc.TrafficOptions(r.Context(), customer(r), id)
+	})))
+	mux.HandleFunc("POST /api/subscriptions/{id}/traffic", s.authed(s.limit("buy", 20, time.Minute, s.handle(withBody(func(r *http.Request, in trafficRequest) (any, error) {
+		id, err := pathID(r, "id")
+		if err != nil {
+			return nil, err
+		}
+		return s.svc.BuyTraffic(r.Context(), customer(r), id, in.Package, in.Method, in.ReturnURL)
+	})))))
+	mux.HandleFunc("POST /api/subscriptions/{id}/traffic/reset", s.authed(s.limit("buy", 20, time.Minute, s.handle(withBody(func(r *http.Request, in trafficRequest) (any, error) {
+		id, err := pathID(r, "id")
+		if err != nil {
+			return nil, err
+		}
+		return s.svc.ResetTrafficPaid(r.Context(), customer(r), id, in.Method, in.ReturnURL)
+	})))))
+	mux.HandleFunc("GET /api/locations", s.authed(s.handle(func(r *http.Request) (any, error) {
+		return s.svc.Locations(r.Context())
+	})))
 	mux.HandleFunc("GET /api/subscriptions/{id}/autopay", s.authed(s.handle(func(r *http.Request) (any, error) {
 		id, err := pathID(r, "id")
 		if err != nil {
@@ -216,4 +240,10 @@ func (s *Server) stage3Routes(mux *http.ServeMux) {
 		}
 		return s.svc.AdminChangePlan(r.Context(), customer(r), id, in.PlanID, in.Days)
 	}))))
+}
+
+type trafficRequest struct {
+	Package   int    `json:"package"`
+	Method    string `json:"method"`
+	ReturnURL string `json:"return_url"`
 }
