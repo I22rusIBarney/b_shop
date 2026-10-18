@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bshop/internal/backup"
 	"context"
 	"errors"
 	"flag"
@@ -40,6 +41,10 @@ func main() {
 }
 
 func run(log *slog.Logger) error {
+	// Works without a database or settings: used to restore on a fresh server.
+	if len(os.Args) > 1 && os.Args[1] == "decrypt-backup" {
+		return backup.DecryptCommand(os.Stdin, os.Stdout)
+	}
 	cfg, err := config.Load()
 	if err != nil {
 		return err
@@ -89,6 +94,7 @@ func run(log *slog.Logger) error {
 		}
 		svc.Notify = b
 		svc.Channels = b
+		svc.Files = b
 		api.BotUsername = b.Username
 		svc.BotUsername = b.Username
 		go b.Run(ctx)

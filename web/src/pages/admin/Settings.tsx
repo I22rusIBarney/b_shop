@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { get, post, put, type Plan } from '../../lib/api'
+import { dateTime } from '../../lib/format'
 import { Close, Plus, Trash } from '../../ui/icons'
 import { ErrorBox, Field, Spinner, Toggle, useAction, useLoad } from '../../ui/kit'
 
@@ -13,8 +14,10 @@ interface SectionSpec {
   title: string
   about?: string
   test?: string
+  /** label of the test button (default «Проверить подключение») */
+  testLabel?: string
   fields: FieldSpec[]
-  custom?: 'tiers' | 'links' | 'apps' | 'channels'
+  custom?: 'tiers' | 'links' | 'apps' | 'channels' | 'backups'
 }
 
 const pages: Record<string, { title: string; sections: SectionSpec[] }> = {
@@ -262,6 +265,30 @@ const pages: Record<string, { title: string; sections: SectionSpec[] }> = {
       },
     ],
   },
+  backups: {
+    title: 'Резервные копии',
+    sections: [
+      {
+        key: 'backups',
+        title: 'Копии в Telegram',
+        about:
+          'Каждую ночь бот присылает администраторам (ADMIN_TELEGRAM_IDS из .env) зашифрованный файл: база и настройки .env. Если сервер взломают или он пропадёт — ставите бота на новый сервер и восстанавливаете командой bshop restore <файл>. Получатели задаются только в .env, чтобы копии нельзя было перенаправить из админки.',
+        test: 'backups',
+        testLabel: 'Сделать копию сейчас',
+        custom: 'backups',
+        fields: [
+          { k: 'enabled', label: 'Отправлять копию каждую ночь', type: 'bool' },
+          { k: 'hour', label: 'Во сколько, час (0–23)', hint: 'По часовому поясу магазина', type: 'number' },
+          {
+            k: 'password',
+            label: 'Пароль шифрования',
+            hint: 'Не короче 10 символов. Запишите его вне сервера (менеджер паролей): без пароля копию не открыть, восстановить его нельзя',
+            type: 'secret',
+          },
+        ],
+      },
+    ],
+  },
   automations: {
     title: 'Автоматизации и рассылки',
     sections: [
@@ -293,6 +320,45 @@ const pages: Record<string, { title: string; sections: SectionSpec[] }> = {
       },
     ],
   },
+}
+
+function BackupRuns() {
+  const data = useLoad(() => get<{ runs: BackupRunRow[]; admins: number }>('/api/admin/backups'))
+  if (!data.data) return null
+  const { runs, admins } = data.data
+  return (
+    <div className="stack" style={{ gap: 8 }}>
+      {admins === 0 && <p className="err small">В .env не указаны ADMIN_TELEGRAM_IDS — копии некому отправлять.</p>}
+      <h3 style={{ margin: '4px 0 0' }}>Последние копии</h3>
+      {runs.length === 0 ? (
+        <p className="small muted">Копий ещё не было.</p>
+      ) : (
+        <div className="backup-runs">
+          {runs.map((r) => (
+            <div key={r.id} className="backup-run">
+              <span className={r.ok ? 'status resolved' : r.finished_at ? 'status bad' : 'status open'}>{r.ok ? 'отправлена' : r.finished_at ? 'ошибка' : 'делается…'}</span>
+              <span className="grow">
+                {dateTime(r.started_at)}
+                {r.manual && <span className="muted"> · вручную</span>}
+                {r.error && <span className="tiny err" style={{ display: 'block' }}>{r.error}</span>}
+              </span>
+              {r.ok && <span className="muted num small">{r.size >= 1048576 ? `${(r.size / 1048576).toFixed(1)} МБ` : `${Math.max(1, Math.round(r.size / 1024))} КБ`}</span>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+interface BackupRunRow {
+  id: number
+  started_at: string
+  finished_at: string | null
+  manual: boolean
+  ok: boolean
+  size: number
+  error: string
 }
 
 const methodNames: [string, string][] = [
@@ -436,13 +502,14 @@ function SectionForm({ spec }: { spec: SectionSpec }) {
       {spec.custom === 'tiers' && <Tiers value={v.tiers || []} onChange={(t) => set('tiers', t)} />}
       {spec.custom === 'links' && <LinksEditor value={v.items || []} onChange={(t) => set('items', t)} />}
       {spec.custom === 'channels' && <ChannelsEditor value={v.items || []} onChange={(t) => set('items', t)} />}
+      {spec.custom === 'backups' && <BackupRuns key={test?.message} />}
       {spec.custom === 'apps' && v.source === 'manual' && <AppsEditor value={v.apps || []} onChange={(t) => set('apps', t)} />}
 
       {test && <p className={test.ok ? 'small' : 'err'} style={test.ok ? { color: 'var(--ok)' } : undefined}>{test.message}</p>}
       <div className="row wrap" style={{ justifyContent: 'flex-end' }}>
         {spec.test && (
           <button className="btn secondary small" disabled={busy} onClick={runTest}>
-            Проверить подключение
+            {spec.testLabel || 'Проверить подключение'}
           </button>
         )}
         <button className="btn small" disabled={busy || !dirty} onClick={save}>

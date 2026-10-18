@@ -22,9 +22,9 @@ type All struct {
 
 	Locations Locations `json:"locations"`
 	Channels  Channels  `json:"channels"`
-	Branding Branding `json:"branding"`
-	Links    Links    `json:"links"`
-	Install  Install  `json:"install"`
+	Branding  Branding  `json:"branding"`
+	Links     Links     `json:"links"`
+	Install   Install   `json:"install"`
 
 	Notifications Notifications `json:"notifications"`
 	Support       Support       `json:"support"`
@@ -34,6 +34,7 @@ type All struct {
 
 	Webhooks Webhooks `json:"webhooks"`
 	Geo      Geo      `json:"geo"`
+	Backups  Backups  `json:"backups"`
 }
 
 func Defaults() All {
@@ -105,6 +106,7 @@ func Defaults() All {
 		Automations:   defaultAutomations(),
 		Webhooks:      defaultWebhooks(),
 		Geo:           defaultGeo(),
+		Backups:       defaultBackups(),
 		Broadcasts:    Broadcasts{RatePerSecond: 20},
 		Channels:      Channels{Items: []Channel{}},
 	}

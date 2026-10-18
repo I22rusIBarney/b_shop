@@ -5,6 +5,9 @@ services:
     build: .
     restart: unless-stopped
     env_file: .env
+    # Бот работает от обычного пользователя на порту 8080 — особые права Linux ему не нужны.
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
     volumes:

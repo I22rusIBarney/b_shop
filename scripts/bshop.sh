@@ -57,14 +57,34 @@ backup)
 	;;
 restore)
 	f="${1:-}"
-	[ -f "$f" ] || die "Укажите файл: bshop restore $BACKUPS/bshop-….dump"
+	[ -f "$f" ] || die "Укажите файл: bshop restore $BACKUPS/bshop-….dump  или  bshop restore bobrgo-….bshop (копия из Telegram)"
+	# Зашифрованная копия из Telegram: расшифровываем образом бота, база — db.dump, настройки — env.
+	if [ "$(head -c 8 "$f")" = BSHOPBK1 ]; then
+		tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
+		read -r -s -p "Пароль копии: " BSHOP_BACKUP_PASSWORD; echo
+		export BSHOP_BACKUP_PASSWORD
+		dc run --rm -T --no-deps -e BSHOP_BACKUP_PASSWORD shop decrypt-backup <"$f" >"$tmp/backup.tgz" || die "Не удалось расшифровать — неверный пароль?"
+		unset BSHOP_BACKUP_PASSWORD
+		tar -xzf "$tmp/backup.tgz" -C "$tmp" || die "Архив повреждён"
+		ok "Копия расшифрована: $(grep -m1 'от ' "$tmp/README.txt" | sed 's/.* от //')"
+		read -r -p "Взять настройки (.env) из копии? Нужно на новом сервере: там ключ шифрования, токены бота и панели [Д/н]: " a
+		if [ "${a:-Д}" != н ] && [ "${a:-Д}" != Н ] && [ "${a:-Д}" != n ]; then
+			cp .env ".env.before-restore-$(date +%F-%H%M)"
+			# Пароль базы, порт и способ HTTPS остаются от этого сервера; остальное — из копии.
+			keep='^(POSTGRES_[A-Z_]*|BSHOP_PORT|BSHOP_IMAGE|COMPOSE_PROFILES)='
+			{ grep -E "$keep" .env; grep -vE "$keep|^#" "$tmp/env"; } >"$tmp/env.new"
+			install -m 600 "$tmp/env.new" .env
+			ok "Настройки взяты из копии (старый .env сохранён рядом)"
+		fi
+		f="$tmp/db.dump"
+	fi
 	read -r -p "Заменить текущую базу содержимым $f? Напишите ДА: " a
 	[ "$a" = ДА ] || exit 1
 	"$0" backup --quiet
 	dc stop shop
 	dc exec -T db sh -c 'dropdb -U "$POSTGRES_USER" --if-exists "$POSTGRES_DB" && createdb -U "$POSTGRES_USER" "$POSTGRES_DB"'
 	dc exec -T db sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner' <"$f" || true
-	dc start shop && wait_up
+	dc up -d shop && wait_up # up, а не start: после восстановления .env контейнер пересоздаётся
 	;;
 env)
 	"${EDITOR:-nano}" .env
@@ -87,7 +107,7 @@ ${B}bshop${N} — управление BobrGO Shop ($DIR)
   bshop restart         перезапуск
   bshop update          копия базы → новая версия → перезапуск
   bshop backup          копия базы сейчас (каждую ночь делается сама)
-  bshop restore ФАЙЛ    вернуть базу из копии
+  bshop restore ФАЙЛ    вернуть базу из копии (.dump с сервера или .bshop из Telegram)
   bshop env             поправить .env и перезапустить
   bshop stop            остановить
   bshop uninstall       удалить (с копией базы)

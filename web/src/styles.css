@@ -1605,3 +1605,10 @@ button.group-row:active, .group-row.pick:active { background: var(--fill); }
 .chips-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .chips-row .chip { margin: 0; }
 .danger-text { color: var(--danger); }
+
+/* ---- backups ---- */
+.backup-runs { display: flex; flex-direction: column; border-radius: 14px; background: var(--fill); overflow: hidden; }
+.backup-run { display: flex; align-items: center; gap: 12px; padding: 10px 14px; font-size: .88rem; }
+.backup-run + .backup-run { border-top: 1px solid var(--sep, var(--line)); }
+.backup-run .status { flex: none; }
+.status.bad { --c: var(--danger); }

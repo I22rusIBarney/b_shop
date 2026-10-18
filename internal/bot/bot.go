@@ -2,6 +2,7 @@
 package bot
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -422,4 +423,14 @@ func (b *Bot) onCheckChannels(ctx context.Context, q *models.CallbackQuery) {
 	}
 	_, _ = b.tg.AnswerCallbackQuery(ctx, &tg.AnswerCallbackQueryParams{CallbackQueryID: q.ID, Text: "Спасибо за подписку!"})
 	b.sendMenu(ctx, q.From.ID, c)
+}
+
+// SendFile implements service.FileSender (backups to the administrators).
+func (b *Bot) SendFile(ctx context.Context, chatID int64, name string, data []byte, caption string) error {
+	_, err := b.tg.SendDocument(ctx, &tg.SendDocumentParams{
+		ChatID:   chatID,
+		Document: &models.InputFileUpload{Filename: name, Data: bytes.NewReader(data)},
+		Caption:  caption,
+	})
+	return err
 }

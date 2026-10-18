@@ -128,6 +128,9 @@ func (s *Service) TestIntegration(ctx context.Context, section string, admin *st
 		return "Письмо отправлено на " + *admin.Email, nil
 	case "ai":
 		return s.TestAI(ctx)
+	case "backups":
+		cancel() // a dump can take longer than the 30 s test budget
+		return s.MakeBackup(context.WithoutCancel(ctx), true)
 	case "remnawave":
 		sq, err := s.Panel.InternalSquads(ctx)
 		if err != nil {

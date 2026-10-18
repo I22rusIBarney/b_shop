@@ -144,6 +144,14 @@
   TimeChart summary='sum'|'last' (итог в шапке карточки), kind='area' (монотонная кривая, MRR), таблица — иконкой справа;
   Kpis раскладывает плитки ровными рядами без одинокой последней. Тот же Switcher в Обращениях, Промокодах, Базе знаний.
 
+- 19.10.2026: образ ghcr.io публичный (13 МБ сжатый); install.sh и `bshop update` только скачивают образ, сборка на сервере —
+  лишь BSHOP_BUILD=1 (раньше при закрытом пакете молча собиралось ~2 ГБ). Рассылки: «Сейчас / По расписанию» с быстрыми
+  вариантами. Резервные копии вне сервера (internal/backup, service/backups.go, миграция 0016 backup_runs, settings.backups):
+  каждую ночь pg_dump + env контейнера → tar.gz → AES-256-GCM (ключ scrypt от пароля из настроек) → бот шлёт файл .bshop
+  администраторам из ADMIN_TELEGRAM_IDS (получатели только из .env, не из админки). Лимит Telegram 49 МБ. Ошибка → админ-событие
+  backup_failed. Восстановление: `bshop restore файл.bshop` (расшифровка `bshop decrypt-backup` в контейнере, .env из копии
+  с сохранением POSTGRES_*/BSHOP_PORT/COMPOSE_PROFILES этого сервера). Контейнер shop: no-new-privileges, cap_drop ALL.
+
 ## Дальше
 - Боевой переезд по docs/MIGRATION.md на тестовом стенде Алексея; проверить на реальных ЮKassa/Remnawave.
 - Не сделано: тексты бота из translations RWP, abuse-детектор (много IP).

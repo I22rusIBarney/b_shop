@@ -2,7 +2,7 @@ import { type ComponentType, useEffect, useRef, useState } from 'react'
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { useApp } from '../../lib/app'
 import {
-  Bars, Bell, Book, Card, Chat, ChevronDown, Coin, Download, Exit, Fingerprint, Globe, Headset, Hook, List, Megaphone, Menu, PanelLeft,
+  Bars, Bell, Book, Card, Chat, ChevronDown, Coin, Download, Exit, Fingerprint, Globe, Shield, Headset, Hook, List, Megaphone, Menu, PanelLeft,
   Palette, People, Receipt, Renew, Settings as SettingsIcon, Sliders, Star, Swap, Ticket, Trend, Trial, Users, Wallet,
 } from '../../ui/icons'
 import Customers from './Customers'
@@ -74,7 +74,13 @@ const groups: Group[] = [
       { to: '/admin/import', label: 'Перенос из RWP', icon: Download },
     ],
   },
-  { title: 'Безопасность', items: [{ to: '/admin/settings/auth', label: 'Вход и почта', icon: Fingerprint }] },
+  {
+    title: 'Безопасность',
+    items: [
+      { to: '/admin/settings/auth', label: 'Вход и почта', icon: Fingerprint },
+      { to: '/admin/settings/backups', label: 'Резервные копии', icon: Shield },
+    ],
+  },
 ]
 
 function AdminMenu({ open }: { open: boolean }) {

@@ -169,4 +169,5 @@ func (s *Service) RunWorkers(ctx context.Context) {
 	every(time.Minute, "broadcasts", s.ProcessBroadcasts)
 	every(5*time.Minute, "automation-triggers", s.ScanAutomationTriggers)
 	every(time.Minute, "automation-runs", s.ProcessAutomationRuns)
+	every(10*time.Minute, "backups", s.RunBackups)
 }

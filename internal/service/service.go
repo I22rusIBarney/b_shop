@@ -90,7 +90,9 @@ type Service struct {
 	Notify   Notifier
 	// Channels checks required channel subscriptions; nil without a bot.
 	Channels ChannelChecker
-	Log      *slog.Logger
+	// Files sends backups to the administrators; nil without a bot.
+	Files FileSender
+	Log   *slog.Logger
 	// BotUsername is the Telegram bot's username (without @), for deep links.
 	BotUsername string
 
