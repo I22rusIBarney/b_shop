@@ -97,3 +97,19 @@ export const operationName: Record<string, string> = {
   gift: 'Подарок',
   buy_for: 'Покупка другому',
 }
+
+/** 21:45 */
+export function clock(iso: string): string {
+  return new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+}
+
+/** «Сегодня», «Вчера» or «18 октября» (with the year when it is not the current one) — for chat day separators. */
+export function dayLabel(iso: string): string {
+  const d = new Date(iso)
+  const today = new Date()
+  const start = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
+  const diff = Math.round((start(today) - start(d)) / 86400000)
+  if (diff === 0) return 'Сегодня'
+  if (diff === 1) return 'Вчера'
+  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', ...(d.getFullYear() !== today.getFullYear() ? { year: 'numeric' } : {}) })
+}
