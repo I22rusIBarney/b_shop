@@ -18,6 +18,7 @@ type All struct {
 	MoyNalog MoyNalog `json:"moynalog"`
 	SMTP     SMTP     `json:"smtp"`
 	Referral Referral `json:"referral"`
+	Gifts    Gifts    `json:"gifts"`
 	Branding Branding `json:"branding"`
 	Links    Links    `json:"links"`
 	Install  Install  `json:"install"`
@@ -481,4 +482,10 @@ func (in *Install) Validate() error {
 		}
 	}
 	return nil
+}
+
+// Gifts: paid gift codes and paying for another customer's subscription. Both are off until enabled.
+type Gifts struct {
+	Enabled     bool `json:"enabled"`
+	BuyForOther bool `json:"buy_for_other"`
 }

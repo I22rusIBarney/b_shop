@@ -161,6 +161,14 @@ const pages: Record<string, { title: string; sections: SectionSpec[] }> = {
           { k: 'description', label: 'Описание для клиентов', type: 'textarea' },
         ],
       },
+      {
+        key: 'gifts',
+        title: 'Подарки и покупка другому',
+        fields: [
+          { k: 'enabled', label: 'Подарочные подписки', hint: 'Клиент оплачивает тариф и получает код GIFT-…; активировать его может любой, один раз', type: 'bool' },
+          { k: 'buy_for_other', label: 'Покупка для другого', hint: 'Клиент оплачивает подписку на чужой аккаунт по Telegram ID, @username или email', type: 'bool' },
+        ],
+      },
     ],
   },
   links: {

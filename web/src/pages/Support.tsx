@@ -60,6 +60,17 @@ export default function Support() {
             <span className="tiny muted">Связаться с поддержкой</span>
           </span>
         </button>
+        {c.faq.length > 0 && (
+          <Link className="item item-link" to="/faq">
+            <span className="action-ico">
+              <Help />
+            </span>
+            <span className="grow">
+              <b>Часто задаваемые вопросы</b>
+              <span className="tiny muted">Ответы на часто задаваемые вопросы</span>
+            </span>
+          </Link>
+        )}
         {primary && (
           <Link className="item item-link" to={`/install/${primary.id}`}>
             <span className="action-ico">
@@ -118,8 +129,6 @@ export default function Support() {
           })}
         </div>
       )}
-
-      {c.faq.length > 0 && <FaqList items={c.faq} />}
 
       <Sheet open={creating} onClose={() => setCreating(false)} title="Новое обращение" icon={<Chat />}>
         <div className="stack">

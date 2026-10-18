@@ -53,6 +53,11 @@ func (s *Server) routes(mux *http.ServeMux) {
 	}))
 	mux.HandleFunc("POST /api/payments", s.authed(s.limit("buy", 20, time.Minute, s.buy)))
 	mux.HandleFunc("GET /api/payments", s.authed(s.myPayments))
+	mux.HandleFunc("GET /api/gifts", s.authed(s.myGifts))
+	mux.HandleFunc("POST /api/gifts", s.authed(s.limit("buy", 20, time.Minute, s.buyGift)))
+	mux.HandleFunc("POST /api/gifts/redeem", s.authed(s.limit("gift-redeem", 10, time.Minute, s.redeemGift)))
+	mux.HandleFunc("POST /api/buy-for/lookup", s.authed(s.limit("buy-for-lookup", 20, time.Minute, s.lookupRecipient)))
+	mux.HandleFunc("POST /api/buy-for", s.authed(s.limit("buy", 20, time.Minute, s.buyForOther)))
 	mux.HandleFunc("GET /api/payments/{id}", s.authed(s.paymentStatus))
 	mux.HandleFunc("GET /api/payment-methods", s.authed(s.paymentMethods))
 	mux.HandleFunc("DELETE /api/payment-methods/{id}", s.authed(s.deletePaymentMethod))
@@ -288,6 +293,8 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 		"trial_available":  st.Trial.Enabled && !c.TrialUsed && n == 0,
 		"ref_link":         refLink(c),
 		"referral_enabled": st.Referral.Enabled,
+		"gifts_enabled":    st.Gifts.Enabled,
+		"buy_for_other":    st.Gifts.BuyForOther,
 	})
 }
 
@@ -453,7 +460,7 @@ func (s *Server) paymentStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"id": p.ID, "status": p.Status, "applied": p.AppliedAt != nil,
-		"amount": p.Amount, "title": p.Title, "confirmation_url": p.ConfirmationURL})
+		"amount": p.Amount, "title": p.Title, "confirmation_url": p.ConfirmationURL, "operation": p.Operation})
 }
 
 func (s *Server) paymentMethods(w http.ResponseWriter, r *http.Request) {
@@ -541,4 +548,79 @@ func orDefault(v, def string) string {
 		return def
 	}
 	return v
+}
+
+// ---- gifts and buying for another customer ----
+
+func (s *Server) myGifts(w http.ResponseWriter, r *http.Request) {
+	list, err := s.svc.ListGifts(r.Context(), customer(r))
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if list == nil {
+		list = []store.Gift{}
+	}
+	writeJSON(w, http.StatusOK, list)
+}
+
+func (s *Server) buyGift(w http.ResponseWriter, r *http.Request) {
+	var in service.GiftRequest
+	if err := decode(r, &in); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	in.Recipient = ""
+	res, err := s.svc.BuyGift(r.Context(), customer(r), in)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
+}
+
+func (s *Server) redeemGift(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Code string `json:"code"`
+	}
+	if err := decode(r, &in); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	sub, err := s.svc.RedeemGift(r.Context(), customer(r), in.Code)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"subscription_id": sub.ID, "title": sub.Title, "expires_at": sub.ExpiresAt})
+}
+
+func (s *Server) lookupRecipient(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Query string `json:"query"`
+	}
+	if err := decode(r, &in); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	res, err := s.svc.LookupRecipient(r.Context(), customer(r), in.Query)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
+}
+
+func (s *Server) buyForOther(w http.ResponseWriter, r *http.Request) {
+	var in service.GiftRequest
+	if err := decode(r, &in); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	res, err := s.svc.BuyForOther(r.Context(), customer(r), in)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
 }

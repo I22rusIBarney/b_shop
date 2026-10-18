@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState, type ComponentType, type MouseEvent } from 'react'
+import { useEffect, useMemo } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { refreshBadges, useBadges } from '../lib/badges'
-import { inTelegram, openLink, startParam } from '../lib/tg'
+import { startParam } from '../lib/tg'
 import { useApp } from '../lib/app'
 import type { Branding } from '../lib/api'
-import { AutopaySheet, LoginsSheet, PaymentsSheet, PromoSheet } from '../pages/Profile'
-import { Card, Chat, Exit, External, Fingerprint, Help, Home, HomeFill, News, Send, Shield, Swap, Tag, User, Users, Wallet } from './icons'
+import { Chat, External, Home, HomeFill, Shield, Swap, User } from './icons'
+import { openExternal, useClientMenu } from './menu'
 
 function Media({ src, className }: { src: string; className: string }) {
   if (!src) return null
@@ -136,39 +136,13 @@ export function ClientShell() {
   )
 }
 
-type Ico = ComponentType<{ className?: string }>
-type SheetKind = '' | 'promo' | 'payments' | 'logins' | 'cards'
-
 /** Desktop side menu of the cabinet (reference: grouped sections with a bar, dashed dividers, admin link at the
  *  bottom). Phones and Telegram keep the bottom tab bar; this menu is hidden below 1024 px. */
 function ClientNav() {
-  const { config, me, signOut, refreshMe } = useApp()
-  const badges = useBadges()
-  const nav = useNavigate()
-  const [sheet, setSheet] = useState<SheetKind>('')
+  const { config, me } = useApp()
+  const { groups, sheets } = useClientMenu()
   const b = config.branding
   if (!me) return null
-
-  const link = (to: string, label: string, Icon: Ico, badge?: number) => (
-    <NavLink key={to} to={to} end={to === '/'} className="am-item">
-      <Icon className="am-ico" />
-      <span className="am-label">{label}</span>
-      {!!badge && <span className="am-badge">{badge}</span>}
-    </NavLink>
-  )
-  const action = (label: string, Icon: Ico, onClick: () => void) => (
-    <button key={label} type="button" className="am-item" onClick={onClick}>
-      <Icon className="am-ico" />
-      <span className="am-label">{label}</span>
-    </button>
-  )
-  const external = (e: MouseEvent, url: string) => {
-    if (!inTelegram()) return
-    e.preventDefault()
-    openLink(url)
-  }
-  const links = config.links.filter((l) => l.url)
-
   return (
     <nav className="admin-nav client-nav" aria-label="Меню кабинета">
       <div className="am-head">
@@ -176,55 +150,34 @@ function ClientNav() {
         <span>{b.title || config.shop_name}</span>
       </div>
       <div className="am-body">
-        <section className="am-group">
-          <div className="am-title">Главная</div>
-          {link('/', 'Личный кабинет', Home)}
-          {link('/news', 'Новости', News)}
-        </section>
-        <section className="am-group">
-          <hr className="am-sep" />
-          <div className="am-title">Покупки и бонусы</div>
-          {link('/buy', 'Купить подписку', Wallet)}
-          {action('Применить промокод', Tag, () => setSheet('promo'))}
-        </section>
-        {me.referral_enabled && (
-          <section className="am-group">
-            <hr className="am-sep" />
-            <div className="am-title">Программы</div>
-            {link('/referral', 'Реферальная система', Users)}
+        {groups.map((g, gi) => (
+          <section key={g.title} className="am-group">
+            {gi > 0 && <hr className="am-sep" />}
+            <div className="am-title">{g.title}</div>
+            {g.items
+              .filter((it) => it.only !== 'mobile')
+              .map((it) =>
+                it.to ? (
+                  <NavLink key={it.key} to={it.to} end={it.to === '/'} className="am-item">
+                    <it.icon className="am-ico" />
+                    <span className="am-label">{it.short || it.label}</span>
+                    {!!it.badge && <span className="am-badge">{it.badge}</span>}
+                  </NavLink>
+                ) : it.href ? (
+                  <a key={it.key} className="am-item" href={it.href} target="_blank" rel="noopener noreferrer" onClick={(e) => openExternal(e, it.href!)}>
+                    <it.icon className="am-ico" />
+                    <span className="am-label">{it.short || it.label}</span>
+                    <External className="am-ico am-ext" />
+                  </a>
+                ) : (
+                  <button key={it.key} type="button" className="am-item" onClick={it.onClick}>
+                    <it.icon className="am-ico" />
+                    <span className="am-label">{it.short || it.label}</span>
+                  </button>
+                ),
+              )}
           </section>
-        )}
-        <section className="am-group">
-          <hr className="am-sep" />
-          <div className="am-title">Помощь</div>
-          {link('/support', 'Поддержка', Chat, badges.tickets)}
-          {link('/faq', 'FAQ', Help)}
-        </section>
-        {links.length > 0 && (
-          <section className="am-group">
-            <hr className="am-sep" />
-            <div className="am-title">Ссылки</div>
-            {links.map((l, i) => (
-              <a key={i} className="am-item" href={l.url} target="_blank" rel="noopener noreferrer" onClick={(e) => external(e, l.url)}>
-                <Send className="am-ico" />
-                <span className="am-label">{l.title}</span>
-                <External className="am-ico am-ext" />
-              </a>
-            ))}
-          </section>
-        )}
-        <section className="am-group">
-          <hr className="am-sep" />
-          <div className="am-title">Аккаунт</div>
-          {link('/profile', 'Профиль', User)}
-          {action('Безопасность', Fingerprint, () => setSheet('logins'))}
-          {action('Платежи', Card, () => setSheet('payments'))}
-          {action('Автопродление', Wallet, () => setSheet('cards'))}
-          {action('Выйти', Exit, async () => {
-            await signOut()
-            nav('/login')
-          })}
-        </section>
+        ))}
       </div>
       {me.customer.is_admin && (
         <NavLink to="/admin" className="am-foot">
@@ -232,10 +185,7 @@ function ClientNav() {
           Админ панель
         </NavLink>
       )}
-      <PromoSheet open={sheet === 'promo'} onClose={() => setSheet('')} />
-      <PaymentsSheet open={sheet === 'payments'} onClose={() => setSheet('')} />
-      <LoginsSheet open={sheet === 'logins'} onClose={() => setSheet('')} onChanged={refreshMe} />
-      <AutopaySheet open={sheet === 'cards'} onClose={() => setSheet('')} />
+      {sheets}
     </nav>
   )
 }

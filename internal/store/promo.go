@@ -168,7 +168,7 @@ func InsertRedemption(ctx context.Context, db DB, r *Redemption) error {
 }
 
 // UseReservedDiscount marks the customer's reserved discount code as used by a payment.
-func UseReservedDiscount(ctx context.Context, db DB, customerID int64, code string, paymentID uuid.UUID, subID int64) error {
+func UseReservedDiscount(ctx context.Context, db DB, customerID int64, code string, paymentID uuid.UUID, subID *int64) error {
 	_, err := db.Exec(ctx, `UPDATE promo_redemptions r SET status='used', used_at=now(), payment_id=$3, subscription_id=$4
 		FROM promo_codes p WHERE p.id=r.promo_id AND r.customer_id=$1 AND p.code=$2 AND r.status='reserved'`,
 		customerID, code, paymentID, subID)

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { get, post, type BuyResult, type CatalogPlan, type RedeemResult } from '../lib/api'
 import { periodLabel, rub, rubRound } from '../lib/format'
-import { Back, Tag } from '../ui/icons'
+import { Back, Check, Gift, Tag, User } from '../ui/icons'
 import { ErrorBox, PageLoader, useAction, useLoad, useToast } from '../ui/kit'
 import { MethodPicker, followPayment, usePayMethod } from '../ui/pay'
 
@@ -18,6 +18,11 @@ export default function Buy() {
   const nav = useNavigate()
   const subID = Number(params.get('sub')) || 0
   const fixedPlan = Number(params.get('plan')) || 0
+  // Gift code (?gift=1) or a subscription paid for another customer (?to=<query>&name=<shown name>).
+  const gift = params.get('gift') === '1'
+  const to = params.get('to') || ''
+  const toName = params.get('name') || to
+  const forOther = !!to && !gift
   const catalog = useLoad(() => get<CatalogPlan[]>('/api/plans'))
   const [planID, setPlanID] = useState<number>(fixedPlan)
   const [periodID, setPeriodID] = useState<number>(0)
@@ -52,6 +57,16 @@ export default function Buy() {
 
   const checkout = () =>
     run(async () => {
+      if (gift || forOther) {
+        const res = await post<BuyResult>(gift ? '/api/gifts' : '/api/buy-for', {
+          recipient: to,
+          plan_id: planID,
+          period_id: periodID,
+          method: pay.method,
+        })
+        followPayment(res, nav, gift ? '/gifts' : '/')
+        return
+      }
       const res = await post<BuyResult>('/api/payments', {
         plan_id: planID,
         period_id: periodID,
@@ -77,8 +92,20 @@ export default function Buy() {
         <button className="icon-btn" onClick={() => nav(-1)} aria-label="Назад">
           <Back />
         </button>
-        <h1>{subID ? 'Продление' : 'Новая подписка'}</h1>
+        <h1>{gift ? 'Подарок' : forOther ? 'Покупка другому' : subID ? 'Продление' : 'Новая подписка'}</h1>
       </div>
+
+      {(gift || forOther) && (
+        <div className="card for-banner">
+          <span className="action-ico">{gift ? <Gift /> : <User />}</span>
+          <div className="grow">
+            <b>{gift ? 'Подписка в подарок' : `Для: ${toName}`}</b>
+            <div className="tiny muted">
+              {gift ? 'После оплаты вы получите код и ссылку — перешлите их получателю.' : 'Оплачиваете вы, подписка появится у получателя.'}
+            </div>
+          </div>
+        </div>
+      )}
 
       {!fixedPlan && (
         <div className="stack">
@@ -104,32 +131,46 @@ export default function Buy() {
               <div className="small muted">{limitsLine(plan)}</div>
             </div>
           )}
-          <div className="periods" role="radiogroup" aria-label="Срок">
+          <div className="periods card" role="radiogroup" aria-label="Срок">
             {plan.offers.map((o) => (
               <button key={o.period_id} role="radio" aria-checked={o.period_id === periodID} className={o.period_id === periodID ? 'period on' : 'period'} onClick={() => setPeriodID(o.period_id)}>
-                {o.is_best && <span className="badge accent best">Выгодно</span>}
+                {o.is_best && <span className="best">Лучший выбор</span>}
                 <div className="p-len">{periodLabel(o.unit, o.amount)}</div>
-                <div className="p-price num">{rub(o.price)}</div>
-                <div className="p-month num">
-                  {o.full_price > o.price && <span className="strike">{rubRound(o.full_price)}</span>} {o.days >= 28 ? `${rubRound(o.per_month)}/мес` : ''}
+                <div className="p-right num">
+                  {o.full_price > o.price && <span className="strike">{rubRound(o.full_price)}</span>}
+                  <span className="p-price">{rub(o.price)}</span>
                 </div>
+                {o.days > 31 && o.per_month > 0 && <span className="p-month num">{rubRound(o.per_month)} / месяц</span>}
               </button>
             ))}
           </div>
 
-          {(plan.description || plan.features.length > 0) && (
-            <div className="card stack">
-              <h3>Что входит</h3>
-              {plan.description && <p className="small muted">{plan.description}</p>}
-              {plan.features.length > 0 && (
-                <ul className="features small">
-                  {plan.features.map((f, i) => (
-                    <li key={i}>{f}</li>
+          <div className="card stack choice">
+            {offer && (
+              <>
+                <h3>Ваш выбор</h3>
+                <div className="spread choice-line">
+                  <span>
+                    {plan.name} <span className="muted">на {periodLabel(offer.unit, offer.amount)}</span>
+                  </span>
+                  <b className="num accent-text">{rub(offer.price)}</b>
+                </div>
+              </>
+            )}
+            {(plan.description || plan.features.length > 0) && (
+              <>
+                <h3>Что входит в подписку?</h3>
+                <ul className="checks">
+                  {[...plan.features, ...(plan.description ? [plan.description] : [])].map((f, i) => (
+                    <li key={i}>
+                      <Check />
+                      <span>{f}</span>
+                    </li>
                   ))}
                 </ul>
-              )}
-            </div>
-          )}
+              </>
+            )}
+          </div>
 
           <div className="promo-line">
             {plan.promo_code ? (
@@ -159,21 +200,19 @@ export default function Buy() {
             )}
           </div>
 
-          {offer && offer.price > 0 && <MethodPicker state={pay} />}
+          {offer && offer.price > 0 && <MethodPicker state={pay} autopay={!gift && !forOther} />}
 
           {offer && (
             <div className="paybar card">
               <div className="spread">
                 <div>
-                  <div className="small muted">Итого за {periodLabel(offer.unit, offer.amount)}</div>
-                  <div className="row" style={{ gap: 8 }}>
-                    <span style={{ fontFamily: 'var(--display)', fontSize: '1.5rem' }} className="num">
-                      {rub(offer.price)}
-                    </span>
-                    {offer.base_price > offer.price && <span className="strike small num">{rub(offer.base_price)}</span>}
+                  {offer.base_price > offer.price && <div className="strike small num">{rub(offer.base_price)}</div>}
+                  <div className="row" style={{ gap: 8, alignItems: 'baseline' }}>
+                    <span className="small muted">Итого</span>
+                    <span className="paybar-sum num">{rub(offer.price)}</span>
                   </div>
                 </div>
-                <button className="btn" disabled={busy || (offer.price > 0 && !pay.method)} onClick={checkout}>
+                <button className="pill-btn paybar-btn" disabled={busy || (offer.price > 0 && !pay.method)} onClick={checkout}>
                   {offer.price > 0 ? 'Оплатить' : 'Получить'}
                 </button>
               </div>

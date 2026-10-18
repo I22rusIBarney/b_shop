@@ -475,6 +475,8 @@ func (s *Service) ApplyPayment(ctx context.Context, id uuid.UUID) error {
 		cust *store.Customer
 		pay  *store.Payment
 		sub  *store.Subscription
+		rcpt *store.Customer // buy_for: who got the subscription
+		gift *store.Gift
 	)
 	err := s.Store.Tx(ctx, func(tx pgx.Tx) error {
 		var err error
@@ -528,6 +530,16 @@ func (s *Service) ApplyPayment(ctx context.Context, id uuid.UUID) error {
 						FromPlanID: pay.FromPlanID, ToPlanID: &plan.ID, Mode: "upgrade", DaysBefore: before, DaysAfter: before, PaymentID: &pid})
 				}
 			}
+		case "buy_for":
+			if pay.RecipientID == nil {
+				return errors.New("buy_for without recipient")
+			}
+			rcpt, err = store.GetCustomerForUpdate(ctx, tx, *pay.RecipientID)
+			if err == nil {
+				sub, err = s.provisionNew(ctx, tx, rcpt, g)
+			}
+		case "gift":
+			gift, err = createGift(ctx, tx, cust, pay, plan)
 		case "devices":
 			if pay.SubscriptionID == nil {
 				return errors.New("devices without subscription")
@@ -542,16 +554,20 @@ func (s *Service) ApplyPayment(ctx context.Context, id uuid.UUID) error {
 		if err != nil {
 			return err
 		}
-		if err := store.MarkApplied(ctx, tx, pay.ID, sub.ID); err != nil {
+		var subID *int64
+		if sub != nil {
+			subID = &sub.ID
+		}
+		if err := store.MarkApplied(ctx, tx, pay.ID, subID); err != nil {
 			return err
 		}
 		if pay.PromoCode != "" {
-			if err := store.UseReservedDiscount(ctx, tx, cust.ID, pay.PromoCode, pay.ID, sub.ID); err != nil {
+			if err := store.UseReservedDiscount(ctx, tx, cust.ID, pay.PromoCode, pay.ID, subID); err != nil {
 				return err
 			}
 		}
 		// A method saved with this payment turns autopay on for the subscription.
-		if pay.PaymentMethodID != nil && s.set().Payments.AutopayEnabled && sub.Kind == "paid" {
+		if pay.PaymentMethodID != nil && s.set().Payments.AutopayEnabled && sub != nil && sub.Kind == "paid" {
 			switch pay.Operation {
 			case "buy", "renew", "autopay":
 				if err := store.SetAutopay(ctx, tx, sub.ID, true, pay.PaymentMethodID, pay.PeriodID); err != nil {
@@ -566,7 +582,7 @@ func (s *Service) ApplyPayment(ctx context.Context, id uuid.UUID) error {
 			}
 		}
 		return store.AddEvent(ctx, tx, cust.ID, "purchase", map[string]any{"payment": pay.ID, "op": pay.Operation,
-			"plan": pay.Title, "days": pay.Days, "amount": pay.Amount, "subscription": sub.ID}, nil)
+			"plan": pay.Title, "days": pay.Days, "amount": pay.Amount, "subscription": subID}, nil)
 	})
 	if err != nil {
 		s.Log.Error("apply payment", "payment", id, "err", err)
@@ -576,7 +592,11 @@ func (s *Service) ApplyPayment(ctx context.Context, id uuid.UUID) error {
 	if pay == nil {
 		return nil
 	}
-	s.afterPurchase(ctx, cust, pay, sub)
+	if pay.Operation == "gift" || pay.Operation == "buy_for" {
+		s.afterGiftPurchase(ctx, cust, rcpt, pay, sub, gift)
+	} else {
+		s.afterPurchase(ctx, cust, pay, sub)
+	}
 	if err := s.ProcessReferral(ctx, pay.ID); err != nil {
 		s.Log.Warn("referral bonus", "payment", pay.ID, "err", err)
 	}

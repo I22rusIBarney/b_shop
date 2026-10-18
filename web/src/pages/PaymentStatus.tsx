@@ -14,6 +14,7 @@ interface Status {
   amount: number
   title: string
   confirmation_url: string
+  operation: string
 }
 
 export default function PaymentStatus() {
@@ -75,10 +76,15 @@ export default function PaymentStatus() {
           </div>
           <h1>Оплата прошла</h1>
           <p className="muted">
-            {st!.title} · {rub(st!.amount)}. Подписка уже активна.
+            {st!.title} · {rub(st!.amount)}.{' '}
+            {st!.operation === 'gift'
+              ? 'Подарок готов — код и ссылка в разделе «Мои подарки».'
+              : st!.operation === 'buy_for'
+                ? 'Подписка выдана получателю, мы сообщили ему об этом.'
+                : 'Подписка уже активна.'}
           </p>
-          <Link className="btn block" to="/">
-            В кабинет
+          <Link className="btn block" to={st!.operation === 'gift' ? '/gifts' : '/'}>
+            {st!.operation === 'gift' ? 'Мои подарки' : 'В кабинет'}
           </Link>
         </>
       ) : failed ? (

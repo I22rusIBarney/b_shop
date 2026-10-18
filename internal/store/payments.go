@@ -42,6 +42,8 @@ type Payment struct {
 	FromPlanID      *int64     `db:"from_plan_id" json:"from_plan_id"`
 	Autopay         bool       `db:"autopay" json:"autopay"`
 	PaymentMethodID *int64     `db:"payment_method_id" json:"-"`
+	// RecipientID gets the subscription when one customer pays for another (operation buy_for).
+	RecipientID *int64 `db:"recipient_id" json:"recipient_id,omitempty"`
 }
 
 func SetPaymentMethodID(ctx context.Context, db DB, id uuid.UUID, methodID int64) error {
@@ -62,10 +64,10 @@ func LastPaidPeriod(ctx context.Context, db DB, subID int64) (*int64, error) {
 
 func InsertPayment(ctx context.Context, db DB, p *Payment) error {
 	return db.QueryRow(ctx, `INSERT INTO payments (customer_id, subscription_id, plan_id, period_id, operation, title, days,
-		months, extra_devices, amount, base_amount, discount_percent, promo_code, provider, method, save_method, from_plan_id, autopay)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING id, status, created_at`,
+		months, extra_devices, amount, base_amount, discount_percent, promo_code, provider, method, save_method, from_plan_id, autopay, recipient_id)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING id, status, created_at`,
 		p.CustomerID, p.SubscriptionID, p.PlanID, p.PeriodID, p.Operation, p.Title, p.Days, p.Months, p.ExtraDevices,
-		p.Amount, p.BaseAmount, p.DiscountPercent, p.PromoCode, p.Provider, p.Method, p.SaveMethod, p.FromPlanID, p.Autopay).
+		p.Amount, p.BaseAmount, p.DiscountPercent, p.PromoCode, p.Provider, p.Method, p.SaveMethod, p.FromPlanID, p.Autopay, p.RecipientID).
 		Scan(&p.ID, &p.Status, &p.CreatedAt)
 }
 
@@ -93,7 +95,8 @@ func MarkPaid(ctx context.Context, db DB, id uuid.UUID, method string) (bool, er
 	return tag.RowsAffected() == 1, err
 }
 
-func MarkApplied(ctx context.Context, db DB, id uuid.UUID, subID int64) error {
+// subID is nil for gifts: the subscription appears only when the code is activated.
+func MarkApplied(ctx context.Context, db DB, id uuid.UUID, subID *int64) error {
 	_, err := db.Exec(ctx, `UPDATE payments SET applied_at=now(), subscription_id=$2 WHERE id=$1`, id, subID)
 	return err
 }

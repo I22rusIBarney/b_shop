@@ -150,6 +150,8 @@ export interface Me {
   trial_available: boolean
   ref_link: string
   referral_enabled: boolean
+  gifts_enabled: boolean
+  buy_for_other: boolean
 }
 
 export interface Session {
@@ -656,4 +658,15 @@ export async function uploadFile(file: File, admin = false): Promise<UploadedFil
   const fd = new FormData()
   fd.append('file', file)
   return api<UploadedFile>('POST', admin ? '/api/admin/tickets/files' : '/api/files', fd)
+}
+
+export interface Gift {
+  id: number
+  code: string
+  plan_id: number | null
+  title: string
+  days: number
+  status: 'ready' | 'redeemed'
+  created_at: string
+  redeemed_at: string | null
 }

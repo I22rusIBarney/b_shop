@@ -1,92 +1,58 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import { openExternal, useClientMenu } from '../ui/menu'
 import { del, get, post, put, type AutopayInfo, type Paged, type Payment, type PaymentMethodInfo, type RedeemResult, type Redemption, type Session, type Subscription } from '../lib/api'
 import { useApp } from '../lib/app'
 import { date, dateTime, operationName, paymentStatus, plural, providerName, rub } from '../lib/format'
-import { haptic, openLink } from '../lib/tg'
-import { Card, Chevron, Exit, Link as LinkIcon, Tag, Trash, Users, Wallet } from '../ui/icons'
+import { haptic } from '../lib/tg'
+import { Card, Chevron, Tag, Trash } from '../ui/icons'
 import { Field, Sheet, Toggle, useAction, useLoad } from '../ui/kit'
 
+/** Phone "Профиль" tab (reference 3555–3556): the cabinet sections as grouped row cards. */
 export default function Profile() {
-  const { me, config, signOut, refreshMe } = useApp()
-  const nav = useNavigate()
-  const [sheet, setSheet] = useState<'' | 'payments' | 'logins' | 'cards' | 'promo'>('')
+  const { me } = useApp()
+  const { groups, sheets } = useClientMenu()
   if (!me) return null
   const c = me.customer
   const name = [c.first_name, c.last_name].filter(Boolean).join(' ') || (c.username ? `@${c.username}` : c.email) || 'Профиль'
 
   return (
-    <div className="stack lg">
-      <div className="card">
-        <h2>{name}</h2>
-        <p className="small muted" style={{ marginTop: 4 }}>
-          {[c.username && `@${c.username}`, c.email].filter(Boolean).join(', ') || `ID ${c.id}`}
-        </p>
-        {c.personal_discount > 0 && (
-          <span className="badge accent" style={{ marginTop: 10 }}>
-            Ваша скидка {c.personal_discount}%
-          </span>
-        )}
+    <div className="menu-page">
+      <div className="menu-who">
+        <b>{name}</b>
+        {c.personal_discount > 0 && <span className="badge accent">Ваша скидка {c.personal_discount}%</span>}
       </div>
-
-      <div className="card list">
-        <button className="item item-link" style={{ background: 'none', border: 0, width: '100%', textAlign: 'left' }} onClick={() => setSheet('promo')}>
-          <Tag style={{ width: 20, height: 20 }} />
-          <span>Применить промокод</span>
-          <Chevron className="chev" style={{ width: 18, height: 18 }} />
-        </button>
-        {me.referral_enabled && (
-          <button className="item item-link" style={{ background: 'none', border: 0, borderTop: '1px solid var(--line)', width: '100%', textAlign: 'left' }} onClick={() => nav('/referral')}>
-            <Users style={{ width: 20, height: 20 }} />
-            <span>Реферальная система</span>
-            <Chevron className="chev" style={{ width: 18, height: 18 }} />
-          </button>
-        )}
-      </div>
-
-      <div className="card list">
-        <button className="item item-link" style={{ background: 'none', border: 0, width: '100%', textAlign: 'left' }} onClick={() => setSheet('payments')}>
-          <Wallet style={{ width: 20, height: 20 }} />
-          <span>История платежей</span>
-          <Chevron className="chev" style={{ width: 18, height: 18 }} />
-        </button>
-        <button className="item item-link" style={{ background: 'none', border: 0, borderTop: '1px solid var(--line)', width: '100%', textAlign: 'left' }} onClick={() => setSheet('logins')}>
-          <LinkIcon style={{ width: 20, height: 20 }} />
-          <span>Способы входа</span>
-          <Chevron className="chev" style={{ width: 18, height: 18 }} />
-        </button>
-        <button className="item item-link" style={{ background: 'none', border: 0, borderTop: '1px solid var(--line)', width: '100%', textAlign: 'left' }} onClick={() => setSheet('cards')}>
-          <Card style={{ width: 20, height: 20 }} />
-          <span>Автопродление и способы оплаты</span>
-          <Chevron className="chev" style={{ width: 18, height: 18 }} />
-        </button>
-      </div>
-
-      {config.links.length > 0 && (
-        <div className="card list">
-          {config.links.map((l, i) => (
-            <button key={i} className="item item-link" style={{ background: 'none', border: 0, borderTop: i ? '1px solid var(--line)' : 0, width: '100%', textAlign: 'left' }} onClick={() => openLink(l.url)}>
-              <span>{l.title}</span>
-              <Chevron className="chev" style={{ width: 18, height: 18 }} />
-            </button>
-          ))}
-        </div>
-      )}
-
-      <button
-        className="btn ghost block"
-        onClick={async () => {
-          await signOut()
-          nav('/login')
-        }}
-      >
-        <Exit /> Выйти
-      </button>
-
-      <PaymentsSheet open={sheet === 'payments'} onClose={() => setSheet('')} />
-      <LoginsSheet open={sheet === 'logins'} onClose={() => setSheet('')} onChanged={refreshMe} />
-      <AutopaySheet open={sheet === 'cards'} onClose={() => setSheet('')} />
-      <PromoSheet open={sheet === 'promo'} onClose={() => setSheet('')} />
+      {groups.map((g) => (
+        <section key={g.title} className="menu-group">
+          <div className="am-title">{g.title}</div>
+          {g.items
+            .filter((it) => it.only !== 'desktop')
+            .map((it) => {
+              const inner = (
+                <>
+                  <it.icon className="menu-ico" />
+                  <span className="grow">{it.label}</span>
+                  {!!it.badge && <span className="am-badge">{it.badge}</span>}
+                  <Chevron className="chev" />
+                </>
+              )
+              return it.to ? (
+                <Link key={it.key} className="menu-row" to={it.to}>
+                  {inner}
+                </Link>
+              ) : it.href ? (
+                <a key={it.key} className="menu-row" href={it.href} target="_blank" rel="noopener noreferrer" onClick={(e) => openExternal(e, it.href!)}>
+                  {inner}
+                </a>
+              ) : (
+                <button key={it.key} type="button" className="menu-row" onClick={it.onClick}>
+                  {inner}
+                </button>
+              )
+            })}
+        </section>
+      ))}
+      {sheets}
     </div>
   )
 }

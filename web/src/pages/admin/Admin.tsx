@@ -65,7 +65,7 @@ const groups: Group[] = [
       { to: '/admin/settings/moynalog', label: 'Мой налог', icon: List },
       { to: '/admin/branding', label: 'Оформление', icon: Palette },
       { to: '/admin/settings/trial', label: 'Пробный период', icon: Trial },
-      { to: '/admin/settings/referral', label: 'Рефералка', icon: People },
+      { to: '/admin/settings/referral', label: 'Рефералка и подарки', icon: People },
       { to: '/admin/settings/links', label: 'Ссылки и установка', icon: List },
       { to: '/admin/notifications', label: 'Уведомления', icon: Bell },
       { to: '/admin/webhooks', label: 'Webhooks', icon: Hook },
@@ -180,8 +180,14 @@ export default function Admin() {
       <AdminMenu open={open} />
       <main className="admin-main">
         <div className="admin-bar">
-          <button className="icon-btn" onClick={toggleNav} aria-label={collapsed ? 'Показать меню' : 'Скрыть меню'} aria-pressed={!collapsed}>
-            <PanelLeft />
+          <button
+            className="icon-btn"
+            onClick={() => (matchMedia('(max-width: 899px)').matches ? setOpen(true) : toggleNav())}
+            aria-label="Меню"
+            aria-expanded={open}
+          >
+            <PanelLeft className="only-desk" />
+            <Menu className="only-phone" />
           </button>
           <span className="grow" />
           <button

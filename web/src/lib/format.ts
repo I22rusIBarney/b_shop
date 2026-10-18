@@ -94,4 +94,6 @@ export const operationName: Record<string, string> = {
   change: 'Смена тарифа',
   devices: 'Устройства',
   traffic: 'Трафик',
+  gift: 'Подарок',
+  buy_for: 'Покупка другому',
 }

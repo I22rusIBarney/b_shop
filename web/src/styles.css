@@ -889,3 +889,76 @@ button.am-item { background: none; border: 1px solid transparent; color: var(--t
   .admin-bar .icon-btn { pointer-events: auto; }
   .admin-bar + :not(.admin-head, h1) > :first-child, .admin-bar + h1, .admin-bar + .admin-head { padding-left: 34px; padding-right: 40px; }
 }
+
+/* ---- buy (mobile reference 3549): periods in one panel, price bottom-right, "Ваш выбор", checks, paybar ---- */
+.periods.card { padding: 12px; gap: 12px; }
+.periods .period { min-height: 92px; display: flex; flex-direction: column; justify-content: space-between; padding: 12px 14px 14px; background: color-mix(in srgb, var(--surface-solid) 70%, transparent); border-radius: 18px; }
+.periods .period .p-len { font-size: 1.05rem; font-weight: 500; }
+.periods .period .p-right { display: flex; flex-direction: column; align-items: flex-end; gap: 0; margin-top: 8px; }
+.periods .period .p-right .strike { font-size: .72rem; color: var(--muted); }
+.periods .period .p-price { margin: 0; font-size: 1.3rem; font-weight: 600; }
+.periods .period .p-month { position: absolute; right: 10px; bottom: -9px; padding: 1px 8px; border-radius: 999px; font-size: .66rem; color: var(--accent); background: var(--surface-solid); border: 1px solid var(--accent); }
+.periods .period .best { position: absolute; top: -11px; left: 50%; transform: translateX(-50%); white-space: nowrap; padding: 1px 9px; border-radius: 999px; font-size: .66rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--accent); background: var(--surface-solid); border: 1px solid var(--accent); }
+.choice h3 { font-size: 1.05rem; }
+.choice-line { padding-bottom: 12px; border-bottom: 1px solid var(--line); gap: 10px; }
+.accent-text { color: var(--accent); font-size: 1.1rem; }
+.checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.checks li { display: flex; gap: 12px; align-items: flex-start; font-size: .92rem; line-height: 1.45; }
+.checks svg { flex: none; width: 18px; height: 18px; margin-top: 2px; color: var(--accent); }
+.paybar-sum { font-family: var(--display); font-size: 1.45rem; font-weight: 600; color: var(--accent); }
+.paybar-btn { width: auto; min-width: 150px; flex: none; }
+.paybar .spread { align-items: center; gap: 12px; }
+.for-banner { display: flex; align-items: center; gap: 12px; padding: 14px 16px; }
+.for-banner .grow { display: grid; gap: 2px; min-width: 0; }
+
+/* ---- phone "Профиль" menu (reference 3555–3556): section titles with a bar, each row its own glass card ---- */
+.menu-page { display: grid; gap: 18px; }
+.menu-who { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 4px; font-size: 1.05rem; }
+.menu-group { display: grid; gap: 10px; }
+.menu-group .am-title { margin: 0 0 0 2px; }
+.menu-row {
+  display: flex; align-items: center; gap: 16px; width: 100%; min-height: 54px; padding: 0 16px;
+  border: 1px solid var(--line); border-radius: 16px; color: var(--text); font: inherit; font-size: 1rem; text-align: left;
+  text-decoration: none !important; cursor: pointer;
+  background: color-mix(in srgb, var(--surface-solid) var(--card-alpha), transparent);
+  backdrop-filter: blur(var(--card-blur)); -webkit-backdrop-filter: blur(var(--card-blur));
+  -webkit-tap-highlight-color: transparent; transition: transform .12s ease, border-color .15s ease;
+}
+.menu-row:active { transform: scale(.985); }
+.menu-row:hover { border-color: var(--line-strong); }
+.menu-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.menu-ico { width: 22px; height: 22px; flex: none; }
+.menu-row .chev { width: 18px; height: 18px; color: var(--muted); flex: none; }
+
+/* ---- gifts and buy-for ---- */
+.action-ico.accent { color: var(--accent); background: color-mix(in srgb, var(--accent) 15%, transparent); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+.gift-card.used { opacity: .7; }
+.gift-code {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; padding: 12px 14px;
+  border-radius: 12px; border: 1px dashed color-mix(in srgb, var(--accent) 60%, transparent); background: var(--surface-2);
+  color: var(--accent); font: inherit; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1.05rem; letter-spacing: .06em; cursor: pointer;
+}
+.gift-code svg { width: 18px; height: 18px; flex: none; }
+.steps { display: grid; gap: 4px; }
+.steps b { font-size: 1.15rem; }
+.steps-bar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; }
+.steps-bar i { height: 4px; border-radius: 4px; background: var(--line-strong); }
+.steps-bar i.on { background: var(--accent); }
+.input-ico { position: relative; }
+.input-ico > svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; color: var(--muted); pointer-events: none; }
+.input-ico > .input { padding-left: 40px; }
+.found { padding: 10px 14px; border-radius: 12px; background: color-mix(in srgb, var(--accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); font-size: .92rem; }
+
+/* ---- admin on phones (reference 3557+): "☰ Title" and page actions in one row, no separate top bar ---- */
+.only-phone { display: none; }
+@media (max-width: 899px) {
+  .only-desk { display: none; }
+  .only-phone { display: block; }
+  .admin-top { display: none; }
+  .admin-main { position: relative; padding-top: calc(12px + max(var(--safe-top), var(--tg-content-safe-area-inset-top, 0px))); }
+  .admin-bar { display: flex; position: absolute; left: 6px; top: calc(10px + max(var(--safe-top), var(--tg-content-safe-area-inset-top, 0px))); pointer-events: none; }
+  .admin-bar .icon-btn { pointer-events: auto; }
+  .admin-bar .icon-btn[aria-label="Выйти"] { display: none; }
+  .admin-bar + :not(.admin-head, h1) > :first-child, .admin-bar + h1, .admin-bar + .admin-head { padding-left: 38px; min-height: 40px; }
+  .admin-main h1 { font-size: 1.15rem; }
+}

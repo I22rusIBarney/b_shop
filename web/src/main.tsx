@@ -17,6 +17,7 @@ import ChangePlan from './pages/ChangePlan'
 import Referral from './pages/Referral'
 import TicketPage from './pages/Ticket'
 import News from './pages/News'
+import Gifts from './pages/Gifts'
 
 const Admin = lazy(() => import('./pages/admin/Admin'))
 
@@ -83,6 +84,7 @@ createRoot(document.getElementById('root')!).render(
               <Route path="support" element={<Support />} />
               <Route path="support/:id" element={<TicketPage />} />
               <Route path="faq" element={<Faq />} />
+              <Route path="gifts" element={<Gifts />} />
               <Route path="news" element={<News />} />
               <Route path="change/:id" element={<ChangePlan />} />
               <Route path="referral" element={<Referral />} />
