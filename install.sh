@@ -56,20 +56,33 @@ say "Папка: $DIR"
 
 step "Пакеты"
 export DEBIAN_FRONTEND=noninteractive
+# На свежем сервере Ubuntu сама ставит обновления (unattended-upgrades) и держит блокировку apt — ждём, а не падаем.
+APT=(apt-get -o DPkg::Lock::Timeout=600)
+wait_apt() {
+	local i=0
+	while fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/lib/apt/lists/lock >/dev/null 2>&1; do
+		[ $i = 0 ] && say "Система сейчас ставит обновления — жду, пока apt освободится (до 10 минут)…"
+		i=$((i + 1)); [ $i -gt 200 ] && die "apt занят больше 10 минут. Проверьте: ps aux | grep -E 'apt|dpkg'"
+		sleep 3
+	done
+}
+wait_apt
 need=()
 for p in curl git openssl ca-certificates cron; do dpkg -s "$p" >/dev/null 2>&1 || need+=("$p"); done
 command -v ss >/dev/null || need+=(iproute2)
 command -v dig >/dev/null || need+=(dnsutils)
 if [ ${#need[@]} -gt 0 ]; then
-	apt-get update -qq && apt-get install -y -qq "${need[@]}" >/dev/null
+	"${APT[@]}" update -qq && "${APT[@]}" install -y -qq "${need[@]}" >/dev/null
 fi
 ok "curl, git, openssl"
 
 if ! command -v docker >/dev/null || ! docker compose version >/dev/null 2>&1; then
 	say "Ставлю Docker…"
+	wait_apt
 	curl -fsSL https://get.docker.com | sh >/dev/null 2>&1 || {
-		warn "get.docker.com недоступен — ставлю Docker из репозитория дистрибутива"
-		apt-get install -y -qq docker.io docker-compose-v2 >/dev/null || apt-get install -y -qq docker.io docker-compose-plugin >/dev/null
+		warn "Официальный установщик Docker не сработал — ставлю Docker из репозитория дистрибутива"
+		wait_apt
+		"${APT[@]}" install -y -qq docker.io docker-compose-v2 >/dev/null || "${APT[@]}" install -y -qq docker.io docker-compose-plugin >/dev/null
 	}
 	systemctl enable --now docker >/dev/null 2>&1 || true
 fi
@@ -316,7 +329,7 @@ EOF
 		[ "$CONF" = /etc/nginx/sites-available/bshop.conf ] && ln -sf "$CONF" /etc/nginx/sites-enabled/bshop.conf
 		nginx -t >/dev/null 2>&1 || die "nginx не принял конфиг $CONF — проверьте: nginx -t"
 		systemctl reload nginx
-		command -v certbot >/dev/null || apt-get install -y -qq certbot python3-certbot-nginx >/dev/null
+		command -v certbot >/dev/null || { wait_apt; "${APT[@]}" install -y -qq certbot python3-certbot-nginx >/dev/null; }
 		MAILARG=(--register-unsafely-without-email)
 		[ -n "$ACME_EMAIL" ] && MAILARG=(-m "$ACME_EMAIL")
 		if certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos --redirect "${MAILARG[@]}" >/dev/null 2>&1; then
