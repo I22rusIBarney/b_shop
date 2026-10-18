@@ -6,6 +6,7 @@ import { useApp } from '../lib/app'
 import type { Branding } from '../lib/api'
 import { Chat, External, Home, HomeFill, Shield, Swap, User } from './icons'
 import { openExternal, useClientMenu } from './menu'
+import { ChannelGate } from './channelgate'
 
 function Media({ src, className }: { src: string; className: string }) {
   if (!src) return null
@@ -110,6 +111,7 @@ export function ClientShell() {
       <Backdrop b={config.branding} dim={loc.pathname !== '/'} />
       <Effect kind={config.branding.effect} />
       <ClientNav />
+      <ChannelGate />
       <main className="app">
         <Brand />
         <Outlet />

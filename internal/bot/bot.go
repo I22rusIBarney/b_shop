@@ -76,7 +76,12 @@ func (b *Bot) handle(ctx context.Context, _ *tg.Bot, u *models.Update) {
 	case u.Message != nil && u.Message.Chat.Type == models.ChatTypePrivate && u.Message.From != nil:
 		b.onMessage(ctx, u.Message)
 	case u.CallbackQuery != nil:
-		_, _ = b.tg.AnswerCallbackQuery(ctx, &tg.AnswerCallbackQueryParams{CallbackQueryID: u.CallbackQuery.ID})
+		q := u.CallbackQuery
+		if q.Data == checkChannelsData {
+			b.onCheckChannels(ctx, q)
+			return
+		}
+		_, _ = b.tg.AnswerCallbackQuery(ctx, &tg.AnswerCallbackQueryParams{CallbackQueryID: q.ID})
 	}
 }
 
@@ -109,6 +114,9 @@ func (b *Bot) onMessage(ctx context.Context, m *models.Message) {
 	isCommand := strings.HasPrefix(text, "/")
 	hasContent := text != "" || m.Caption != "" || len(m.Photo) > 0 || m.Document != nil
 	if !isCommand && hasContent && b.supportMessage(ctx, m, c) {
+		return
+	}
+	if b.channelGate(ctx, f.ID, c) {
 		return
 	}
 	b.sendMenu(ctx, f.ID, c)
@@ -357,4 +365,61 @@ func (l LogNotifier) Deliver(_ context.Context, c *store.Customer, m service.Mes
 
 func (l LogNotifier) Admin(_ context.Context, n service.AdminNote) {
 	l.Log.Info("notify admin", "event", n.Event, "chat", n.ChatID, "customer", n.CustomerID, "text", n.Text)
+}
+
+// IsChannelMember implements service.ChannelChecker. chatID is -100… or @username.
+func (b *Bot) IsChannelMember(ctx context.Context, chatID string, userID int64) (bool, error) {
+	var chat any = chatID
+	if id, err := strconv.ParseInt(chatID, 10, 64); err == nil {
+		chat = id
+	}
+	m, err := b.tg.GetChatMember(ctx, &tg.GetChatMemberParams{ChatID: chat, UserID: userID})
+	if err != nil {
+		return false, err
+	}
+	switch m.Type {
+	case models.ChatMemberTypeOwner, models.ChatMemberTypeAdministrator, models.ChatMemberTypeMember:
+		return true, nil
+	case models.ChatMemberTypeRestricted:
+		return m.Restricted != nil && m.Restricted.IsMember, nil
+	}
+	return false, nil
+}
+
+const checkChannelsData = "check_channels"
+
+// channelGate shows the required channels instead of the menu. Returns true if the customer must subscribe first.
+func (b *Bot) channelGate(ctx context.Context, chatID int64, c *store.Customer) bool {
+	missing := b.svc.MissingChannels(ctx, c)
+	if len(missing) == 0 {
+		return false
+	}
+	rows := [][]models.InlineKeyboardButton{}
+	for _, ch := range missing {
+		rows = append(rows, []models.InlineKeyboardButton{{Text: "📢 " + ch.Title, URL: ch.URL}})
+	}
+	rows = append(rows, []models.InlineKeyboardButton{{Text: "✅ Я подписался", CallbackData: checkChannelsData}})
+	text := "Чтобы пользоваться сервисом, подпишитесь на наш канал. После подписки нажмите «Я подписался»."
+	if len(missing) > 1 {
+		text = "Чтобы пользоваться сервисом, подпишитесь на наши каналы. После подписки нажмите «Я подписался»."
+	}
+	_, err := b.tg.SendMessage(ctx, &tg.SendMessageParams{ChatID: chatID, Text: text,
+		ReplyMarkup: &models.InlineKeyboardMarkup{InlineKeyboard: rows}})
+	b.checkBlocked(ctx, chatID, err)
+	return true
+}
+
+func (b *Bot) onCheckChannels(ctx context.Context, q *models.CallbackQuery) {
+	c, err := store.GetCustomerByTelegram(ctx, b.svc.Store.Pool, q.From.ID)
+	if err != nil {
+		_, _ = b.tg.AnswerCallbackQuery(ctx, &tg.AnswerCallbackQueryParams{CallbackQueryID: q.ID})
+		return
+	}
+	if len(b.svc.MissingChannels(ctx, c)) > 0 {
+		_, _ = b.tg.AnswerCallbackQuery(ctx, &tg.AnswerCallbackQueryParams{CallbackQueryID: q.ID, ShowAlert: true,
+			Text: "Подписка пока не видна. Подпишитесь на канал и нажмите ещё раз."})
+		return
+	}
+	_, _ = b.tg.AnswerCallbackQuery(ctx, &tg.AnswerCallbackQueryParams{CallbackQueryID: q.ID, Text: "Спасибо за подписку!"})
+	b.sendMenu(ctx, q.From.ID, c)
 }

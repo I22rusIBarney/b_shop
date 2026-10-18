@@ -162,6 +162,7 @@ func (s *Service) RunWorkers(ctx context.Context) {
 	every(5*time.Minute, "geo", s.SyncGeo)
 	every(5*time.Minute, "traffic-topups", s.EndTrafficTopups)
 	every(5*time.Minute, "auto-topups", s.RunAutoTopups)
+	every(time.Hour, "kb-proposals", s.RunKBProposals)
 	every(10*time.Second, "ai", s.ProcessAI)
 	every(15*time.Second, "reply-notices", s.ProcessReplyNotices)
 	every(5*time.Minute, "ticket-timers", s.ProcessTicketTimers)

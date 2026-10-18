@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { get, post, put, type Plan } from '../../lib/api'
-import { Close, Plus } from '../../ui/icons'
+import { Close, Plus, Trash } from '../../ui/icons'
 import { ErrorBox, Field, Spinner, Toggle, useAction, useLoad } from '../../ui/kit'
 
 type FieldSpec =
@@ -14,7 +14,7 @@ interface SectionSpec {
   about?: string
   test?: string
   fields: FieldSpec[]
-  custom?: 'tiers' | 'links' | 'apps'
+  custom?: 'tiers' | 'links' | 'apps' | 'channels'
 }
 
 const pages: Record<string, { title: string; sections: SectionSpec[] }> = {
@@ -186,6 +186,14 @@ const pages: Record<string, { title: string; sections: SectionSpec[] }> = {
     sections: [
       { key: 'links', title: 'Ссылки в кабинете и боте', about: 'Канал, правила, поддержка и любые другие ссылки.', custom: 'links', fields: [] },
       {
+        key: 'channels',
+        title: 'Обязательная подписка на каналы',
+        about:
+          'Пока клиент не подпишется, бот вместо меню показывает кнопки каналов, а кабинет — экран подписки. Бот должен быть администратором каждого канала, иначе Telegram не скажет, кто подписан (в этом случае проверка пропускается, клиентов не блокирует). Администраторы и клиенты без Telegram проверку не проходят.',
+        custom: 'channels',
+        fields: [{ k: 'enabled', label: 'Требовать подписку', type: 'bool' }],
+      },
+      {
         key: 'install',
         title: 'Инструкции по подключению',
         about: 'По умолчанию приложения и пошаговые инструкции берутся из панели Remnawave (Настройки страницы подписки) — меняете там, кабинет подхватывает в течение 5 минут. Вручную: список ниже, в ссылке добавления {url} — ссылка подписки, {url_b64} — она же в base64.',
@@ -245,6 +253,9 @@ const pages: Record<string, { title: string; sections: SectionSpec[] }> = {
           { k: 'analyze_images', label: 'Смотреть картинки из обращения', type: 'bool' },
           { k: 'use_customer_data', label: 'Давать данные клиента (подписки, тарифы, цены)', type: 'bool' },
           { k: 'use_knowledge', label: 'Давать частые вопросы и базу знаний', type: 'bool' },
+          { k: 'use_live_data', label: 'Давать живые данные клиента', hint: 'Трафик, подключённые устройства, последнее подключение к VPN, статус в панели и последние платежи', type: 'bool' },
+          { k: 'use_server_status', label: 'Давать состояние серверов', hint: 'Какие серверы работают, а какие нет (только названия) — ассистент сразу узнаёт известные проблемы', type: 'bool' },
+          { k: 'kb_from_tickets', label: 'Предлагать статьи для базы знаний из тикетов', hint: 'Раз в час ассистент читает решённые обращения с вашими ответами и предлагает статьи. Они появятся в «Знания → Предложения» и попадут в базу только после вашего одобрения', type: 'bool' },
           { k: 'notify_drafts', label: 'Уведомлять о черновиках', type: 'bool' },
           { k: 'system_prompt', label: 'Инструкция ассистенту', type: 'textarea' },
         ],
@@ -424,6 +435,7 @@ function SectionForm({ spec }: { spec: SectionSpec }) {
 
       {spec.custom === 'tiers' && <Tiers value={v.tiers || []} onChange={(t) => set('tiers', t)} />}
       {spec.custom === 'links' && <LinksEditor value={v.items || []} onChange={(t) => set('items', t)} />}
+      {spec.custom === 'channels' && <ChannelsEditor value={v.items || []} onChange={(t) => set('items', t)} />}
       {spec.custom === 'apps' && v.source === 'manual' && <AppsEditor value={v.apps || []} onChange={(t) => set('apps', t)} />}
 
       {test && <p className={test.ok ? 'small' : 'err'} style={test.ok ? { color: 'var(--ok)' } : undefined}>{test.message}</p>}
@@ -493,6 +505,42 @@ function LinksEditor({ value, onChange }: { value: LinkItem[]; onChange: (v: Lin
       <div>
         <button className="btn secondary small" onClick={() => onChange([...value, { title: '', url: 'https://', enabled: true, kind: '' }])}>
           <Plus /> Добавить ссылку
+        </button>
+      </div>
+    </div>
+  )
+}
+
+type Channel = { chat_id: string; title: string; url: string }
+
+function ChannelsEditor({ value, onChange }: { value: Channel[]; onChange: (v: Channel[]) => void }) {
+  const upd = (i: number, p: Partial<Channel>) => onChange(value.map((x, j) => (j === i ? { ...x, ...p } : x)))
+  return (
+    <div className="stack">
+      {value.map((c, i) => (
+        <div className="card flat stack" key={i}>
+          <div className="spread">
+            <b>Канал {i + 1}</b>
+            <button className="icon-btn" onClick={() => onChange(value.filter((_, j) => j !== i))} aria-label="Удалить канал">
+              <Trash />
+            </button>
+          </div>
+          <div className="form-grid">
+            <Field label="ID канала" hint="-100… или @username">
+              <input className="input" value={c.chat_id} onChange={(e) => upd(i, { chat_id: e.target.value })} placeholder="@bobrogo" />
+            </Field>
+            <Field label="Название на кнопке">
+              <input className="input" value={c.title} onChange={(e) => upd(i, { title: e.target.value })} placeholder="BobrGO" />
+            </Field>
+            <Field label="Ссылка" hint="Для @username можно не заполнять; для закрытого канала — ссылка-приглашение">
+              <input className="input" value={c.url} onChange={(e) => upd(i, { url: e.target.value })} placeholder="https://t.me/…" />
+            </Field>
+          </div>
+        </div>
+      ))}
+      <div>
+        <button className="btn secondary small" onClick={() => onChange([...value, { chat_id: '', title: '', url: '' }])}>
+          <Plus /> Добавить канал
         </button>
       </div>
     </div>

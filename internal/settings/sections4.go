@@ -156,6 +156,12 @@ type AI struct {
 	SystemPrompt    string   `json:"system_prompt"`
 	UseCustomerData bool     `json:"use_customer_data"`
 	UseKnowledge    bool     `json:"use_knowledge"`
+	// UseLiveData adds traffic, devices, online time and recent payments from the panel and the shop.
+	UseLiveData bool `json:"use_live_data"`
+	// UseServerStatus adds which servers are up or down (names only).
+	UseServerStatus bool `json:"use_server_status"`
+	// KBFromTickets: the assistant proposes knowledge-base articles from closed tickets with operator answers.
+	KBFromTickets bool `json:"kb_from_tickets"`
 	// Replies below this confidence become drafts for an operator.
 	Confidence      float64 `json:"confidence"`
 	DebounceSeconds int     `json:"debounce_seconds"`
@@ -181,6 +187,8 @@ func defaultAI() AI {
 			"Если вопрос про деньги, возврат, ошибку оплаты или ты не уверен — передай оператору.",
 		UseCustomerData: true,
 		UseKnowledge:    true,
+		UseLiveData:     true,
+		UseServerStatus: true,
 		Confidence:      0.75,
 		DebounceSeconds: 30,
 		MaxCallsPerHour: 3,

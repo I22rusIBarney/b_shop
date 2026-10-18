@@ -154,6 +154,7 @@ export interface Me {
   gifts_enabled: boolean
   buy_for_other: boolean
   locations: boolean
+  missing_channels: { chat_id: string; title: string; url: string }[]
 }
 
 export interface Session {

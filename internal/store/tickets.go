@@ -30,6 +30,7 @@ type Ticket struct {
 	FirstResponseAt *time.Time `db:"first_response_at" json:"first_response_at"`
 	ResolvedAt      *time.Time `db:"resolved_at" json:"resolved_at"`
 	ClosedAt        *time.Time `db:"closed_at" json:"closed_at"`
+	KBScannedAt     *time.Time `db:"kb_scanned_at" json:"-"`
 }
 
 type TicketMessage struct {

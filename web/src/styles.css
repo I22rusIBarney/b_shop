@@ -1001,3 +1001,9 @@ button.am-item { background: none; border: 1px solid transparent; color: var(--t
 
 /* ---- device slider on the buy page ---- */
 .dev-slider { width: 100%; height: 32px; accent-color: var(--accent); cursor: pointer; touch-action: pan-y; }
+
+/* ---- required channel subscription ---- */
+.gate { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: max(16px, var(--safe-top)) 16px max(16px, var(--safe-bottom)); background: color-mix(in srgb, var(--bg) 70%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.gate-card { width: 100%; max-width: 400px; text-align: center; }
+.gate-ico { justify-self: center; display: grid; place-items: center; width: 56px; height: 56px; border-radius: 16px; color: #4ea3ff; background: color-mix(in srgb, #4ea3ff 15%, transparent); }
+.gate-ico svg { width: 28px; height: 28px; }

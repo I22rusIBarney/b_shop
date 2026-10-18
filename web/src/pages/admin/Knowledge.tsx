@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { del, get, post, put } from '../../lib/api'
 import { Pencil, Plus, Trash } from '../../ui/icons'
-import { ErrorBox, Field, Sheet, Spinner, Toggle, useAction, useLoad } from '../../ui/kit'
+import { ErrorBox, Field, Sheet, Spinner, Toggle, useAction, useLoad, useToast } from '../../ui/kit'
 
 type Kind = 'templates' | 'faq' | 'kb'
 
@@ -34,7 +34,7 @@ const meta: Record<Kind, { title: string; about: string; group: string; head: st
 const labels: Record<string, string> = { category: 'Категория', section: 'Раздел', title: 'Название', question: 'Вопрос', body: 'Текст', answer: 'Ответ' }
 
 export default function Knowledge() {
-  const [kind, setKind] = useState<Kind>('templates')
+  const [kind, setKind] = useState<Kind | 'proposals'>('templates')
   return (
     <div className="stack lg" style={{ maxWidth: 900 }}>
       <h1>Шаблоны и база знаний</h1>
@@ -44,8 +44,11 @@ export default function Knowledge() {
             {meta[k].title}
           </button>
         ))}
+        <button className={kind === 'proposals' ? 'chip on' : 'chip'} onClick={() => setKind('proposals')}>
+          Предложения ИИ
+        </button>
       </div>
-      <Editor key={kind} kind={kind} />
+      {kind === 'proposals' ? <Proposals /> : <Editor key={kind} kind={kind} />}
     </div>
   )
 }
@@ -133,6 +136,89 @@ function Editor({ kind }: { kind: Kind }) {
             <button className="btn" disabled={busy} onClick={save}>
               Сохранить
             </button>
+          </div>
+        )}
+      </Sheet>
+    </section>
+  )
+}
+
+type Proposal = { id: number; ticket_id: number | null; title: string; body: string; status: 'pending' | 'approved' | 'rejected'; created_at: string }
+
+/** Articles the assistant drafted from solved tickets and your answers; nothing reaches the base without approval. */
+function Proposals() {
+  const list = useLoad(() => get<Proposal[]>('/api/admin/support/kb-proposals?status=pending'))
+  const [edit, setEdit] = useState<Proposal | null>(null)
+  const { busy, run } = useAction()
+
+  const toast = useToast()
+  const generate = () =>
+    run(async () => {
+      const r = await post<{ created: number }>('/api/admin/support/kb-proposals/generate')
+      await list.reload()
+      toast(r.created ? `Новых предложений: ${r.created}` : 'Новых статей нет: подходящих решённых обращений пока не нашлось')
+    })
+  const decide = (p: Proposal, approve: boolean) =>
+    run(async () => {
+      await post(`/api/admin/support/kb-proposals/${p.id}`, { approve, title: p.title, body: p.body })
+      setEdit(null)
+      await list.reload()
+    }, approve ? 'Статья добавлена в базу знаний' : 'Предложение отклонено')
+
+  if (list.error) return <ErrorBox text={list.error} retry={list.reload} />
+  if (!list.data)
+    return (
+      <div className="center">
+        <Spinner />
+      </div>
+    )
+
+  return (
+    <section className="card stack">
+      <div className="spread wrap" style={{ gap: 12 }}>
+        <p className="small muted" style={{ margin: 0, flex: '1 1 260px' }}>
+          Ассистент читает решённые обращения с вашими ответами и предлагает статьи для базы знаний — без имён и личных данных. В базу попадает только то, что вы
+          одобрите. Автоматически — раз в час, если включено в «Поддержка и ИИ».
+        </p>
+        <button className="btn small" disabled={busy} onClick={generate}>
+          Сгенерировать из тикетов
+        </button>
+      </div>
+      {list.data.length === 0 ? (
+        <p className="small muted">Пока нет предложений.</p>
+      ) : (
+        <div className="list">
+          {list.data.map((p) => (
+            <div className="item" key={p.id}>
+              <div className="grow" style={{ minWidth: 0 }}>
+                <b className="ellipsis">{p.title}</b>
+                <div className="tiny muted ellipsis">{p.body}</div>
+                {p.ticket_id && <div className="tiny muted">из обращения #{p.ticket_id}</div>}
+              </div>
+              <button className="btn small secondary" onClick={() => setEdit({ ...p })}>
+                Проверить
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <Sheet open={!!edit} onClose={() => setEdit(null)} title="Предложение статьи">
+        {edit && (
+          <div className="stack">
+            <Field label="Заголовок">
+              <input className="input" value={edit.title} onChange={(e) => setEdit({ ...edit, title: e.target.value })} />
+            </Field>
+            <Field label="Текст статьи">
+              <textarea className="input" style={{ minHeight: 220 }} value={edit.body} onChange={(e) => setEdit({ ...edit, body: e.target.value })} />
+            </Field>
+            <div className="row" style={{ gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn secondary" disabled={busy} onClick={() => decide(edit, false)}>
+                Отклонить
+              </button>
+              <button className="btn" disabled={busy || !edit.title.trim() || !edit.body.trim()} onClick={() => decide(edit, true)}>
+                Добавить в базу
+              </button>
+            </div>
           </div>
         )}
       </Sheet>

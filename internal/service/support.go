@@ -559,7 +559,12 @@ func (s *Service) askAssistant(ctx context.Context, t *store.Ticket, c *store.Cu
 	sys.WriteString(strings.TrimSpace(set.SystemPrompt))
 	sys.WriteString("\n\nСервис: " + s.set().General.ShopName + ". Сегодня " + time.Now().In(s.set().General.Location()).Format("02.01.2006 15:04") + ".")
 	if set.UseCustomerData {
-		sys.WriteString("\n\n## Данные клиента\n" + s.customerContext(ctx, c))
+		sys.WriteString("\n\n## Данные клиента\n" + s.customerContext(ctx, c, set.UseLiveData))
+	}
+	if set.UseServerStatus {
+		if st := s.serverStatusContext(ctx); st != "" {
+			sys.WriteString("\n\n## Состояние серверов\n" + st)
+		}
 	}
 	var question strings.Builder
 	for _, m := range msgs {
@@ -633,14 +638,27 @@ func parseAIAnswer(text string) *aiAnswer {
 	return &aiAnswer{Reply: strings.TrimSpace(text), Confidence: 0}
 }
 
-func (s *Service) customerContext(ctx context.Context, c *store.Customer) string {
+func (s *Service) customerContext(ctx context.Context, c *store.Customer, live bool) string {
 	var b strings.Builder
 	loc := s.set().General.Location()
 	fmt.Fprintf(&b, "Имя: %s. Клиент с %s.", c.DisplayName(), c.CreatedAt.In(loc).Format("02.01.2006"))
 	if c.TrialUsed {
 		b.WriteString(" Пробный период уже использован.")
 	}
-	subs, _ := s.Subscriptions(ctx, c, false)
+	var linked []string
+	if c.TelegramID != nil {
+		linked = append(linked, "Telegram")
+	}
+	if c.Email != nil {
+		linked = append(linked, "email")
+	}
+	if len(linked) > 0 {
+		b.WriteString(" Вход: " + strings.Join(linked, ", ") + ".")
+	}
+	if c.LastSeenAt != nil {
+		b.WriteString(" Последний визит в кабинет: " + c.LastSeenAt.In(loc).Format("02.01.2006 15:04") + ".")
+	}
+	subs, _ := s.Subscriptions(ctx, c, live)
 	if len(subs) == 0 {
 		b.WriteString("\nПодписок нет.")
 	}
@@ -656,6 +674,36 @@ func (s *Service) customerContext(ctx context.Context, c *store.Customer) string
 		kind := map[string]string{"trial": "пробная", "paid": "платная", "free": "бесплатная"}[sv.Kind]
 		fmt.Fprintf(&b, "\n- Подписка «%s» (%s): %s, до %s, %s, автопродление %s.", sv.Title, kind, state,
 			sv.ExpiresAt.In(loc).Format("02.01.2006"), dev, map[bool]string{true: "включено", false: "выключено"}[sv.Autopay])
+		if live {
+			if sv.TrafficLimitBytes > 0 {
+				fmt.Fprintf(&b, " Трафик: израсходовано %.1f из %.1f ГБ.", float64(sv.UsedTrafficBytes)/(1<<30), float64(sv.TrafficLimitBytes)/(1<<30))
+			} else if sv.UsedTrafficBytes > 0 {
+				fmt.Fprintf(&b, " Трафик за период: %.1f ГБ (безлимит).", float64(sv.UsedTrafficBytes)/(1<<30))
+			}
+			if sv.TotalDevices() > 0 {
+				fmt.Fprintf(&b, " Подключено устройств: %d из %d.", sv.DevicesUsed, sv.TotalDevices())
+			} else if sv.DevicesUsed > 0 {
+				fmt.Fprintf(&b, " Подключено устройств: %d.", sv.DevicesUsed)
+			}
+			switch {
+			case sv.FirstConnectedAt == nil:
+				b.WriteString(" Ни разу не подключался к VPN.")
+			case sv.OnlineAt != nil:
+				b.WriteString(" Последнее подключение к VPN: " + sv.OnlineAt.In(loc).Format("02.01.2006 15:04") + ".")
+			}
+			if sv.PanelStatus != "" && sv.PanelStatus != "ACTIVE" {
+				b.WriteString(" Статус в панели: " + sv.PanelStatus + ".")
+			}
+		}
+	}
+	if live {
+		if pays, err := store.RecentPayments(ctx, s.Store.Pool, c.ID, 3); err == nil && len(pays) > 0 {
+			b.WriteString("\nПоследние платежи:")
+			for _, p := range pays {
+				st := map[string]string{"succeeded": "оплачен", "pending": "ожидает оплаты", "canceled": "отменён", "refunded": "возвращён"}[p.Status]
+				fmt.Fprintf(&b, "\n- %s: %s «%s», %s, %s.", p.CreatedAt.In(loc).Format("02.01.2006"), operationNames[p.Operation], p.Title, rub(p.Amount), st)
+			}
+		}
 	}
 	if plans, err := s.Catalog(ctx, c); err == nil && len(plans) > 0 {
 		b.WriteString("\nТарифы для покупки:")

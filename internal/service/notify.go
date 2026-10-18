@@ -52,6 +52,7 @@ var AdminEvents = []EventInfo{
 	{"ticket_message", "Ответ клиента в обращении", "Поддержка", "💬 Обращение #{ticket}\n👤 {user}\n{text}", []string{"ticket", "text"}},
 	{"ticket_escalated", "Ассистент передал оператору", "Поддержка", "🙋 Обращение #{ticket} передано оператору\n👤 {user}\n❓ {reason}", []string{"ticket", "reason"}},
 	{"ai_draft", "Черновик ассистента", "Поддержка", "📝 Черновик ответа к #{ticket} (уверенность {confidence})\n👤 {user}\n{text}", []string{"ticket", "confidence", "text"}},
+	{"kb_proposals", "Предложения в базу знаний", "Поддержка", "📚 Ассистент предложил статей для базы знаний: {count}. Проверьте в «Знания → Предложения»", []string{"count"}},
 	{"ticket_rating", "Оценка поддержки", "Поддержка", "⭐ Оценка {rating}/5 по обращению #{ticket}\n👤 {user}{comment}", []string{"ticket", "rating", "comment"}},
 	{"system_error", "Системные ошибки", "Система", "🛠 {error}", []string{"error"}},
 	{"rw_node_down", "Нода недоступна", "Remnawave", "🔴 Нода <b>{node}</b> недоступна\n🌐 {address}", []string{"node", "address", "country"}},

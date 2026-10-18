@@ -88,6 +88,8 @@ type Service struct {
 	Panel    Panel
 	Mailer   *mailer.Mailer
 	Notify   Notifier
+	// Channels checks required channel subscriptions; nil without a bot.
+	Channels ChannelChecker
 	Log      *slog.Logger
 	// BotUsername is the Telegram bot's username (without @), for deep links.
 	BotUsername string

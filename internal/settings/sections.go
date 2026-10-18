@@ -21,6 +21,7 @@ type All struct {
 	Gifts    Gifts    `json:"gifts"`
 
 	Locations Locations `json:"locations"`
+	Channels  Channels  `json:"channels"`
 	Branding Branding `json:"branding"`
 	Links    Links    `json:"links"`
 	Install  Install  `json:"install"`
@@ -105,6 +106,7 @@ func Defaults() All {
 		Webhooks:      defaultWebhooks(),
 		Geo:           defaultGeo(),
 		Broadcasts:    Broadcasts{RatePerSecond: 20},
+		Channels:      Channels{Items: []Channel{}},
 	}
 }
 
@@ -506,4 +508,46 @@ type Gifts struct {
 type Locations struct {
 	Enabled     bool `json:"enabled"`
 	ShowOffline bool `json:"show_offline"`
+}
+
+// Channels: customers must be subscribed to these Telegram channels to use the bot and the cabinet.
+// The bot has to be an administrator of each channel, otherwise Telegram does not tell who is subscribed.
+type Channels struct {
+	Enabled bool      `json:"enabled"`
+	Items   []Channel `json:"items"`
+}
+
+type Channel struct {
+	ChatID string `json:"chat_id"` // -100… or @username
+	Title  string `json:"title"`
+	URL    string `json:"url"` // public or invite link shown to the customer
+}
+
+func (c *Channels) Validate() error {
+	if c.Items == nil {
+		c.Items = []Channel{}
+	}
+	for i := range c.Items {
+		ch := &c.Items[i]
+		ch.ChatID, ch.Title, ch.URL = strings.TrimSpace(ch.ChatID), strings.TrimSpace(ch.Title), strings.TrimSpace(ch.URL)
+		if ch.ChatID == "" {
+			return fmt.Errorf("канал %d: укажите ID канала (-100…) или @username", i+1)
+		}
+		if !strings.HasPrefix(ch.ChatID, "@") && !strings.HasPrefix(ch.ChatID, "-100") {
+			return fmt.Errorf("канал %d: ID начинается с -100 или @", i+1)
+		}
+		if ch.URL == "" && strings.HasPrefix(ch.ChatID, "@") {
+			ch.URL = "https://t.me/" + strings.TrimPrefix(ch.ChatID, "@")
+		}
+		if !strings.HasPrefix(ch.URL, "https://t.me/") {
+			return fmt.Errorf("канал %d: ссылка должна начинаться с https://t.me/", i+1)
+		}
+		if ch.Title == "" {
+			ch.Title = "Наш канал"
+		}
+	}
+	if c.Enabled && len(c.Items) == 0 {
+		return errors.New("добавьте хотя бы один канал или выключите обязательную подписку")
+	}
+	return nil
 }

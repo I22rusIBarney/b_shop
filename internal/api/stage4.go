@@ -134,6 +134,26 @@ func (s *Server) stage4Routes(mux *http.ServeMux) {
 	}))))
 	mux.HandleFunc("POST /api/admin/tickets/files", s.admin(s.customerUpload))
 
+	// knowledge-base proposals made by the assistant from closed tickets
+	mux.HandleFunc("GET /api/admin/support/kb-proposals", s.admin(s.handle(func(r *http.Request) (any, error) {
+		return store.ListKBProposals(r.Context(), pool(), r.URL.Query().Get("status"))
+	})))
+	mux.HandleFunc("POST /api/admin/support/kb-proposals/generate", s.admin(s.limit("kb-generate", 6, time.Hour, s.handle(func(r *http.Request) (any, error) {
+		n, err := s.svc.ProposeKBFromTickets(r.Context(), 10)
+		return map[string]int{"created": n}, err
+	}))))
+	mux.HandleFunc("POST /api/admin/support/kb-proposals/{id}", s.admin(s.handle(withBody(func(r *http.Request, in struct {
+		Approve bool   `json:"approve"`
+		Title   string `json:"title"`
+		Body    string `json:"body"`
+	}) (any, error) {
+		id, err := pathID(r, "id")
+		if err != nil {
+			return nil, err
+		}
+		return s.svc.DecideKBProposal(r.Context(), id, in.Approve, in.Title, in.Body)
+	}))))
+
 	// templates, FAQ, knowledge base
 	crud(mux, s, "templates",
 		func(r *http.Request) (any, error) { return store.ListTemplates(r.Context(), pool()) },

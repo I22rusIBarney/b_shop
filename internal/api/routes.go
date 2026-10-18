@@ -297,6 +297,7 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 		"gifts_enabled":    st.Gifts.Enabled,
 		"buy_for_other":    st.Gifts.BuyForOther,
 		"locations":        st.Locations.Enabled,
+		"missing_channels": s.svc.MissingChannels(r.Context(), c),
 	})
 }
 

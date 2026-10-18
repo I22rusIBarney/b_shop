@@ -88,6 +88,7 @@ func run(log *slog.Logger) error {
 			return err
 		}
 		svc.Notify = b
+		svc.Channels = b
 		api.BotUsername = b.Username
 		svc.BotUsername = b.Username
 		go b.Run(ctx)
