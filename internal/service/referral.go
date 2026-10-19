@@ -180,7 +180,17 @@ func (s *Service) notifyBonus(ctx context.Context, payer *store.Customer, cb cre
 	}
 	s.Notify.Customer(ctx, cb.recipient, Message{Text: text, ButtonText: "Открыть кабинет", ButtonURL: s.Cfg.PublicURL + "/",
 		EmailSubject: "Бонусные дни"})
-	kind := map[string]string{"first": "за первую оплату", "recurring": "за повторную оплату", "invitee": "приглашённому"}[cb.bonus.Kind]
+	if cb.bonus.Kind == "invitee" {
+		referrer := "—"
+		if r := cb.recipient.ReferrerID; r != nil {
+			if rc, err := store.GetCustomer(ctx, s.Store.Pool, *r); err == nil {
+				referrer = whoLine(rc)
+			}
+		}
+		s.event(ctx, "referral_invitee", cb.recipient, map[string]any{"kind": "за первую покупку", "days": d, "referrer": referrer})
+		return
+	}
+	kind := map[string]string{"first": "первый", "recurring": "повторный"}[cb.bonus.Kind]
 	s.event(ctx, "referral_bonus", cb.recipient, map[string]any{"kind": kind, "days": d, "referral": whoLine(payer)})
 }
 

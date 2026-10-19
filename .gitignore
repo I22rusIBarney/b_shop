@@ -9,3 +9,4 @@ server.log
 web/dist/*
 web/node_modules
 web/tsconfig.tsbuildinfo
+.playwright-mcp/

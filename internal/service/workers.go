@@ -141,6 +141,8 @@ func (s *Service) RunWorkers(ctx context.Context) {
 					}()
 					jctx, cancel := context.WithTimeout(ctx, d*3)
 					defer cancel()
+					s.beat(name, d, true)
+					defer s.beat(name, d, false)
 					fn(jctx)
 				}()
 				select {
@@ -170,4 +172,5 @@ func (s *Service) RunWorkers(ctx context.Context) {
 	every(5*time.Minute, "automation-triggers", s.ScanAutomationTriggers)
 	every(time.Minute, "automation-runs", s.ProcessAutomationRuns)
 	every(10*time.Minute, "backups", s.RunBackups)
+	go s.RunHealthLoop(ctx)
 }

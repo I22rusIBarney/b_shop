@@ -355,6 +355,10 @@ func (s *Server) adminCustomerPatch(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	if id == customer(r).ID && ((p.IsAdmin != nil && !*p.IsAdmin) || (p.IsBlocked != nil && *p.IsBlocked)) {
+		bad(w, "нельзя снять права или заблокировать самого себя — попросите другого администратора")
+		return
+	}
 	if p.PersonalDiscount != nil && (*p.PersonalDiscount < 0 || *p.PersonalDiscount > 100) {
 		bad(w, "скидка должна быть от 0 до 100%")
 		return

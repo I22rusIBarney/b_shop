@@ -92,14 +92,23 @@ func pathID(r *http.Request, name string) (int64, error) {
 	return id, nil
 }
 
+// clientIP trusts proxy headers only when the request comes from the reverse proxy itself
+// (loopback or a private Docker network): from anyone else a forged header would let a client
+// pick a fresh "IP" per request and walk around the login/OTP rate limits.
 func clientIP(r *http.Request) string {
-	if v := r.Header.Get("X-Real-IP"); v != "" {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	if ip := net.ParseIP(host); ip == nil || !(ip.IsLoopback() || ip.IsPrivate()) {
+		return host
+	}
+	if v := strings.TrimSpace(r.Header.Get("X-Real-IP")); v != "" {
 		return v
 	}
 	if v := r.Header.Get("X-Forwarded-For"); v != "" {
 		return strings.TrimSpace(strings.Split(v, ",")[0])
 	}
-	host, _, _ := net.SplitHostPort(r.RemoteAddr)
 	return host
 }
 
@@ -134,7 +143,7 @@ func (s *Server) authed(h http.HandlerFunc) http.HandlerFunc {
 			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "требуется вход"})
 			return
 		}
-		if c.IsBlocked {
+		if s.svc.Banned(c) {
 			writeJSON(w, http.StatusForbidden, map[string]string{"error": "доступ ограничен"})
 			return
 		}
@@ -174,8 +183,9 @@ func (s *Server) recoverer(next http.Handler) http.Handler {
 // ---- rate limiting (per key, fixed window) ----
 
 type limiter struct {
-	mu   sync.Mutex
-	hits map[string][]time.Time
+	mu        sync.Mutex
+	hits      map[string][]time.Time
+	lastPrune time.Time
 }
 
 func newLimiter() *limiter { return &limiter{hits: map[string][]time.Time{}} }
@@ -197,10 +207,24 @@ func (l *limiter) allow(key string, n int, window time.Duration) bool {
 		return false
 	}
 	l.hits[key] = append(kept, now)
-	if len(l.hits) > 50000 {
+	if len(l.hits) > 50000 && now.Sub(l.lastPrune) > time.Minute {
+		l.prune(now)
+	}
+	if len(l.hits) > 200000 { // still flooded: memory matters more than counters
 		l.hits = map[string][]time.Time{}
 	}
 	return true
+}
+
+// prune drops keys with no recent hits. Wiping the whole map instead would let anyone
+// reset every counter (login, OTP) by flooding unique keys. Windows here are at most an hour.
+func (l *limiter) prune(now time.Time) {
+	l.lastPrune = now
+	for k, h := range l.hits {
+		if len(h) == 0 || now.Sub(h[len(h)-1]) > time.Hour {
+			delete(l.hits, k)
+		}
+	}
 }
 
 func (s *Server) limit(key string, n int, window time.Duration, h http.HandlerFunc) http.HandlerFunc {

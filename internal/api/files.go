@@ -104,8 +104,12 @@ func (s *Server) serveFile(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", f.Mime)
 	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
-	if f.Mime == "image/svg+xml" {
+	switch {
+	case f.Mime == "image/svg+xml":
 		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'")
+	case !strings.HasPrefix(f.Mime, "image/") && !strings.HasPrefix(f.Mime, "video/"):
+		// customer attachments (PDF, text) are downloaded, never rendered on our origin next to the session
+		w.Header().Set("Content-Disposition", "attachment")
 	}
 	http.ServeContent(w, r, f.Name, f.CreatedAt, bytes.NewReader(f.Data))
 }

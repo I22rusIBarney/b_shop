@@ -93,7 +93,10 @@ function useStartRoute() {
     startHandled = true
     const p = startParam()
     const m = /^ticket_(\d+)$/.exec(p)
+    // admin notification buttons in channels: ac_<customer id>, at_<ticket id> (the admin pages check rights on the server)
+    const a = /^a([ct])_(\d+)$/.exec(p)
     if (m) nav(`/support/${m[1]}`, { replace: true })
+    else if (a) nav(`/admin/${a[1] === 'c' ? 'customers' : 'tickets'}/${a[2]}`, { replace: true })
     else if (startRoutes[p]) nav(startRoutes[p], { replace: true })
   }, [nav])
 }

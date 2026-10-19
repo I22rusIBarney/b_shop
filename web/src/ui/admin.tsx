@@ -33,11 +33,29 @@ export function Panel({
           <Icon />
         </span>
         <h3>{title}</h3>
-        {count != null && <span className="panel-count num">{count}</span>}
+        {!!count && <span className="panel-count num">{count}</span>}
         {actions && <div className="panel-act">{actions}</div>}
       </header>
       <div className="panel-body">{children}</div>
     </section>
+  )
+}
+
+/** Page switcher for long admin lists; hidden when everything fits on one page. */
+export function Pager({ offset, count, total, size, onOffset }: { offset: number; count: number; total: number; size: number; onOffset: (o: number) => void }) {
+  if (total <= size && offset === 0) return null
+  return (
+    <div className="pager">
+      <span className="small muted num">
+        {count ? `${offset + 1}–${offset + count}` : 0} из {total.toLocaleString('ru-RU')}
+      </span>
+      <button className="btn secondary small" disabled={offset === 0} onClick={() => onOffset(Math.max(0, offset - size))}>
+        Назад
+      </button>
+      <button className="btn secondary small" disabled={offset + size >= total} onClick={() => onOffset(offset + size)}>
+        Дальше
+      </button>
+    </div>
   )
 }
 

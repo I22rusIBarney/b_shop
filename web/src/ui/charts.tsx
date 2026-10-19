@@ -44,10 +44,11 @@ function useWidth<T extends HTMLElement>() {
   return [ref, w] as const
 }
 
-function niceMax(v: number): number {
-  if (v <= 0) return 1
+function niceMax(v: number, whole = false): number {
+  // whole: counts of people/tickets — the middle grid line must stay an integer (no «0,5 клиента»)
+  if (v <= 0) return whole ? 2 : 1
   const p = Math.pow(10, Math.floor(Math.log10(v)))
-  for (const m of [1, 2, 2.5, 5, 10]) if (m * p >= v) return m * p
+  for (const m of whole ? [1, 2, 5, 10] : [1, 2, 2.5, 5, 10]) if (m * p >= v) return whole ? Math.max(2, m * p) : m * p
   return 10 * p
 }
 
@@ -102,7 +103,7 @@ export function TimeChart({
   const plotW = width - left - right
   const plotH = height - top - bottom
   const totals = points.map((p) => (kind === 'stack' ? p.v.reduce((a, b) => a + Math.max(b, 0), 0) : Math.max(...p.v, 0)))
-  const max = money ? niceMax(Math.max(0, ...totals) / 100) * 100 : niceMax(Math.max(0, ...totals))
+  const max = money ? niceMax(Math.max(0, ...totals) / 100) * 100 : niceMax(Math.max(0, ...totals), true)
   const y = (v: number) => top + plotH - (v / max) * plotH
   const step = plotW / n
   const barW = Math.max(2, Math.min(24, step - (step > 8 ? 4 : 1)))

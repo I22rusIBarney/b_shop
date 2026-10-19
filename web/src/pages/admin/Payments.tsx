@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { get, type Paged, type Payment } from '../../lib/api'
 import { dateTime, operationName, paymentStatus, rub } from '../../lib/format'
 import { ErrorBox, Sheet, Spinner, useLoad, pressable } from '../../ui/kit'
-import { Avatar } from '../../ui/admin'
+import { Avatar, Pager } from '../../ui/admin'
 
 const PAGE = 50
 const receiptName: Record<string, string> = { none: '—', pending: 'в очереди', done: 'отправлен', failed: 'ошибка', cancel_pending: 'аннулируется', canceled: 'аннулирован' }
@@ -57,8 +57,14 @@ export default function Payments() {
           <option value="canceled">Отменён</option>
           <option value="refunded">Возврат</option>
         </select>
-        <input className="input" type="date" value={params.get('from') || ''} onChange={(e) => set('from', e.target.value)} aria-label="С даты" />
-        <input className="input" type="date" value={params.get('to') || ''} onChange={(e) => set('to', e.target.value)} aria-label="По дату" />
+        <label className="input date-field">
+          <span>с</span>
+          <input type="date" value={params.get('from') || ''} max={params.get('to') || undefined} onChange={(e) => set('from', e.target.value)} aria-label="С даты" />
+        </label>
+        <label className="input date-field">
+          <span>по</span>
+          <input type="date" value={params.get('to') || ''} min={params.get('from') || undefined} onChange={(e) => set('to', e.target.value)} aria-label="По дату" />
+        </label>
       </div>
       {data.error ? (
         <ErrorBox text={data.error} retry={data.reload} />
@@ -87,14 +93,14 @@ export default function Payments() {
               <tbody>
                 {data.data.items.map((p) => (
                   <tr key={p.id} className="click" {...pressable(() => setOpen(p))}>
-                    <td className="num muted wide small">{dateTime(p.created_at)}</td>
+                    <td className="num muted wide small nowrap">{dateTime(p.created_at)}</td>
                     <td className="wide lead">
                       <div className="person">
                         <Avatar name={p.customer_name || `#${p.customer_id}`} seed={p.customer_id} size={30} />
                         <span className="cell-title">{p.customer_name || `#${p.customer_id}`}</span>
                       </div>
                     </td>
-                    <td className="wide">
+                    <td className="wide pay-op">
                       {operationName[p.operation] || p.operation}: {p.title}
                       <div className="tiny muted">{p.days} дн. · {p.method || p.provider}</div>
                     </td>
@@ -108,14 +114,7 @@ export default function Payments() {
               </tbody>
             </table>
           </div>
-          <div className="pager">
-            <button className="btn secondary small" disabled={offset === 0} onClick={() => set('offset', String(Math.max(0, offset - PAGE)))}>
-              Назад
-            </button>
-            <button className="btn secondary small" disabled={offset + PAGE >= data.data.total} onClick={() => set('offset', String(offset + PAGE))}>
-              Дальше
-            </button>
-          </div>
+          <Pager offset={offset} count={data.data.items.length} total={data.data.total} size={PAGE} onOffset={(o) => set('offset', String(o))} />
         </>
       )}
       <Sheet open={!!open} onClose={() => setOpen(null)} title="Платёж">

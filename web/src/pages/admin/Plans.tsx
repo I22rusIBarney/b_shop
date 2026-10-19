@@ -68,7 +68,7 @@ export default function Plans() {
                       <ChevronDown />
                     </button>
                   </div>
-                  <Link to={`/admin/plans/${p.id}`} className="plan-card-name">
+                  <Link to={`/admin/plans/${p.id}`} className="plan-card-name" title={p.name}>
                     {p.name}
                   </Link>
                   <div className="plan-card-tools">

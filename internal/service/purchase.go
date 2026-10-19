@@ -669,22 +669,39 @@ func (s *Service) afterPurchase(ctx context.Context, c *store.Customer, p *store
 	}
 	extra := ""
 	if p.PromoCode != "" {
-		extra = fmt.Sprintf("\n🎟 %s (−%d%%)", escape(p.PromoCode), p.DiscountPercent)
+		extra = fmt.Sprintf("\n🏷 Промокод: %s (−%d%%)", escape(p.PromoCode), p.DiscountPercent)
 	}
+	expires := sub.ExpiresAt.In(loc).Format("2006-01-02 15:04")
+	if left := daysLeft(sub.ExpiresAt); left > 0 {
+		expires += " (" + plural(left, "день", "дня", "дней") + ")"
+	}
+	provider := providerTitle(p.Provider)
 	switch p.Operation {
 	case "change":
-		s.event(ctx, "plan_change", c, map[string]any{"mode": "с доплатой", "from": s.planName(ctx, p.FromPlanID), "to": p.Title,
-			"days": plural(p.Days, "день", "дня", "дней"), "amount": Raw("\n💰 " + rub(p.Amount) + extra)})
+		amount := rub(p.Amount)
+		if p.PromoCode != "" {
+			amount += fmt.Sprintf(" · промокод %s (−%d%%)", p.PromoCode, p.DiscountPercent)
+		}
+		s.event(ctx, "plan_change", c, map[string]any{"mode": "Апгрейд с доплатой", "from": s.planName(ctx, p.FromPlanID), "to": p.Title,
+			"days": "→ " + plural(daysLeft(sub.ExpiresAt), "день", "дня", "дней"), "amount": amount})
 	case "autopay":
-		s.event(ctx, "autopay", c, map[string]any{"plan": p.Title, "detail": detail, "amount": rub(p.Amount)})
+		s.event(ctx, "autopay", c, map[string]any{"plan": p.Title, "detail": detail, "amount": rub(p.Amount), "provider": provider, "expires": expires})
 	default:
 		ev := "purchase"
 		if p.Operation == "renew" {
 			ev = "renew"
 		}
-		s.event(ctx, ev, c, map[string]any{"operation": opName, "plan": p.Title, "detail": detail, "amount": rub(p.Amount), "promo": Raw(extra)})
+		s.event(ctx, ev, c, map[string]any{"operation": opName, "plan": p.Title, "detail": detail, "amount": rub(p.Amount), "promo": Raw(extra),
+			"devices": sub.TotalDevices(), "provider": provider, "expires": expires})
 	}
 	s.onPurchaseForAutomations(ctx, c, p)
+}
+
+func providerTitle(p string) string {
+	if t := map[string]string{"yookassa": "ЮKassa", "balance": "Баланс", "admin": "Администратор"}[p]; t != "" {
+		return t
+	}
+	return p
 }
 
 func whoLine(c *store.Customer) string {

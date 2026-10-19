@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { openExternal, useClientMenu } from '../ui/menu'
-import { del, get, post, put, type AutopayInfo, type Paged, type Payment, type PaymentMethodInfo, type RedeemResult, type Redemption, type Session, type Subscription } from '../lib/api'
+import { del, get, myAvatar, post, put, type AutopayInfo, type Paged, type Payment, type PaymentMethodInfo, type RedeemResult, type Redemption, type Session, type Subscription } from '../lib/api'
 import { useApp } from '../lib/app'
 import { date, dateTime, operationName, paymentStatus, plural, providerName, rub } from '../lib/format'
 import { haptic } from '../lib/tg'
@@ -12,6 +12,15 @@ import { Field, Sheet, Toggle, useAction, useLoad } from '../ui/kit'
 export default function Profile() {
   const { me } = useApp()
   const { groups, sheets } = useClientMenu()
+  const [photo, setPhoto] = useState<string | null>(null)
+  const meID = me?.customer.id
+  useEffect(() => {
+    let live = true
+    if (meID) myAvatar().then((u) => live && setPhoto(u))
+    return () => {
+      live = false
+    }
+  }, [meID])
   if (!me) return null
   const c = me.customer
   const name = [c.first_name, c.last_name].filter(Boolean).join(' ') || (c.username ? `@${c.username}` : c.email) || 'Профиль'
@@ -19,8 +28,9 @@ export default function Profile() {
   return (
     <div className="menu-page">
       <header className="me-card">
-        <span className="me-avatar" aria-hidden="true">
+        <span className={photo ? 'me-avatar has-photo' : 'me-avatar'} aria-hidden="true">
           {(name.replace(/^@/, '')[0] || '?').toUpperCase()}
+          {photo && <img src={photo} alt="" onError={() => setPhoto(null)} />}
         </span>
         <div className="me-text">
           <h1>{name}</h1>

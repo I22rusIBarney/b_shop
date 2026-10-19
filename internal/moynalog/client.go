@@ -230,6 +230,25 @@ func (c *Client) ReceiptURL(ctx context.Context, receiptUUID string) string {
 }
 
 // Check verifies credentials.
+// Reachable checks that the API answers at all, without logging in: the health check runs every minute and
+// frequent logins could get the account rate-limited. Any HTTP answer below 500 counts as reachable.
+func (c *Client) Reachable(ctx context.Context) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+"/", nil)
+	if err != nil {
+		return err
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10))
+	resp.Body.Close()
+	if resp.StatusCode >= 500 {
+		return fmt.Errorf("moynalog: HTTP %d", resp.StatusCode)
+	}
+	return nil
+}
+
 func (c *Client) Check(ctx context.Context) error {
 	_, err := c.ensureToken(ctx, true)
 	return err

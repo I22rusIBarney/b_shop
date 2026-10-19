@@ -74,6 +74,7 @@ p { margin: 0; }
 .small { font-size: 0.875rem; }
 .tiny { font-size: 0.8rem; }
 .num { font-variant-numeric: tabular-nums; }
+.nowrap { white-space: nowrap; }
 .strike { text-decoration: line-through; color: var(--muted); }
 .center { text-align: center; }
 .row { display: flex; align-items: center; gap: 12px; }
@@ -1765,3 +1766,39 @@ button.group-row:active, .group-row.pick:active { background: var(--fill); }
 }
 @media (max-width: 720px) { .admin .filters.toolbar > select { flex: 1 1 96px; min-width: 0; } }
 @media (max-width: 720px) { .admin .filters.toolbar > .input:not(.grow):not([type="search"]) { flex: 1 1 96px; min-width: 0; } }
+
+/* ---- payments: labelled date range, operation column keeps its width ---- */
+.date-field { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); cursor: text; }
+.date-field > span { font-size: 0.8rem; }
+.date-field input { min-width: 0; flex: 1; border: 0; padding: 0; background: none; color: var(--text); font: inherit; outline: none; }
+.date-field:focus-within { border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+.t td.pay-op { min-width: 18rem; }
+@media (max-width: 640px) { .t td.pay-op { min-width: 0; } }
+/* phone: search gets its own line so selects keep readable labels («Все статусы», not «Все ст») */
+@media (max-width: 480px) { .admin .filters.toolbar > .input.grow, .admin .filters.toolbar > input[type="search"] { flex-basis: 100%; } }
+/* long e-mails / names in the customer header wrap instead of running off the card */
+.cc-head .id-line > span { min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 480px) {
+  /* two selects per line instead of three equal truncated boxes; a lone select takes the line */
+  .admin .filters.toolbar > select.input:not(.grow):not([type="search"]) { flex: 1 1 calc(50% - 4px); min-width: 0; }
+  .admin .filters.toolbar > select.input:only-of-type:not(.grow):not([type="search"]) { flex-basis: 100%; }
+  .admin .filters.toolbar > .input.date-field:not(.grow):not([type="search"]) { flex: 1 1 calc(50% - 4px); min-width: 0; }
+}
+
+/* profile: the customer's Telegram photo sits over the initial (the letter stays while it loads or when there is none) */
+.me-avatar { position: relative; overflow: hidden; }
+.me-avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: inherit; animation: me-photo-in .25s ease both; }
+.me-avatar.has-photo { box-shadow: 0 8px 24px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.08); }
+@keyframes me-photo-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .me-avatar img { animation: none; } }
+
+/* ---- geo map (MapLibre): globe → streets ---- */
+.geomap-stage.gl { touch-action: none; }
+.geomap-gl, .geomap-gl.maplibregl-map { position: absolute; inset: 0; } /* maplibre sets position: relative on its container */
+.geomap-gl .maplibregl-canvas { outline: none; }
+.geomap-loading { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
+.geomap-stage .geomap-zoom { z-index: 2; }
+.geomap .maplibregl-ctrl.maplibregl-ctrl-attrib, .geomap .maplibregl-ctrl-attrib.maplibregl-compact { background: color-mix(in srgb, var(--surface-solid) 78%, transparent); color: var(--muted); font-size: 10px; }
+.geomap .maplibregl-ctrl-attrib a { color: var(--label-2, var(--muted)); }
+.geomap .maplibregl-ctrl-attrib-button { filter: invert(1) opacity(.6); background-color: transparent; }
+.geomap-sel .link-btn { margin-left: 4px; }

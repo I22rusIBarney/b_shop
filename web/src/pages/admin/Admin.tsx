@@ -2,7 +2,7 @@ import { type ComponentType, useEffect, useRef, useState } from 'react'
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { useApp } from '../../lib/app'
 import {
-  Bars, Bell, Book, Card, Chat, ChevronDown, Coin, Download, Exit, Fingerprint, Globe, Shield, Headset, Hook, List, Megaphone, Menu, PanelLeft,
+  Bars, Bell, Bolt, Book, Card, Chat, ChevronDown, Coin, Download, Exit, Fingerprint, Globe, Shield, Headset, Hook, List, Megaphone, Menu, PanelLeft,
   Palette, People, Receipt, Renew, Settings as SettingsIcon, Sliders, Star, Swap, Ticket, Trend, Trial, Users, Wallet,
 } from '../../ui/icons'
 import Customers from './Customers'
@@ -79,6 +79,7 @@ const groups: Group[] = [
     items: [
       { to: '/admin/settings/auth', label: 'Вход и почта', icon: Fingerprint },
       { to: '/admin/settings/backups', label: 'Резервные копии', icon: Shield },
+      { to: '/admin/settings/health', label: 'Health Check', icon: Bolt },
     ],
   },
 ]
@@ -231,7 +232,9 @@ export default function Admin() {
           <Route path="webhooks" element={<Webhooks />} />
           <Route path="import" element={<ImportRWP />} />
           <Route path="settings/:section" element={<SettingsPage />} />
-          <Route path="*" element={<Navigate to="customers" replace />} />
+          <Route path="settings" element={<Navigate to="/admin/settings/general" replace />} />
+          {/* absolute: a relative target inside a splat route nests itself on every render (/x/customers/customers/…) */}
+          <Route path="*" element={<Navigate to="/admin/customers" replace />} />
         </Routes>
       </main>
     </div>

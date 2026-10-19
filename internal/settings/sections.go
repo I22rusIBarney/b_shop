@@ -35,6 +35,7 @@ type All struct {
 	Webhooks Webhooks `json:"webhooks"`
 	Geo      Geo      `json:"geo"`
 	Backups  Backups  `json:"backups"`
+	Health   Health   `json:"health"`
 }
 
 func Defaults() All {
@@ -107,6 +108,7 @@ func Defaults() All {
 		Webhooks:      defaultWebhooks(),
 		Geo:           defaultGeo(),
 		Backups:       defaultBackups(),
+		Health:        defaultHealth(),
 		Broadcasts:    Broadcasts{RatePerSecond: 20},
 		Channels:      Channels{Items: []Channel{}},
 	}

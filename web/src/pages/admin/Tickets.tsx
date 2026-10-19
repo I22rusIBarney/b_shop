@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { get, patch, post, type AdminTicketView, type SupportTemplate, type TicketMessage, type TicketRow } from '../../lib/api'
 import { refreshBadges } from '../../lib/badges'
 import { date, relative, shortDate } from '../../lib/format'
-import { Avatar, Empty, Switcher } from '../../ui/admin'
+import { Avatar, Empty, Pager, Switcher } from '../../ui/admin'
 import { Back, Bolt, Chat, ChevronDown, Copy } from '../../ui/icons'
 import { Composer, Messages, ticketStatus } from '../../ui/chat'
 import { ErrorBox, Spinner, Toggle, copy, useAction, useLoad, usePolling, useToast } from '../../ui/kit'
@@ -101,17 +101,7 @@ export function TicketList() {
               )
             })}
           </div>
-          <div className="pager">
-            <span className="small muted num">
-              {offset + 1}–{offset + data.data.items.length} из {data.data.total}
-            </span>
-            <button className="btn secondary small" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - 50))}>
-              Назад
-            </button>
-            <button className="btn secondary small" disabled={offset + 50 >= data.data.total} onClick={() => setOffset(offset + 50)}>
-              Дальше
-            </button>
-          </div>
+          <Pager offset={offset} count={data.data.items.length} total={data.data.total} size={50} onOffset={setOffset} />
         </>
       )}
     </>

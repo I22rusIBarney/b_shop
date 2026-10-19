@@ -9,6 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net"
+	"strconv"
 	"strings"
 	"time"
 
@@ -114,6 +116,7 @@ type rwUser struct {
 type rwNode struct {
 	Name          string `json:"name"`
 	Address       string `json:"address"`
+	Port          *int   `json:"port"`
 	CountryCode   string `json:"countryCode"`
 	TrafficLimit  *int64 `json:"trafficLimitBytes"`
 	TrafficUsed   *int64 `json:"trafficUsedBytes"`
@@ -263,7 +266,11 @@ func (s *Service) dispatchWebhook(ctx context.Context, ev *rwWebhook) (customerI
 		if err := json.Unmarshal(ev.Data, &n); err != nil {
 			return 0, "", "ошибка разбора: " + err.Error()
 		}
-		vars := map[string]any{"node": n.Name, "address": n.Address, "country": n.CountryCode}
+		addr := n.Address
+		if n.Port != nil && *n.Port > 0 {
+			addr = net.JoinHostPort(n.Address, strconv.Itoa(*n.Port))
+		}
+		vars := map[string]any{"node": n.Name, "address": addr, "country": n.CountryCode, "flag": flag(n.CountryCode)}
 		summary = n.Name
 		switch ev.Event {
 		case "node.connection_lost":

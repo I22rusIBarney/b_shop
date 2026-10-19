@@ -302,9 +302,14 @@ func (s *Service) ChangePlan(ctx context.Context, c *store.Customer, subID int64
 		}
 		return nil, err
 	}
-	s.event(ctx, "plan_change", c, map[string]any{"mode": modeName(q.Mode), "from": cur.Name, "to": target.Name,
-		"days": fmt.Sprintf("%d → %d дн.", q.DaysBefore, q.DaysAfter), "amount": Raw("")})
+	s.event(ctx, "plan_change", c, map[string]any{"mode": changeKind(q.Mode), "from": cur.Name, "to": target.Name,
+		"days": fmt.Sprintf("%d → %s", q.DaysBefore, plural(q.DaysAfter, "день", "дня", "дней")), "amount": "Бесплатно"})
 	return &BuyResult{Applied: true, SubscriptionID: after.ID}, nil
+}
+
+// changeKind is the last line of the plan change notification (old bot: Апгрейд / Даунгрейд).
+func changeKind(m string) string {
+	return map[string]string{"upgrade": "Апгрейд", "convert": "Конвертация дней", "downgrade": "Даунгрейд", "admin": "Смена администратором"}[m]
 }
 
 func modeName(m string) string {

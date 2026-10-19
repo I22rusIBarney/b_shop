@@ -212,7 +212,17 @@ func (s *Service) RedeemPromo(ctx context.Context, c *store.Customer, code strin
 	case "days":
 		what = "+" + plural(res.Value, "день", "дня", "дней")
 	case "unlock":
-		what = "открытие тарифа"
+		what = "Разблокировка тарифа"
+		var names []string
+		for _, id := range res.PlanIDs {
+			id := id
+			if n := s.planName(ctx, &id); n != "—" {
+				names = append(names, n)
+			}
+		}
+		if len(names) > 0 {
+			what += " (" + strings.Join(names, ", ") + ")"
+		}
 	}
 	s.event(ctx, "promo", c, map[string]any{"code": res.Code, "what": what})
 	return res, nil

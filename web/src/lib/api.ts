@@ -20,6 +20,21 @@ export function setToken(t: string | null) {
   }
 }
 
+// The customer's own Telegram photo as a blob URL (an <img> cannot send the Bearer token). One request per
+// session token: the URL is reused across visits to the profile; null = no photo, show the initial.
+let avatarFor: string | null = null
+let avatarReq: Promise<string | null> | null = null
+export function myAvatar(): Promise<string | null> {
+  const tok = getToken()
+  if (!tok) return Promise.resolve(null)
+  if (avatarReq && avatarFor === tok) return avatarReq
+  avatarFor = tok
+  avatarReq = fetch('/api/me/avatar', { headers: { Authorization: `Bearer ${tok}` } })
+    .then(async (r) => (r.ok ? URL.createObjectURL(await r.blob()) : null))
+    .catch(() => null)
+  return avatarReq
+}
+
 export class ApiError extends Error {
   status: number
   constructor(status: number, message: string) {

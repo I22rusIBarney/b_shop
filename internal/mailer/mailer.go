@@ -43,41 +43,11 @@ func (m *Mailer) Send(ctx context.Context, to, subject, html string) error {
 		return ErrNotConfigured
 	}
 	m.throttle(cfg.RatePerSecond)
-
-	addr := net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))
-	conn, err := dial(ctx, cfg, addr)
+	c, err := session(ctx, cfg)
 	if err != nil {
-		return fmt.Errorf("smtp connect: %w", err)
-	}
-	if cfg.Port == 465 {
-		conn = tls.Client(conn, &tls.Config{ServerName: cfg.Host})
-	}
-	_ = conn.SetDeadline(time.Now().Add(45 * time.Second))
-	c, err := smtp.NewClient(conn, cfg.Host)
-	if err != nil {
-		conn.Close()
-		return fmt.Errorf("smtp: %w", err)
-	}
-	defer c.Close()
-	helo := cfg.HELO
-	if helo == "" {
-		helo = "localhost"
-	}
-	if err := c.Hello(helo); err != nil {
 		return err
 	}
-	if cfg.Port != 465 {
-		if ok, _ := c.Extension("STARTTLS"); ok {
-			if err := c.StartTLS(&tls.Config{ServerName: cfg.Host}); err != nil {
-				return fmt.Errorf("smtp starttls: %w", err)
-			}
-		}
-	}
-	if cfg.Username != "" {
-		if err := c.Auth(smtp.PlainAuth("", cfg.Username, cfg.Password, cfg.Host)); err != nil {
-			return fmt.Errorf("smtp auth: %w", err)
-		}
-	}
+	defer c.Close()
 	if err := c.Mail(cfg.From); err != nil {
 		return err
 	}
@@ -95,6 +65,66 @@ func (m *Mailer) Send(ctx context.Context, to, subject, html string) error {
 		return err
 	}
 	return c.Quit()
+}
+
+// Check connects, says hello, switches to TLS and logs in — everything Send does except sending (health check).
+func (m *Mailer) Check(ctx context.Context) error {
+	cfg := m.get()
+	if !cfg.Configured() {
+		return ErrNotConfigured
+	}
+	c, err := session(ctx, cfg)
+	if err != nil {
+		return err
+	}
+	defer c.Close()
+	return c.Quit()
+}
+
+// session opens an authenticated SMTP connection ready for MAIL FROM.
+func session(ctx context.Context, cfg settings.SMTP) (*smtp.Client, error) {
+	addr := net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))
+	conn, err := dial(ctx, cfg, addr)
+	if err != nil {
+		return nil, fmt.Errorf("smtp connect: %w", err)
+	}
+	if cfg.Port == 465 {
+		conn = tls.Client(conn, &tls.Config{ServerName: cfg.Host})
+	}
+	deadline := time.Now().Add(45 * time.Second)
+	if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
+		deadline = d
+	}
+	_ = conn.SetDeadline(deadline)
+	c, err := smtp.NewClient(conn, cfg.Host)
+	if err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("smtp: %w", err)
+	}
+	helo := cfg.HELO
+	if helo == "" {
+		helo = "localhost"
+	}
+	fail := func(err error) (*smtp.Client, error) {
+		c.Close()
+		return nil, err
+	}
+	if err := c.Hello(helo); err != nil {
+		return fail(err)
+	}
+	if cfg.Port != 465 {
+		if ok, _ := c.Extension("STARTTLS"); ok {
+			if err := c.StartTLS(&tls.Config{ServerName: cfg.Host}); err != nil {
+				return fail(fmt.Errorf("smtp starttls: %w", err))
+			}
+		}
+	}
+	if cfg.Username != "" {
+		if err := c.Auth(smtp.PlainAuth("", cfg.Username, cfg.Password, cfg.Host)); err != nil {
+			return fail(fmt.Errorf("smtp auth: %w", err))
+		}
+	}
+	return c, nil
 }
 
 func dial(ctx context.Context, cfg settings.SMTP, addr string) (net.Conn, error) {

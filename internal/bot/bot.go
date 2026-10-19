@@ -27,6 +27,7 @@ type Bot struct {
 	tg       *tg.Bot
 	log      *slog.Logger
 	Username string
+	adminQ   *adminQueue
 }
 
 func New(token string, svc *service.Service, log *slog.Logger) (*Bot, error) {
@@ -40,6 +41,10 @@ func New(token string, svc *service.Service, log *slog.Logger) (*Bot, error) {
 		return nil, err
 	}
 	b.tg = t
+	b.adminQ = newAdminQueue(func(ctx context.Context, p *tg.SendMessageParams) error {
+		_, err := t.SendMessage(ctx, p)
+		return err
+	}, log.Warn)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	me, err := t.GetMe(ctx)
@@ -52,6 +57,7 @@ func New(token string, svc *service.Service, log *slog.Logger) (*Bot, error) {
 
 // Run polls updates until ctx is done.
 func (b *Bot) Run(ctx context.Context) {
+	go b.adminQ.run(ctx, b.adminParams)
 	_, _ = b.tg.DeleteWebhook(ctx, &tg.DeleteWebhookParams{})
 	// The menu button opens the web app at PUBLIC_URL, so a domain change needs no trip to @BotFather.
 	if strings.HasPrefix(b.svc.Cfg.PublicURL, "https://") {
@@ -109,7 +115,7 @@ func (b *Bot) onMessage(ctx context.Context, m *models.Message) {
 			return
 		}
 	}
-	if c.IsBlocked {
+	if b.svc.Banned(c) {
 		return
 	}
 	isCommand := strings.HasPrefix(text, "/")
@@ -327,29 +333,6 @@ func (b *Bot) sendEmail(ctx context.Context, to string, msg service.Message) err
 	}
 	html += "</div>"
 	return b.svc.Mailer.Send(ctx, to, subject, html)
-}
-
-// Admin sends an event to its chat/topic, or to every admin in ADMIN_TELEGRAM_IDS.
-func (b *Bot) Admin(ctx context.Context, n service.AdminNote) {
-	targets := []int64{n.ChatID}
-	if n.ChatID == 0 {
-		targets = b.svc.Cfg.AdminTelegram
-	}
-	for _, id := range targets {
-		p := &tg.SendMessageParams{ChatID: id, Text: n.Text, ParseMode: models.ParseModeHTML,
-			LinkPreviewOptions: &models.LinkPreviewOptions{IsDisabled: tg.True()}}
-		if n.TopicID > 0 && n.ChatID != 0 {
-			p.MessageThreadID = n.TopicID
-		}
-		if n.ButtonPath != "" {
-			p.ReplyMarkup = &models.InlineKeyboardMarkup{InlineKeyboard: [][]models.InlineKeyboardButton{{
-				b.button(n.ButtonText, b.webAppURL(n.ButtonPath), id > 0),
-			}}}
-		}
-		if _, err := b.tg.SendMessage(ctx, p); err != nil {
-			b.log.Warn("notify admin", "event", n.Event, "chat", id, "err", err)
-		}
-	}
 }
 
 // LogNotifier is used when no bot token is configured (development).

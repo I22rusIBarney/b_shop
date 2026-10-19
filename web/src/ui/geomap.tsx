@@ -1,209 +1,272 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { geoDistance, geoGraticule10, geoNaturalEarth1, geoOrthographic, geoPath } from 'd3-geo'
-import { feature } from 'topojson-client'
-import type { Feature, FeatureCollection, Geometry } from 'geojson'
-import type { Topology } from 'topojson-specification'
-import numeric from './geo/numeric.json'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Map as MapLibre, setWorkerUrl, type ExpressionSpecification, type GeoJSONSource, type StyleSpecification } from 'maplibre-gl'
+import 'maplibre-gl/dist/maplibre-gl.css'
+import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
+import type { FeatureCollection, Geometry, Point } from 'geojson'
+import GeoSvg, { loadAtlas, plural, type GeoPoint } from './geomap-svg'
 
-// A globe and a flat map of where requests come from. Country outlines are Natural Earth (110m, public domain)
-// from the world-atlas package, loaded as a separate chunk the first time a map is shown.
+export type { GeoPoint }
 
-export interface GeoPoint {
-  lat: number
-  lon: number
-  count: number
-  label: string
+// Where subscription requests come from: a WebGL globe that turns into a street map as you zoom in
+// (pinch, wheel or the buttons). Streets are OpenFreeMap vector tiles (OpenStreetMap data, no key, no account);
+// country shading is Natural Earth from world-atlas. Points are city-level: DB-IP City Lite knows the city,
+// not the house, so the closest zoom shows the city centre. Without WebGL the old SVG globe is used.
+
+setWorkerUrl(workerUrl)
+
+const STYLE_URL = 'https://tiles.openfreemap.org/styles/dark'
+const MAX_ZOOM = 18
+
+// Labels in Russian where OpenStreetMap has them.
+const ruName: ExpressionSpecification = ['coalesce', ['get', 'name:ru'], ['get', 'name']]
+
+let remoteStyle: Promise<StyleSpecification | null> | null = null
+function loadStyle(): Promise<StyleSpecification | null> {
+  remoteStyle ??= fetch(STYLE_URL, { signal: AbortSignal.timeout(8000) })
+    .then((r) => (r.ok ? (r.json() as Promise<StyleSpecification>) : null))
+    .catch(() => null)
+  return remoteStyle
 }
 
-type Country = Feature<Geometry, { name?: string }> & { iso?: string }
+// Tiles unreachable: still a zoomable globe, just without streets.
+const offlineStyle: StyleSpecification = { version: 8, sources: {}, layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#14110e' } }] }
 
-let atlas: Promise<Country[]> | null = null
-function loadAtlas(): Promise<Country[]> {
-  atlas ??= import('world-atlas/countries-110m.json').then((m) => {
-    const topo = (m.default ?? m) as unknown as Topology
-    const fc = feature(topo, topo.objects.countries) as unknown as FeatureCollection<Geometry, { name?: string }>
-    const byNum = numeric as unknown as Record<string, string | Record<string, string>>
-    const byName = (byNum._name || {}) as Record<string, string>
-    return fc.features.map((f) => {
-      const id = f.id != null ? String(f.id).padStart(3, '0') : ''
-      const iso = (typeof byNum[id] === 'string' ? (byNum[id] as string) : '') || byName[f.properties?.name || ''] || ''
-      return Object.assign(f, { iso }) as Country
-    })
+/** The dark OpenFreeMap style warmed up to the cabinet palette, with Russian labels. */
+function warm(st: StyleSpecification): StyleSpecification {
+  const s = structuredClone(st)
+  for (const l of s.layers) {
+    if (l.id === 'background' && l.type === 'background') l.paint = { ...l.paint, 'background-color': '#14110e' }
+    if (l.id === 'water' && l.type === 'fill') l.paint = { ...l.paint, 'fill-color': '#0b0d10' }
+    if (l.type === 'symbol' && l.layout?.['text-field'] && /name/.test(JSON.stringify(l.layout['text-field']))) {
+      l.layout = { ...l.layout, 'text-field': ruName }
+    }
+  }
+  return s
+}
+
+// world-atlas rings jump from +180 to -180 (Russia, Fiji…): fine for d3's spherical maths, but a flat GeoJSON
+// renderer draws that jump as a band across the globe. Keep each ring continuous (longitudes may pass 180).
+function unwrapRing(ring: number[][]): number[][] {
+  let shift = 0
+  return ring.map(([lon, lat], i) => {
+    if (i) {
+      const prev = ring[i - 1][0]
+      if (lon - prev > 180) shift -= 360
+      else if (prev - lon > 180) shift += 360
+    }
+    return [lon + shift, lat]
   })
-  return atlas
+}
+function unwrap(g: Geometry): Geometry {
+  if (g.type === 'Polygon') return { ...g, coordinates: g.coordinates.map(unwrapRing) }
+  if (g.type === 'MultiPolygon') return { ...g, coordinates: g.coordinates.map((p) => p.map(unwrapRing)) }
+  return g
 }
 
-const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v))
+function cssColor(el: Element, name: string, fallback: string) {
+  const v = getComputedStyle(el).getPropertyValue(name).trim()
+  return /^(#|rgb|hsl)/.test(v) ? v : fallback
+}
+
+// Starting zoom that shows the whole globe in this box: a phone gets a smaller globe than a laptop.
+function fitZoom(el: HTMLElement) {
+  const side = Math.min(el.clientWidth, el.clientHeight * 1.6)
+  return Math.max(0, Math.min(1.6, Math.log2(side / 200)))
+}
+
+function webglOK() {
+  try {
+    const c = document.createElement('canvas')
+    return !!(c.getContext('webgl2') || c.getContext('webgl'))
+  } catch {
+    return false
+  }
+}
 
 export default function GeoMap({ countries, points, compact }: { countries: Record<string, number>; points: GeoPoint[]; compact?: boolean }) {
-  const [mode, setMode] = useState<'globe' | 'map'>('globe')
-  const [features, setFeatures] = useState<Country[]>([])
-  const [failed, setFailed] = useState(false)
-  const [rot, setRot] = useState<[number, number]>([-60, -30]) // [lambda, phi] of the projection
-  const [zoom, setZoom] = useState(1)
-  const [pan, setPan] = useState<[number, number]>([0, 0])
-  const [sel, setSel] = useState<GeoPoint | null>(null)
-  const [width, setWidth] = useState(320)
-  const box = useRef<HTMLDivElement>(null)
-  const drag = useRef<{ x: number; y: number; id: number } | null>(null)
+  const [gl] = useState(webglOK)
+  if (!gl) return <GeoSvg countries={countries} points={points} compact={compact} />
+  return <GlMap countries={countries} points={points} compact={compact} />
+}
 
+function GlMap({ countries, points, compact }: { countries: Record<string, number>; points: GeoPoint[]; compact?: boolean }) {
+  const box = useRef<HTMLDivElement>(null)
+  const stage = useRef<HTMLDivElement>(null)
+  const map = useRef<MapLibre | null>(null)
+  const [ready, setReady] = useState(false)
+  const [failed, setFailed] = useState(false)
+  const [mode, setMode] = useState<'globe' | 'map'>('globe')
+  const [sel, setSel] = useState<GeoPoint | null>(null)
+
+  const top = useMemo(() => points.reduce<GeoPoint | null>((b, p) => (!b || p.count > b.count ? p : b), null), [points])
+  const home = () => {
+    if (stage.current) map.current?.flyTo({ center: top ? [top.lon, top.lat] : [60, 50], zoom: fitZoom(stage.current), speed: 1.6 })
+    setSel(null)
+  }
+
+  const pointsGeo = useMemo<FeatureCollection<Point>>(() => {
+    const max = Math.max(1, ...points.map((p) => p.count))
+    return {
+      type: 'FeatureCollection',
+      features: points.map((p, i) => ({ type: 'Feature', id: i, geometry: { type: 'Point', coordinates: [p.lon, p.lat] }, properties: { i, s: Math.sqrt(p.count / max) } })),
+    }
+  }, [points])
+
+  // The map itself: created once, data is pushed into its sources below.
   useEffect(() => {
+    const el = stage.current
+    if (!el) return
     let live = true
-    loadAtlas().then(
-      (f) => live && setFeatures(f),
-      () => live && setFailed(true),
-    )
+    let m: MapLibre | null = null
+    loadStyle().then((remote) => {
+      if (!live) return
+      try {
+        m = new MapLibre({
+          container: el,
+          style: remote ? warm(remote) : offlineStyle,
+          center: top ? [top.lon, top.lat] : [60, 50],
+          zoom: fitZoom(el),
+          maxZoom: MAX_ZOOM,
+          attributionControl: { compact: true },
+          dragRotate: false,
+          pitchWithRotate: false,
+        })
+      } catch {
+        setFailed(true)
+        return
+      }
+      m.touchZoomRotate.disableRotation()
+      map.current = m
+      if (import.meta.env.DEV) (window as unknown as { __geomap?: MapLibre }).__geomap = m // for browser checks
+      const accent = cssColor(el, '--accent', '#f5a524')
+      m.on('style.load', () => {
+        if (!m) return
+        m.setProjection({ type: 'globe' })
+        const before = m.getLayer('waterway') ? 'waterway' : undefined
+        m.addSource('countries', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
+        m.addLayer(
+          {
+            id: 'countries-fill',
+            type: 'fill',
+            source: 'countries',
+            // shading fades out as streets appear
+            paint: { 'fill-color': accent, 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 0, ['*', 0.38, ['get', 't']], 4, ['*', 0.24, ['get', 't']], 6, 0] },
+          },
+          before,
+        )
+        m.addSource('points', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
+        const r = (lo: number, hi: number): ExpressionSpecification => ['interpolate', ['linear'], ['zoom'], 1, ['+', lo, ['*', 4, ['get', 's']]], 10, ['+', hi, ['*', 10, ['get', 's']]]]
+        m.addLayer({ id: 'points-halo', type: 'circle', source: 'points', paint: { 'circle-radius': r(4, 10), 'circle-color': accent, 'circle-opacity': 0.28, 'circle-blur': 0.6 } })
+        m.addLayer({
+          id: 'points-core',
+          type: 'circle',
+          source: 'points',
+          paint: { 'circle-radius': r(1.8, 4), 'circle-color': '#ffe8c4', 'circle-stroke-color': accent, 'circle-stroke-width': 1 },
+        })
+        setReady(true)
+      })
+      // A failed tile is not fatal; a failed style before the first load is — fall back to the offline globe.
+      m.on('error', (e) => {
+        if (!m || m.isStyleLoaded()) return
+        if (remote && String(e.error?.message || '').includes('style')) m.setStyle(offlineStyle)
+      })
+      for (const id of ['points-core', 'points-halo']) {
+        m.on('mouseenter', id, () => m && (m.getCanvas().style.cursor = 'pointer'))
+        m.on('mouseleave', id, () => m && (m.getCanvas().style.cursor = ''))
+      }
+    })
+    const ro = new ResizeObserver(() => map.current?.resize())
+    ro.observe(el)
+    return () => {
+      live = false
+      ro.disconnect()
+      m?.remove()
+      map.current = null
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Country shading.
+  useEffect(() => {
+    if (!ready) return
+    let live = true
+    loadAtlas().then((features) => {
+      const src = map.current?.getSource('countries') as GeoJSONSource | undefined
+      if (!live || !src) return
+      const max = Math.max(1, ...Object.values(countries))
+      src.setData({
+        type: 'FeatureCollection',
+        features: features
+          .filter((f) => f.iso && countries[f.iso])
+          .map((f) => ({ type: 'Feature', geometry: unwrap(f.geometry), properties: { t: Math.log1p(countries[f.iso!]) / Math.log1p(max) } })),
+      })
+    })
     return () => {
       live = false
     }
-  }, [])
+  }, [ready, countries])
 
+  // Points, and a tap selects the nearest one.
   useEffect(() => {
-    const el = box.current
-    if (!el) return
-    const ro = new ResizeObserver(() => setWidth(Math.max(240, Math.round(el.clientWidth))))
-    ro.observe(el)
-    setWidth(Math.max(240, Math.round(el.clientWidth)))
-    return () => ro.disconnect()
-  }, [])
-
-  const top = useMemo(() => points.reduce<GeoPoint | null>((b, p) => (!b || p.count > b.count ? p : b), null), [points])
-  const topKey = top ? `${top.lat},${top.lon}` : ''
-  const faceTop = useCallback(() => {
-    setRot(top ? [-top.lon, -clamp(top.lat, -60, 60)] : [-40, -25])
-    setPan([0, 0])
-    setZoom(1)
-  }, [top])
-  // Turn the globe to the busiest place whenever the data changes (not on every re-render).
-  useEffect(() => {
-    faceTop()
+    const m = map.current
+    if (!ready || !m) return
+    ;(m.getSource('points') as GeoJSONSource | undefined)?.setData(pointsGeo)
     setSel(null)
+    const onClick = (e: { point: { x: number; y: number } }) => {
+      const pad = 12 // finger-sized target around small dots
+      const hits = m.queryRenderedFeatures(
+        [
+          [e.point.x - pad, e.point.y - pad],
+          [e.point.x + pad, e.point.y + pad],
+        ],
+        { layers: ['points-core', 'points-halo'] },
+      )
+      const i = hits[0]?.properties?.i
+      setSel(typeof i === 'number' ? points[i] : null)
+    }
+    m.on('click', onClick)
+    return () => {
+      m.off('click', onClick)
+    }
+  }, [ready, pointsGeo, points])
+
+  // Fly to the busiest place whenever the data set changes.
+  const topKey = top ? `${top.lat},${top.lon}` : ''
+  useEffect(() => {
+    if (ready && top) map.current?.jumpTo({ center: [top.lon, top.lat] })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [topKey])
+  }, [ready, topKey])
 
-  const H = mode === 'globe' ? Math.min(width, compact ? 300 : 460) : Math.round(width * 0.54)
-  const maxCountry = Math.max(1, ...Object.values(countries))
-  const maxPoint = Math.max(1, ...points.map((p) => p.count))
-
-  const { proj, path } = useMemo(() => {
-    if (mode === 'globe') {
-      const r = (Math.min(width, H) / 2 - 8) * zoom
-      const p = geoOrthographic().scale(r).translate([width / 2, H / 2]).rotate([rot[0], rot[1]]).clipAngle(90)
-      return { proj: p, path: geoPath(p) }
-    }
-    const p = geoNaturalEarth1().fitExtent([[4, 4], [width - 4, H - 4]], { type: 'Sphere' })
-    p.scale(p.scale() * zoom).translate([width / 2 + pan[0], H / 2 + pan[1]])
-    return { proj: p, path: geoPath(p) }
-  }, [mode, width, H, zoom, rot, pan])
-
-  const fillOf = (iso?: string) => {
-    const n = iso ? countries[iso] : 0
-    if (!n) return 'color-mix(in srgb, var(--text) 9%, var(--surface-solid))'
-    const t = Math.log1p(n) / Math.log1p(maxCountry)
-    return `color-mix(in srgb, var(--accent) ${Math.round(16 + 36 * t)}%, color-mix(in srgb, var(--text) 9%, var(--surface-solid)))`
+  const pickMode = (v: 'globe' | 'map') => {
+    setMode(v)
+    map.current?.setProjection({ type: v === 'globe' ? 'globe' : 'mercator' })
   }
 
-  const onDown = (e: React.PointerEvent) => {
-    drag.current = { x: e.clientX, y: e.clientY, id: e.pointerId }
-    ;(e.currentTarget as Element).setPointerCapture?.(e.pointerId)
-  }
-  const onMove = (e: React.PointerEvent) => {
-    const d = drag.current
-    if (!d) return
-    const dx = e.clientX - d.x
-    const dy = e.clientY - d.y
-    d.x = e.clientX
-    d.y = e.clientY
-    if (mode === 'globe') {
-      const k = 90 / ((Math.min(width, H) / 2 - 8) * zoom) // dragging by one radius turns the globe by 90°
-      setRot(([l, f]) => [l + dx * k, clamp(f - dy * k, -90, 90)])
-    } else if (zoom > 1) {
-      const lim = (width * zoom) / 2
-      setPan(([x, y]) => [clamp(x + dx, -lim, lim), clamp(y + dy, -H * zoom / 2, H * zoom / 2)])
-    }
-  }
-  const onUp = () => {
-    drag.current = null
-  }
-
-  const center: [number, number] = [-rot[0], -rot[1]]
-  const dots = points
-    .map((p) => {
-      if (mode === 'globe' && geoDistance([p.lon, p.lat], center) > Math.PI / 2 - 0.02) return null
-      const xy = proj([p.lon, p.lat])
-      return xy ? { p, x: xy[0], y: xy[1], r: 1.9 + 4.1 * Math.sqrt(p.count / maxPoint) } : null
-    })
-    .filter((d): d is { p: GeoPoint; x: number; y: number; r: number } => !!d)
-    .sort((a, b) => b.r - a.r)
-
-  const sphere = path({ type: 'Sphere' })
-  const grat = path(geoGraticule10())
+  if (failed) return <GeoSvg countries={countries} points={points} compact={compact} />
 
   return (
     <div className="geomap" ref={box}>
       <div className="geomap-bar">
         <div className="seg seg-fill seg-2 geomap-mode" role="tablist">
-          <button className={mode === 'globe' ? 'on' : ''} onClick={() => (setMode('globe'), setZoom(1), setPan([0, 0]))}>
+          <button className={mode === 'globe' ? 'on' : ''} onClick={() => pickMode('globe')}>
             Глобус
           </button>
-          <button className={mode === 'map' ? 'on' : ''} onClick={() => (setMode('map'), setZoom(1), setPan([0, 0]))}>
+          <button className={mode === 'map' ? 'on' : ''} onClick={() => pickMode('map')}>
             Карта
           </button>
         </div>
       </div>
-      <div className="geomap-stage" style={{ height: H }}>
-        {failed ? (
-          <div className="center muted small" style={{ height: '100%' }}>
-            Не удалось загрузить контуры стран
-          </div>
-        ) : (
-          <svg
-            viewBox={`0 0 ${width} ${H}`}
-            width={width}
-            height={H}
-            role="img"
-            aria-label="Карта запросов подписки"
-            style={{ touchAction: mode === 'globe' || zoom > 1 ? 'none' : 'pan-y', cursor: drag.current ? 'grabbing' : 'grab' }}
-            onPointerDown={onDown}
-            onPointerMove={onMove}
-            onPointerUp={onUp}
-            onPointerCancel={onUp}
-          >
-            <defs>
-              <clipPath id="geo-clip">
-                <rect width={width} height={H} rx="14" />
-              </clipPath>
-            </defs>
-            <g clipPath="url(#geo-clip)">
-              {sphere && <path d={sphere} className="geo-sea" />}
-              {grat && <path d={grat} className="geo-grat" />}
-              {features.map((f, i) => {
-                const d = path(f)
-                return d ? <path key={i} d={d} className="geo-land" style={{ fill: fillOf(f.iso) }} /> : null
-              })}
-              {sphere && mode === 'globe' && <path d={sphere} className="geo-rim" />}
-              <g className="geo-dots">
-                {dots.map(({ p, x, y, r }) => (
-                  <g key={`${p.lat},${p.lon},${p.label}`} className={sel === p ? 'on' : undefined} onClick={() => setSel(p)} onPointerDown={(e) => e.stopPropagation()}>
-                    <circle className="halo" cx={x} cy={y} r={r * 2.4} />
-                    <circle className="core" cx={x} cy={y} r={r} />
-                    {/* invisible target: small dots stay easy to tap */}
-                    <circle className="hit" cx={x} cy={y} r={Math.max(10, r * 2.4)} />
-                    <title>{`${p.label}: ${p.count}`}</title>
-                  </g>
-                ))}
-              </g>
-            </g>
-          </svg>
-        )}
+      <div className="geomap-stage gl" style={{ height: compact ? 300 : 'min(460px, 62vh)' }}>
+        <div ref={stage} className="geomap-gl" role="img" aria-label="Карта запросов подписки: приближайте до улиц пальцами или колесом" />
+        {!ready && <div className="geomap-loading small muted">Загружаем карту…</div>}
         <div className="geomap-zoom">
-          <button onClick={() => setZoom((z) => clamp(+(z * 1.5).toFixed(2), 1, 8))} aria-label="Приблизить">
+          <button onClick={() => map.current?.zoomIn()} aria-label="Приблизить">
             +
           </button>
-          <button onClick={() => setZoom((z) => clamp(+(z / 1.5).toFixed(2), 1, 8))} aria-label="Отдалить">
+          <button onClick={() => map.current?.zoomOut()} aria-label="Отдалить">
             −
           </button>
-          <button onClick={faceTop} aria-label="Вернуть вид" title="Вернуть вид">
+          <button onClick={home} aria-label="Вернуть вид" title="Вернуть вид">
             ◎
           </button>
         </div>
@@ -216,17 +279,14 @@ export default function GeoMap({ countries, points, compact }: { countries: Reco
       {sel && (
         <div className="geomap-sel small">
           <b>{sel.label}</b> · {sel.count} {plural(sel.count)}
+          <button
+            className="link-btn"
+            onClick={() => map.current?.flyTo({ center: [sel.lon, sel.lat], zoom: Math.max(map.current.getZoom(), 11), speed: 1.4 })}
+          >
+            приблизить
+          </button>
         </div>
       )}
     </div>
   )
-}
-
-function plural(n: number) {
-  const a = n % 100
-  const b = n % 10
-  if (a > 10 && a < 20) return 'запросов'
-  if (b === 1) return 'запрос'
-  if (b >= 2 && b <= 4) return 'запроса'
-  return 'запросов'
 }

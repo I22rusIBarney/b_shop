@@ -57,7 +57,8 @@ func (s *Service) ActivateTrial(ctx context.Context, c *store.Customer) (*store.
 		}
 		return nil, err
 	}
-	s.event(ctx, "trial", c, map[string]any{"days": t.Days, "plan": sub.Title})
+	s.event(ctx, "trial", c, map[string]any{"days": t.Days, "plan": sub.Title,
+		"expires": sub.ExpiresAt.In(s.set().General.Location()).Format("2006-01-02 15:04")})
 	s.AutomationEvent(ctx, "active_trial", c.ID, map[string]any{"plan_name": sub.Title, "subscription_id": sub.ID})
 	return sub, nil
 }

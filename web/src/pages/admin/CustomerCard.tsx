@@ -139,11 +139,19 @@ export default function CustomerCard() {
       data.setData(d)
     }, 'Сохранено')
 
-  const setFlag = (k: 'is_blocked' | 'is_admin', v: boolean) =>
-    run(async () => {
+  const flagQuestion: Record<string, string> = {
+    'is_admin:true': 'Сделать клиента администратором? Он получит полный доступ к админке: клиенты, платежи, настройки, рассылки.',
+    'is_admin:false': 'Снять права администратора?',
+    'is_blocked:true': 'Заблокировать доступ? Клиент не сможет войти в кабинет и бот.',
+  }
+  const setFlag = (k: 'is_blocked' | 'is_admin', v: boolean) => {
+    const q = flagQuestion[`${k}:${v}`]
+    if (q && !confirm(q)) return
+    return run(async () => {
       const d = await patch<Detail>(`/api/admin/customers/${c.id}`, { [k]: v })
       data.setData(d)
     })
+  }
 
   const subAction = (fn: () => Promise<unknown>, ok: string) =>
     run(async () => {
@@ -259,15 +267,15 @@ export default function CustomerCard() {
                 s={s}
                 busy={busy}
                 onDays={(days) => subAction(() => post(`/api/admin/subscriptions/${s.id}/days`, { days }), 'Срок изменён')}
-                onReset={() => subAction(() => post(`/api/admin/subscriptions/${s.id}/reset-traffic`), 'Трафик сброшен')}
-                onRevoke={() => subAction(() => post(`/api/subscriptions/${s.id}/revoke`, { only_passwords: false }), 'Ссылка перевыпущена')}
-                onToggle={(en) => subAction(() => post(`/api/admin/subscriptions/${s.id}/status`, { enabled: en }), en ? 'Подписка включена' : 'Подписка отключена')}
+                onReset={() => confirm('Сбросить использованный трафик подписки?') && subAction(() => post(`/api/admin/subscriptions/${s.id}/reset-traffic`), 'Трафик сброшен')}
+                onRevoke={() => confirm('Перевыпустить ссылку? Старая перестанет работать — клиенту нужно будет заново добавить подписку в приложение.') && subAction(() => post(`/api/subscriptions/${s.id}/revoke`, { only_passwords: false }), 'Ссылка перевыпущена')}
+                onToggle={(en) => (en || confirm('Отключить подписку? VPN у клиента перестанет работать до включения.')) && subAction(() => post(`/api/admin/subscriptions/${s.id}/status`, { enabled: en }), en ? 'Подписка включена' : 'Подписка отключена')}
                 onDelete={() => {
                   if (confirm(`Удалить подписку «${s.plan_name || s.title}» вместе с пользователем в панели?`)) subAction(() => del(`/api/admin/subscriptions/${s.id}`), 'Подписка удалена')
                 }}
                 onDevices={() => setDevicesFor(s)}
                 onChange={() => setChangeFor(s)}
-                onAutopay={() => subAction(() => post(`/api/admin/subscriptions/${s.id}/autopay`), 'Автоплатёж запущен')}
+                onAutopay={() => confirm('Списать оплату продления с сохранённой карты клиента прямо сейчас?') && subAction(() => post(`/api/admin/subscriptions/${s.id}/autopay`), 'Автоплатёж запущен')}
                 onCopy={async () => (await copy(s.subscription_url)) && toast('Ссылка скопирована')}
               />
             ))

@@ -81,6 +81,9 @@ func (s *Server) stage5Routes(mux *http.ServeMux) {
 		}
 		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 	})
+	mux.HandleFunc("GET /api/admin/health", s.admin(s.handle(func(r *http.Request) (any, error) {
+		return s.svc.HealthStatus(), nil
+	})))
 	mux.HandleFunc("GET /api/admin/backups", s.admin(s.handle(func(r *http.Request) (any, error) {
 		runs, err := store.BackupRuns(r.Context(), s.svc.Store.Pool, 10)
 		return map[string]any{"runs": runs, "admins": len(s.svc.Cfg.AdminTelegram)}, err

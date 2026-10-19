@@ -131,6 +131,25 @@ func (s *Service) TestIntegration(ctx context.Context, section string, admin *st
 	case "backups":
 		cancel() // a dump can take longer than the 30 s test budget
 		return s.MakeBackup(context.WithoutCancel(ctx), true)
+	case "health":
+		cancel() // a round may take two timeouts plus the retry pause
+		hc := s.set().Health
+		rctx, rcancel := context.WithTimeout(context.WithoutCancel(ctx), time.Duration(2*hc.TimeoutSec+5)*time.Second)
+		defer rcancel()
+		if !s.RunHealth(rctx) {
+			return "", userErr("проверка уже идёт, подождите несколько секунд")
+		}
+		r := s.HealthStatus()
+		if r.Up == r.Total {
+			return fmt.Sprintf("Всё работает: %d из %d", r.Up, r.Total), nil
+		}
+		var bad []string
+		for _, c := range r.Components {
+			if !c.Up {
+				bad = append(bad, c.Name)
+			}
+		}
+		return "", fmt.Errorf("в работе %d из %d, ошибки: %s", r.Up, r.Total, strings.Join(bad, ", "))
 	case "remnawave":
 		sq, err := s.Panel.InternalSquads(ctx)
 		if err != nil {

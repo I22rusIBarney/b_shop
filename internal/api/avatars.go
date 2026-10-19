@@ -49,6 +49,16 @@ func (s *Server) avatarAdmin(r *http.Request) bool {
 }
 
 func (s *Server) avatarRoutes(mux *http.ServeMux) {
+	// The customer's own Telegram photo for the cabinet profile. Only "me": no id in the path, nothing to enumerate.
+	// The cabinet fetches it with the Bearer token and shows it as a blob URL.
+	mux.HandleFunc("GET /api/me/avatar", s.authed(func(w http.ResponseWriter, r *http.Request) {
+		data, err := s.svc.Avatar(r.Context(), customer(r).ID)
+		if err != nil || len(data) == 0 {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "нет фото"})
+			return
+		}
+		writeAvatar(w, data)
+	}))
 	mux.HandleFunc("GET /api/avatars/{id}", func(w http.ResponseWriter, r *http.Request) {
 		if !s.avatarAdmin(r) {
 			http.Error(w, "forbidden", http.StatusForbidden)
@@ -65,8 +75,12 @@ func (s *Server) avatarRoutes(mux *http.ServeMux) {
 			http.NotFound(w, r)
 			return
 		}
-		w.Header().Set("Content-Type", http.DetectContentType(data))
-		w.Header().Set("Cache-Control", "private, max-age=86400")
-		_, _ = w.Write(data)
+		writeAvatar(w, data)
 	})
+}
+
+func writeAvatar(w http.ResponseWriter, data []byte) {
+	w.Header().Set("Content-Type", http.DetectContentType(data))
+	w.Header().Set("Cache-Control", "private, max-age=86400")
+	_, _ = w.Write(data)
 }

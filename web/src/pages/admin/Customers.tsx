@@ -4,7 +4,7 @@ import { get, type CustomerRow, type Paged, type Plan } from '../../lib/api'
 import { relative, rub, shortDate } from '../../lib/format'
 import { ErrorBox, Spinner, useLoad, pressable } from '../../ui/kit'
 import PanelSync from './PanelSync'
-import { Avatar } from '../../ui/admin'
+import { Avatar, Pager } from '../../ui/admin'
 
 const PAGE = 50
 
@@ -149,27 +149,23 @@ export default function Customers() {
                       <SubState c={c} />
                     </td>
                     <td className="num" data-label="Оплачено">
-                      {rub(c.paid_total)} <span className="tiny muted">({c.payments_count})</span>
+                      {c.payments_count ? (
+                        <>
+                          {rub(c.paid_total)} <span className="tiny muted">({c.payments_count})</span>
+                        </>
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
                     </td>
                     <td className="num" data-label="Рефералы">{c.ref_count || <span className="muted">—</span>}</td>
-                    <td className="muted" data-label="Активность">{relative(c.last_seen_at)}</td>
+                    <td className="muted nowrap" data-label="Активность">{relative(c.last_seen_at)}</td>
                     <td className="muted num" data-label="Создан">{shortDate(c.created_at)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <div className="pager">
-            <span className="small muted num">
-              {offset + 1}–{offset + data.data.items.length} из {data.data.total}
-            </span>
-            <button className="btn secondary small" disabled={offset === 0} onClick={() => set('offset', String(Math.max(0, offset - PAGE)))}>
-              Назад
-            </button>
-            <button className="btn secondary small" disabled={offset + PAGE >= data.data.total} onClick={() => set('offset', String(offset + PAGE))}>
-              Дальше
-            </button>
-          </div>
+          <Pager offset={offset} count={data.data.items.length} total={data.data.total} size={PAGE} onOffset={(o) => set('offset', String(o))} />
         </>
       )}
     </>

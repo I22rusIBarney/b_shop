@@ -17,7 +17,7 @@ interface SectionSpec {
   /** label of the test button (default «Проверить подключение») */
   testLabel?: string
   fields: FieldSpec[]
-  custom?: 'tiers' | 'links' | 'apps' | 'channels' | 'backups'
+  custom?: 'tiers' | 'links' | 'apps' | 'channels' | 'backups' | 'health'
 }
 
 const pages: Record<string, { title: string; sections: SectionSpec[] }> = {
@@ -289,6 +289,28 @@ const pages: Record<string, { title: string; sections: SectionSpec[] }> = {
       },
     ],
   },
+  health: {
+    title: 'Health Check',
+    sections: [
+      {
+        key: 'health',
+        title: 'Проверка сервисов',
+        about:
+          'Раз в период проверяются база, Telegram, Remnawave, включённые интеграции (ЮKassa, «Мой налог», почта) и фоновые задачи. Неудачная попытка сразу повторяется; о сбое приходит одно сообщение после нескольких проверок подряд, затем напоминание, пока сервис лежит, и отдельное — когда он вернулся. Куда слать — «Уведомления → Healthcheck».',
+        test: 'health',
+        testLabel: 'Проверить сейчас',
+        custom: 'health',
+        fields: [
+          { k: 'enabled', label: 'Проверять сервисы', type: 'bool' },
+          { k: 'notify_recovery', label: 'Сообщать о восстановлении', type: 'bool' },
+          { k: 'interval_sec', label: 'Период проверки, сек', hint: 'От 30 до 3600', type: 'number' },
+          { k: 'timeout_sec', label: 'Тайм-аут одной попытки, сек', hint: 'От 2 до 60', type: 'number' },
+          { k: 'fail_threshold', label: 'Сбой после стольких проверок подряд', hint: 'От 1 до 10. Каждая проверка уже включает повтор', type: 'number' },
+          { k: 'remind_minutes', label: 'Напоминать, пока не восстановится, мин', hint: '0 — не напоминать', type: 'number' },
+        ],
+      },
+    ],
+  },
   automations: {
     title: 'Автоматизации и рассылки',
     sections: [
@@ -320,6 +342,59 @@ const pages: Record<string, { title: string; sections: SectionSpec[] }> = {
       },
     ],
   },
+}
+
+interface HealthRow {
+  name: string
+  up: boolean
+  latency_ms: number
+  error?: string
+  fails: number
+  down: boolean
+  since: string | null
+}
+
+const healthNames: Record<string, string> = {
+  postgres: 'База данных',
+  telegram_bot_api: 'Telegram Bot API',
+  remnawave: 'Remnawave',
+  yookassa: 'ЮKassa',
+  moynalog: '«Мой налог»',
+  smtp: 'Почта (SMTP)',
+  workers: 'Фоновые задачи',
+}
+
+function HealthStatus() {
+  const data = useLoad(() => get<{ enabled: boolean; checked_at: string | null; up: number; total: number; components: HealthRow[] }>('/api/admin/health'))
+  if (!data.data) return null
+  const h = data.data
+  return (
+    <div className="stack" style={{ gap: 8 }}>
+      <h3 style={{ margin: '4px 0 0' }}>
+        Состояние {h.total > 0 && <span className="muted num">· {h.up}/{h.total} в работе</span>}
+      </h3>
+      {!h.checked_at ? (
+        <p className="small muted">Проверок ещё не было — первая через 20 секунд после запуска или по кнопке «Проверить сейчас».</p>
+      ) : (
+        <>
+          <div className="backup-runs">
+            {h.components.map((c) => (
+              <div key={c.name} className="backup-run">
+                <span className={c.up ? 'status resolved' : c.down ? 'status bad' : 'status open'}>{c.up ? 'работает' : c.down ? 'сбой' : 'проверяется'}</span>
+                <span className="grow">
+                  {healthNames[c.name] || c.name}
+                  {c.error && <span className="tiny err" style={{ display: 'block' }}>{c.error}</span>}
+                  {c.since && <span className="tiny muted" style={{ display: 'block' }}>с {dateTime(c.since)} · проверок с ошибкой подряд: {c.fails}</span>}
+                </span>
+                {c.up && <span className="muted num small">{c.latency_ms < 1 ? '<1' : c.latency_ms} мс</span>}
+              </div>
+            ))}
+          </div>
+          <p className="tiny muted">Последняя проверка: {dateTime(h.checked_at)}</p>
+        </>
+      )}
+    </div>
+  )
 }
 
 function BackupRuns() {
@@ -463,7 +538,7 @@ function SectionForm({ spec }: { spec: SectionSpec }) {
               ) : f.type === 'ids' ? (
                 <input className="input" value={(v[f.k] || []).join(', ')} onChange={(e) => set(f.k, e.target.value.split(/[\s,]+/).filter(Boolean).map(Number).filter((n) => !Number.isNaN(n)))} />
               ) : (
-                <input className="input" type={f.type === 'secret' ? 'password' : 'text'} autoComplete="off" value={v[f.k] ?? ''} onChange={(e) => set(f.k, e.target.value)} onFocus={(e) => f.type === 'secret' && e.target.select()} />
+                <input className="input" type={f.type === 'secret' ? 'password' : 'text'} autoComplete={f.type === 'secret' ? 'new-password' : 'off'} value={v[f.k] ?? ''} onChange={(e) => set(f.k, e.target.value)} onFocus={(e) => f.type === 'secret' && e.target.select()} />
               )}
             </Field>
           ))}
@@ -503,6 +578,7 @@ function SectionForm({ spec }: { spec: SectionSpec }) {
       {spec.custom === 'links' && <LinksEditor value={v.items || []} onChange={(t) => set('items', t)} />}
       {spec.custom === 'channels' && <ChannelsEditor value={v.items || []} onChange={(t) => set('items', t)} />}
       {spec.custom === 'backups' && <BackupRuns key={test?.message} />}
+      {spec.custom === 'health' && <HealthStatus key={test?.message} />}
       {spec.custom === 'apps' && v.source === 'manual' && <AppsEditor value={v.apps || []} onChange={(t) => set('apps', t)} />}
 
       {test && <p className={test.ok ? 'small' : 'err'} style={test.ok ? { color: 'var(--ok)' } : undefined}>{test.message}</p>}

@@ -21,7 +21,10 @@ import (
 )
 
 func (s *Server) routes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/health", s.health)
+	mux.HandleFunc("GET /api/health", s.health) // readiness: the process and the database answer
+	mux.HandleFunc("GET /api/health/live", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"}) // liveness: the process is not stuck
+	})
 	mux.HandleFunc("GET /api/config", s.publicConfig)
 
 	// auth

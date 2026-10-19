@@ -94,7 +94,13 @@ type Service struct {
 	Files FileSender
 	// Photos fetches Telegram profile photos for admin avatars; nil without a bot.
 	Photos PhotoFetcher
-	Log    *slog.Logger
+	// Telegram pings the Bot API for the health check; nil without a bot.
+	Telegram TelegramPinger
+	// HealthChecksOverride replaces the component list in tests; HealthClock the time source.
+	HealthChecksOverride []HealthCheck
+	HealthClock          func() time.Time
+	health               healthState
+	Log                  *slog.Logger
 	// BotUsername is the Telegram bot's username (without @), for deep links.
 	BotUsername string
 

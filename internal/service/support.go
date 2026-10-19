@@ -95,7 +95,7 @@ func (s *Service) CreateTicket(ctx context.Context, c *store.Customer, subject, 
 	s.scheduleAI(ctx, t)
 	_ = store.AddEvent(ctx, s.Store.Pool, c.ID, "ticket", map[string]any{"ticket": t.ID}, nil)
 	s.eventLink(ctx, "ticket_new", c, map[string]any{"ticket": t.ID, "subject": t.Subject, "text": truncate(body, 600)},
-		"Открыть обращение", fmt.Sprintf("/admin/tickets/%d", t.ID))
+		"Открыть чат", fmt.Sprintf("/admin/tickets/%d", t.ID))
 	return t, nil
 }
 
@@ -162,8 +162,8 @@ func (s *Service) CustomerMessage(ctx context.Context, c *store.Customer, id int
 		return nil, err
 	}
 	s.scheduleAI(ctx, t)
-	s.eventLink(ctx, "ticket_message", c, map[string]any{"ticket": t.ID, "text": truncate(body, 600)},
-		"Открыть обращение", fmt.Sprintf("/admin/tickets/%d", t.ID))
+	s.eventLink(ctx, "ticket_message", c, map[string]any{"ticket": t.ID, "subject": t.Subject, "text": truncate(body, 600)},
+		"Открыть чат", fmt.Sprintf("/admin/tickets/%d", t.ID))
 	return m, nil
 }
 
@@ -233,7 +233,7 @@ func (s *Service) RateTicket(ctx context.Context, c *store.Customer, id int64, r
 		extra = Raw("\n💬 " + escape(t.RatingComment))
 	}
 	s.eventLink(ctx, "ticket_rating", c, map[string]any{"ticket": t.ID, "rating": rating, "comment": extra},
-		"Открыть обращение", fmt.Sprintf("/admin/tickets/%d", t.ID))
+		"Открыть чат", fmt.Sprintf("/admin/tickets/%d", t.ID))
 	return nil
 }
 
@@ -523,7 +523,7 @@ func (s *Service) applyAIAnswer(ctx context.Context, t *store.Ticket, c *store.C
 			if err := store.UpdateTicket(ctx, tx, cur); err != nil {
 				return err
 			}
-			s.eventLink(ctx, "ticket_escalated", c, map[string]any{"ticket": t.ID, "reason": ans.Reason}, "Открыть обращение", path)
+			s.eventLink(ctx, "ticket_escalated", c, map[string]any{"ticket": t.ID, "reason": ans.Reason}, "Открыть чат", path)
 		case ans.Reply != "" && ans.Confidence >= set.Confidence:
 			at := s.noticeTime(c)
 			if err := store.InsertTicketMessage(ctx, tx, &store.TicketMessage{TicketID: t.ID, Author: "ai", Body: ans.Reply, Confidence: &conf, NotifyAt: &at}); err != nil {
@@ -540,7 +540,7 @@ func (s *Service) applyAIAnswer(ctx context.Context, t *store.Ticket, c *store.C
 			}
 			if set.NotifyDrafts {
 				s.eventLink(ctx, "ai_draft", c, map[string]any{"ticket": t.ID, "confidence": fmt.Sprintf("%.2f", ans.Confidence),
-					"text": truncate(ans.Reply, 800)}, "Открыть обращение", path)
+					"text": truncate(ans.Reply, 800)}, "Открыть чат", path)
 			}
 		}
 		return nil
@@ -837,7 +837,7 @@ func (s *Service) ProcessReplyNotices(ctx context.Context) {
 		}
 		msg := Message{
 			Text:         fmt.Sprintf("💬 <b>Ответ поддержки</b> · обращение #%d\n\n%s", n.TicketID, escape(truncate(n.Body, 3500))),
-			ButtonText:   "Открыть обращение",
+			ButtonText:   "Открыть чат",
 			ButtonURL:    fmt.Sprintf("%s/support/%d", s.Cfg.PublicURL, n.TicketID),
 			EmailSubject: fmt.Sprintf("Ответ по обращению #%d", n.TicketID),
 		}

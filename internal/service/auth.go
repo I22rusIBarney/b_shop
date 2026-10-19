@@ -46,7 +46,7 @@ func (s *Service) Login(ctx context.Context, p *auth.Profile, meta LoginMeta) (*
 	if err != nil {
 		return nil, err
 	}
-	if cust.IsBlocked {
+	if s.Banned(cust) {
 		return nil, userErr("доступ к аккаунту ограничен, обратитесь в поддержку")
 	}
 	if meta.LinkTo != nil {
@@ -186,6 +186,22 @@ func referralCode(start string) string {
 		}
 	}
 	return ""
+}
+
+// Banned reports a blocked customer: the admin flag or a Telegram ID from general.blocked_telegram_ids
+// (the list must hold on every entrance, not only in the bot).
+func (s *Service) Banned(c *store.Customer) bool {
+	if c.IsBlocked {
+		return true
+	}
+	if c.TelegramID != nil {
+		for _, id := range s.set().General.BlockedTelegramIDs {
+			if id == *c.TelegramID {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // AuthenticateToken resolves a session token to its customer.
@@ -377,7 +393,7 @@ func (s *Service) OAuthCallback(ctx context.Context, provider, code, state, devi
 }
 
 func safeReturn(r string) string {
-	if !strings.HasPrefix(r, "/") || strings.HasPrefix(r, "//") {
+	if !strings.HasPrefix(r, "/") || strings.HasPrefix(r, "//") || strings.ContainsAny(r, "\\\r\n") {
 		return "/"
 	}
 	return r
