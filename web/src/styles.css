@@ -88,8 +88,8 @@ p { margin: 0; }
 .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---------- background ---------- */
-/* A separate fixed layer stays put in mobile browsers and Telegram WebViews without background-attachment. */
-.backdrop { position: fixed; top: 0; left: 0; right: 0; height: var(--tg-viewport-stable-height, 100svh); z-index: -1; overflow: hidden; background: var(--bg); }
+/* Cover the longest viewport so a shorter Telegram stable height or collapsing browser toolbar cannot expose the page behind the fixed picture. */
+.backdrop { position: fixed; top: 0; left: 0; right: 0; height: 100vh; height: 100lvh; min-height: 100dvh; z-index: -1; overflow: hidden; background: var(--bg); }
 /* Inner pages put text right over the picture: darken it so it reads as a background. */
 .backdrop.dim::after { background: linear-gradient(180deg, color-mix(in srgb, var(--bg) 72%, transparent) 0%, color-mix(in srgb, var(--bg) 80%, transparent) 50%, var(--bg) 100%); }
 .backdrop img, .backdrop video { width: 100%; height: 100%; object-fit: var(--bg-fit, cover); }

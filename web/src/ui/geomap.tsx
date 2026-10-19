@@ -68,10 +68,10 @@ function cssColor(el: Element, name: string, fallback: string) {
   return /^(#|rgb|hsl)/.test(v) ? v : fallback
 }
 
-// Starting zoom that shows the whole globe in this box: a phone gets a smaller globe than a laptop.
+// Fit the whole globe inside the shorter side, with room around its rim and the controls.
 function fitZoom(el: HTMLElement) {
-  const side = Math.min(el.clientWidth, el.clientHeight * 1.6)
-  return Math.max(0, Math.min(1.6, Math.log2(side / 200)))
+  const side = Math.min(el.clientWidth, el.clientHeight)
+  return Math.max(0, Math.min(1.6, Math.log2(side / 225)))
 }
 
 function webglOK() {
@@ -93,6 +93,7 @@ function GlMap({ countries, points, compact }: { countries: Record<string, numbe
   const box = useRef<HTMLDivElement>(null)
   const stage = useRef<HTMLDivElement>(null)
   const map = useRef<MapLibre | null>(null)
+  const fitted = useRef(true)
   const [ready, setReady] = useState(false)
   const [failed, setFailed] = useState(false)
   const [mode, setMode] = useState<'globe' | 'map'>('globe')
@@ -110,6 +111,7 @@ function GlMap({ countries, points, compact }: { countries: Record<string, numbe
 
   const top = useMemo(() => points.reduce<GeoPoint | null>((b, p) => (!b || p.count > b.count ? p : b), null), [points])
   const home = () => {
+    fitted.current = true
     if (stage.current) map.current?.flyTo({ center: top ? [top.lon, top.lat] : [60, 50], zoom: fitZoom(stage.current), speed: 1.6 })
     setSel(null)
   }
@@ -146,6 +148,12 @@ function GlMap({ countries, points, compact }: { countries: Record<string, numbe
         return
       }
       m.touchZoomRotate.disableRotation()
+      m.on('zoomstart', (e) => {
+        if (e.originalEvent) fitted.current = false
+      })
+      m.on('dragstart', () => {
+        fitted.current = false
+      })
       map.current = m
       if (import.meta.env.DEV) (window as unknown as { __geomap?: MapLibre }).__geomap = m // for browser checks
       const accent = cssColor(el, '--accent', '#f5a524')
@@ -185,7 +193,22 @@ function GlMap({ countries, points, compact }: { countries: Record<string, numbe
         m.on('mouseleave', id, () => m && (m.getCanvas().style.cursor = ''))
       }
     })
-    const ro = new ResizeObserver(() => map.current?.resize())
+    let lastWidth = el.clientWidth
+    let lastHeight = el.clientHeight
+    const ro = new ResizeObserver(() => {
+      const width = el.clientWidth
+      const height = el.clientHeight
+      if (width === lastWidth && height === lastHeight) return
+      lastWidth = width
+      lastHeight = height
+      const current = map.current
+      if (!current || !width || !height) return
+      current.resize()
+      if (fitted.current) {
+        current.stop()
+        current.setZoom(fitZoom(el))
+      }
+    })
     ro.observe(el)
     return () => {
       live = false
@@ -270,10 +293,16 @@ function GlMap({ countries, points, compact }: { countries: Record<string, numbe
         <div ref={stage} className="geomap-gl" role="img" aria-label="Карта запросов подписки: приближайте до улиц пальцами или колесом" />
         {!ready && <div className="geomap-loading small muted">Загружаем карту…</div>}
         <div className="geomap-zoom">
-          <button onClick={() => map.current?.zoomIn()} aria-label="Приблизить">
+          <button onClick={() => {
+            fitted.current = false
+            map.current?.zoomIn()
+          }} aria-label="Приблизить">
             +
           </button>
-          <button onClick={() => map.current?.zoomOut()} aria-label="Отдалить">
+          <button onClick={() => {
+            fitted.current = false
+            map.current?.zoomOut()
+          }} aria-label="Отдалить">
             −
           </button>
           <button onClick={home} aria-label="Вернуть вид" title="Вернуть вид">
@@ -291,7 +320,10 @@ function GlMap({ countries, points, compact }: { countries: Record<string, numbe
           <b>{sel.label}</b> · {sel.count} {plural(sel.count)}
           <button
             className="link-btn"
-            onClick={() => map.current?.flyTo({ center: [sel.lon, sel.lat], zoom: Math.max(map.current.getZoom(), 11), speed: 1.4 })}
+            onClick={() => {
+              fitted.current = false
+              map.current?.flyTo({ center: [sel.lon, sel.lat], zoom: Math.max(map.current.getZoom(), 11), speed: 1.4 })
+            }}
           >
             приблизить
           </button>
