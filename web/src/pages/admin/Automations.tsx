@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { Kpi, Kpis } from '../../ui/charts'
 import { Link } from 'react-router-dom'
 import { api, del, get, getToken, post, put, type AutoStep, type Automation, type TriggerInfo } from '../../lib/api'
 import { plural } from '../../lib/format'
@@ -107,24 +108,12 @@ export default function Automations() {
         </div>
       )}
 
-      <div className="stats">
-        <div>
-          <div className="stat-value">{d.items.filter((a) => a.is_active).length}</div>
-          <div className="stat-label">активных сценариев</div>
-        </div>
-        <div>
-          <div className="stat-value">{totals.active}</div>
-          <div className="stat-label">в цепочках сейчас</div>
-        </div>
-        <div>
-          <div className="stat-value">{totals.sent}</div>
-          <div className="stat-label">отправлено</div>
-        </div>
-        <div>
-          <div className="stat-value">{totals.runs ? Math.round((totals.conv / totals.runs) * 100) : 0}%</div>
-          <div className="stat-label">конверсия</div>
-        </div>
-      </div>
+      <Kpis>
+        <Kpi label="Активных сценариев" value={d.items.filter((a) => a.is_active).length} hint={`из ${d.items.length}`} />
+        <Kpi label="В цепочках сейчас" value={totals.active} />
+        <Kpi label="Отправлено сообщений" value={totals.sent} />
+        <Kpi label="Конверсия" value={`${totals.runs ? Math.round((totals.conv / totals.runs) * 100) : 0}%`} hint="оплатили после сценария" />
+      </Kpis>
 
       {importInfo && (
         <div className="card flat small">

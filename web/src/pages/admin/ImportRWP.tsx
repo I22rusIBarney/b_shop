@@ -62,7 +62,9 @@ export default function ImportRWP() {
     }, 1500)
     return () => clearInterval(t)
   }, [working])
-  useEffect(() => logEnd.current?.scrollIntoView({ block: 'nearest' }), [st?.log.length])
+  useEffect(() => {
+    logEnd.current?.scrollIntoView({ block: 'nearest' })
+  }, [st?.log.length])
 
   if (load.error) return <ErrorBox text={load.error} retry={load.reload} />
   if (!st)

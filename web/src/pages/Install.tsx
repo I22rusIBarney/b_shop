@@ -256,7 +256,9 @@ export default function Install() {
     }
   }, [url, b.logo])
   useEffect(() => setAppIdx(0), [platform])
-  useEffect(() => window.scrollTo(0, 0), [view])
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [view])
 
   const rw = guide.data?.source === 'remnawave' ? guide.data.config : undefined
   const platforms = useMemo(
@@ -394,7 +396,7 @@ export default function Install() {
           <span className="inst-device-ico">{platIcon(current, 30)}</span>
           <span className="inst-device-name">{current.name}</span>
         </div>
-        <button className="pill-btn" onClick={() => setView('steps')}>
+        <button className="pill-btn primary" onClick={() => setView('steps')}>
           Продолжить
           <Chevron />
         </button>

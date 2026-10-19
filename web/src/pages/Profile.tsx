@@ -8,12 +8,6 @@ import { haptic } from '../lib/tg'
 import { Card, Chevron, Tag, Trash } from '../ui/icons'
 import { Field, Sheet, Toggle, useAction, useLoad } from '../ui/kit'
 
-// iOS Settings-style coloured tiles, one hue per kind of action.
-const tone: Record<string, string> = {
-  news: 'orange', locations: 'blue', buy: 'green', promo: 'pink', buyfor: 'indigo', gifts: 'red', ref: 'purple',
-  support: 'green', faq: 'teal', logins: 'gray', payments: 'blue', cards: 'green', exit: 'red',
-}
-
 /** Phone "Профиль" tab (reference 3555–3556): the cabinet sections as grouped row cards. */
 export default function Profile() {
   const { me } = useApp()
@@ -24,8 +18,16 @@ export default function Profile() {
 
   return (
     <div className="menu-page">
-      <header className="large-title">
-        <h1>{name}</h1>
+      <header className="me-card">
+        <span className="me-avatar" aria-hidden="true">
+          {(name.replace(/^@/, '')[0] || '?').toUpperCase()}
+        </span>
+        <div className="me-text">
+          <h1>{name}</h1>
+          <p>
+            {[c.username && `@${c.username}`, c.email, c.telegram_id && `ID ${c.telegram_id}`].filter(Boolean).join(' · ') || `Клиент с ${date(c.created_at)}`}
+          </p>
+        </div>
       </header>
       {c.personal_discount > 0 && (
         <div className="callout">
@@ -48,7 +50,7 @@ export default function Profile() {
               {items.map((it) => {
                 const inner = (
                   <>
-                    <span className={`set-ico ${tone[it.key] || 'gray'}`} aria-hidden="true">
+                    <span className="set-ico" aria-hidden="true">
                       <it.icon />
                     </span>
                     <span className="grow">{it.label}</span>

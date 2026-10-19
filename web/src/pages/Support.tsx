@@ -93,7 +93,7 @@ export default function Support() {
         </Link>
       </div>
 
-      <div className="seg" role="tablist">
+      <div className="seg seg-fill seg-2" role="tablist" aria-label="Обращения">
         <button role="tab" aria-selected={tab === 'open'} className={tab === 'open' ? 'on' : ''} onClick={() => setTab('open')}>
           Открытые
         </button>

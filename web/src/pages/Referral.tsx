@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { get, type ReferralInfo } from '../lib/api'
 import { date, plural } from '../lib/format'
 import { haptic, inTelegram, openLink } from '../lib/tg'
-import { Back, Copy, Gift, Users } from '../ui/icons'
+import { Back, Copy, Gift, People, Users } from '../ui/icons'
 import { ErrorBox, PageLoader, copy, useLoad, useToast } from '../ui/kit'
 
 const d = (n: number) => `${n} ${plural(n, 'день', 'дня', 'дней')}`
@@ -50,7 +50,11 @@ export default function Referral() {
       </div>
 
       {!r.enabled ? (
-        <div className="glass panel empty">Реферальная программа сейчас не действует</div>
+        <div className="card empty-state">
+          <People />
+          <b style={{ color: 'var(--text)' }}>Программа приглашений на паузе</b>
+          <p className="small">Когда она заработает, здесь появится ваша ссылка и бонусы за друзей.</p>
+        </div>
       ) : (
         <>
           <div className="glass panel ref-hero">

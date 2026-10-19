@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { del, get, post, put } from '../../lib/api'
 import { Switcher } from '../../ui/admin'
-import { Pencil, Plus, Trash } from '../../ui/icons'
+import { Book, Pencil, Plus, Trash } from '../../ui/icons'
 import { ErrorBox, Field, Sheet, Spinner, Toggle, useAction, useLoad, useToast } from '../../ui/kit'
 
 type Kind = 'templates' | 'faq' | 'kb'
@@ -92,7 +92,7 @@ function Editor({ kind }: { kind: Kind }) {
         </button>
       </div>
       {list.data.length === 0 ? (
-        <p className="small muted">Пока пусто.</p>
+        <div className="panel-empty"><span><Book /></span><p>Пока пусто — нажмите «Добавить».</p></div>
       ) : (
         <div className="list">
           {list.data.map((x) => (

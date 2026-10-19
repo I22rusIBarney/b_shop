@@ -55,14 +55,19 @@ export default function Gifts() {
       )}
 
       <form
-        className="input-row"
+        className="card stack redeem-card"
         onSubmit={(e) => {
           e.preventDefault()
           redeem()
         }}
       >
+        <div className="redeem-head">
+          <b>Есть код подарка?</b>
+          <span className="small muted">Введите его — дни добавятся к вашей подписке</span>
+        </div>
+        <div className="input-row">
         <input
-          className="input"
+          className="input code-input"
           placeholder="GIFT-XXXX-XXXX"
           value={code}
           onChange={(e) => setCode(e.target.value.toUpperCase())}
@@ -74,6 +79,7 @@ export default function Gifts() {
         <button className="btn secondary" disabled={busy || code.trim().length < 6}>
           Активировать
         </button>
+        </div>
       </form>
 
       {gifts.length === 0 ? (

@@ -90,7 +90,7 @@ export default function ChangePlan() {
         </div>
       </div>
 
-      <div className="seg" role="tablist" aria-label="Способ смены">
+      <div className="seg seg-fill" role="tablist" aria-label="Способ смены">
         {modes.map((m) => (
           <button
             key={m.mode}
