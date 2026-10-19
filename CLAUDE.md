@@ -152,6 +152,13 @@
   backup_failed. Восстановление: `bshop restore файл.bshop` (расшифровка `bshop decrypt-backup` в контейнере, .env из копии
   с сохранением POSTGRES_*/BSHOP_PORT/COMPOSE_PROFILES этого сервера). Контейнер shop: no-new-privileges, cap_drop ALL.
 
+- 19.10.2026: аватарки клиентов из Telegram в админке (service/avatars.go, bot.UserPhoto ~160 px, кэш в customer_avatars —
+  миграция 0017: фото 3 дня, «нет фото» 7 дней). <img> не умеет Bearer: админ-ответы ставят cookie bshop_av = id.HMAC(SECRET_KEY)
+  с Path=/api/avatars (HttpOnly, SameSite=Strict, 12 ч), GET /api/avatars/{id} проверяет подпись и что владелец всё ещё админ.
+  Avatar в ui/admin.tsx: инициалы, поверх — фото при загрузке. Карта географии: только тёплая гамма (кремовые точки с
+  янтарным ореолом, страны приглушённым янтарём), увеличенная зона нажатия. Админка: внутренние панели полупрозрачные
+  (--panel/--hair в .admin), фильтры в одну строку, клиенты на телефоне — компактные карточки.
+
 ## Дальше
 - Боевой переезд по docs/MIGRATION.md на тестовом стенде Алексея; проверить на реальных ЮKassa/Remnawave.
 - Не сделано: тексты бота из translations RWP, abuse-детектор (много IP).

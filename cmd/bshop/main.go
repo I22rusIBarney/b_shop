@@ -95,6 +95,7 @@ func run(log *slog.Logger) error {
 		svc.Notify = b
 		svc.Channels = b
 		svc.Files = b
+		svc.Photos = b
 		api.BotUsername = b.Username
 		svc.BotUsername = b.Username
 		go b.Run(ctx)

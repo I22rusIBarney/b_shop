@@ -100,7 +100,7 @@ export default function GeoMap({ countries, points, compact }: { countries: Reco
     const n = iso ? countries[iso] : 0
     if (!n) return 'color-mix(in srgb, var(--text) 9%, var(--surface-solid))'
     const t = Math.log1p(n) / Math.log1p(maxCountry)
-    return `color-mix(in srgb, var(--accent) ${Math.round(22 + 78 * t)}%, var(--surface-solid))`
+    return `color-mix(in srgb, var(--accent) ${Math.round(16 + 36 * t)}%, color-mix(in srgb, var(--text) 9%, var(--surface-solid)))`
   }
 
   const onDown = (e: React.PointerEvent) => {
@@ -131,7 +131,7 @@ export default function GeoMap({ countries, points, compact }: { countries: Reco
     .map((p) => {
       if (mode === 'globe' && geoDistance([p.lon, p.lat], center) > Math.PI / 2 - 0.02) return null
       const xy = proj([p.lon, p.lat])
-      return xy ? { p, x: xy[0], y: xy[1], r: 2.6 + 7.4 * Math.sqrt(p.count / maxPoint) } : null
+      return xy ? { p, x: xy[0], y: xy[1], r: 1.9 + 4.1 * Math.sqrt(p.count / maxPoint) } : null
     })
     .filter((d): d is { p: GeoPoint; x: number; y: number; r: number } => !!d)
     .sort((a, b) => b.r - a.r)
@@ -142,7 +142,7 @@ export default function GeoMap({ countries, points, compact }: { countries: Reco
   return (
     <div className="geomap" ref={box}>
       <div className="geomap-bar">
-        <div className="seg" role="tablist">
+        <div className="seg seg-fill seg-2 geomap-mode" role="tablist">
           <button className={mode === 'globe' ? 'on' : ''} onClick={() => (setMode('globe'), setZoom(1), setPan([0, 0]))}>
             Глобус
           </button>
@@ -184,9 +184,13 @@ export default function GeoMap({ countries, points, compact }: { countries: Reco
               {sphere && mode === 'globe' && <path d={sphere} className="geo-rim" />}
               <g className="geo-dots">
                 {dots.map(({ p, x, y, r }) => (
-                  <circle key={`${p.lat},${p.lon},${p.label}`} cx={x} cy={y} r={r} onClick={() => setSel(p)} onPointerDown={(e) => e.stopPropagation()}>
+                  <g key={`${p.lat},${p.lon},${p.label}`} className={sel === p ? 'on' : undefined} onClick={() => setSel(p)} onPointerDown={(e) => e.stopPropagation()}>
+                    <circle className="halo" cx={x} cy={y} r={r * 2.4} />
+                    <circle className="core" cx={x} cy={y} r={r} />
+                    {/* invisible target: small dots stay easy to tap */}
+                    <circle className="hit" cx={x} cy={y} r={Math.max(10, r * 2.4)} />
                     <title>{`${p.label}: ${p.count}`}</title>
-                  </circle>
+                  </g>
                 ))}
               </g>
             </g>

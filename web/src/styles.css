@@ -746,7 +746,6 @@ html { touch-action: pan-x pan-y; } /* no pinch-zoom: the layout fits the screen
 .geo-grat { fill: none; stroke: color-mix(in srgb, var(--text) 7%, transparent); stroke-width: .5; }
 .geo-land { stroke: color-mix(in srgb, var(--text) 24%, transparent); stroke-width: .5; }
 .geo-rim { fill: none; stroke: color-mix(in srgb, var(--accent) 35%, transparent); stroke-width: 1.2; }
-.geo-dots circle { fill: #19c6e6; fill-opacity: .95; stroke: #fff; stroke-opacity: .95; stroke-width: 1.2; cursor: pointer; filter: drop-shadow(0 0 4px rgba(0,0,0,.7)); }
 .geomap-zoom { position: absolute; top: 10px; right: 10px; display: flex; flex-direction: column; border-radius: 10px; overflow: hidden; border: 1px solid var(--line-strong); background: color-mix(in srgb, var(--surface-solid) 88%, transparent); }
 .geomap-zoom button { width: 34px; height: 34px; border: 0; border-top: 1px solid var(--line); background: transparent; color: var(--text); font-size: 1.15rem; line-height: 1; cursor: pointer; }
 .geomap-zoom button:first-child { border-top: 0; }
@@ -1699,3 +1698,70 @@ button.group-row:active, .group-row.pick:active { background: var(--fill); }
 @media (max-height: 700px) { .home .cab-banner-body span { display: none; } .home .cab-banner { padding-top: 9px; padding-bottom: 9px; } }
 .plan-prices { grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); }
 .plan-price .k { white-space: nowrap; }
+
+/* ---- geography: warm palette only — cream points with an amber glow over amber-shaded countries ---- */
+.geomap-stage { background: radial-gradient(120% 90% at 50% 40%, color-mix(in srgb, var(--accent) 6%, var(--bg)), var(--bg)); box-shadow: inset 0 0 0 1px var(--hair, var(--line)); }
+.geo-sea { fill: color-mix(in srgb, var(--accent) 4%, color-mix(in srgb, var(--bg) 82%, var(--surface-solid))); }
+.geo-grat { stroke: color-mix(in srgb, var(--text) 5%, transparent); }
+.geo-land { stroke: color-mix(in srgb, var(--bg) 70%, transparent); stroke-width: .6; }
+.geo-rim { stroke: color-mix(in srgb, var(--accent) 22%, transparent); stroke-width: 1; }
+.geo-dots g { cursor: pointer; }
+.geo-dots .halo { fill: var(--accent); fill-opacity: .22; stroke: none; filter: none; }
+.geo-dots .core { fill: #fff6e8; stroke: color-mix(in srgb, var(--bg) 80%, transparent); stroke-width: 1; filter: none; transition: r .2s var(--ease-out); }
+.geo-dots .hit { fill: transparent; stroke: none; filter: none; }
+.geo-dots g:hover .halo, .geo-dots g.on .halo { fill-opacity: .45; }
+.geo-dots g.on .core { fill: var(--accent); stroke: #fff6e8; stroke-width: 1.5; }
+
+.geomap-bar { justify-content: flex-start; }
+.geomap-mode { width: 220px; max-width: 100%; }
+.geomap-zoom { border: 0; border-radius: 12px; background: color-mix(in srgb, var(--surface-solid) 72%, transparent); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  box-shadow: 0 0 0 .5px color-mix(in srgb, var(--text) 14%, transparent), 0 8px 24px rgba(0,0,0,.35); }
+.geomap-zoom button { width: 34px; height: 34px; border-top: .5px solid color-mix(in srgb, var(--text) 10%, transparent); color: var(--label-2); transition: color .15s ease, background-color .15s ease; }
+.geomap-zoom button:hover { color: var(--text); background: var(--fill); }
+.geomap-legend i { height: 6px; }
+.geomap-sel { display: inline-flex; gap: 6px; align-items: baseline; margin: 10px auto 0; padding: 6px 12px; border-radius: 999px; background: var(--fill); }
+.geomap { display: flex; flex-direction: column; }
+.geomap-sel { align-self: center; }
+.geo-dots .halo { fill-opacity: .32; }
+.geo-dots .core { fill: #fff3df; }
+.geomap-legend i { background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 16%, color-mix(in srgb, var(--text) 9%, var(--surface-solid))), color-mix(in srgb, var(--accent) 52%, color-mix(in srgb, var(--text) 9%, var(--surface-solid)))); }
+/* city / country chips: sentence case, quieter */
+.geo-pill { padding: 5px 11px; font-size: .8rem; font-weight: 600; letter-spacing: 0; text-transform: none; border: 0; background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.geo-pill.sub { background: var(--fill); border: 0; color: var(--text); font-weight: 500; }
+
+/* ---- avatars: Telegram photo over the initials, fades in when loaded ---- */
+.avatar { position: relative; overflow: hidden; isolation: isolate; }
+.avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity .3s ease; border-radius: inherit; }
+.avatar.has-photo img { opacity: 1; }
+.avatar.has-photo { color: transparent; box-shadow: inset 0 0 0 .5px color-mix(in srgb, var(--text) 18%, transparent); }
+@media (prefers-reduced-motion: reduce) { .avatar img { transition: none; } }
+
+/* ---- admin cohesion: inner surfaces are translucent layers of one sheet, not opaque boxes on a box ---- */
+.admin { --panel: color-mix(in srgb, var(--text) 3.4%, transparent); --hair: color-mix(in srgb, var(--text) 7.5%, transparent); --panel-2: color-mix(in srgb, var(--text) 5.5%, transparent); }
+.admin .card:not(.flat), .admin .kpi, .admin .table-wrap:not(.stack-sm), .admin .panel, .admin .plan-card, .admin .filters.toolbar {
+  background: var(--panel); border: 1px solid var(--hair); box-shadow: none; }
+.admin .card.flat { background: var(--panel-2); border: 0; }
+.admin .t th { border-bottom-color: var(--hair); font-size: .76rem; font-weight: 600; color: var(--label-2, var(--muted)); }
+.admin .t td { border-bottom-color: color-mix(in srgb, var(--text) 5%, transparent); }
+.admin .t tbody tr:last-child td { border-bottom: 0; }
+.admin .t tbody tr.click:hover td, .admin .t tbody tr[role="button"]:hover td { background: color-mix(in srgb, var(--text) 2.5%, transparent); }
+.admin .kpi b { font-weight: 700; }
+/* filter bars: search takes the room, selects stay compact — one line on a laptop */
+.admin .filters.toolbar { flex-wrap: wrap; }
+.admin .filters.toolbar > .input:not(.grow), .admin .filters.toolbar > select { flex: 0 1 190px; min-width: 140px; }
+.admin .filters.toolbar > .input.grow, .admin .filters.toolbar > input[type="search"] { flex: 1 1 240px; min-width: 0; }
+@media (max-width: 720px) { .admin .filters.toolbar > .input:not(.grow), .admin .filters.toolbar > select { flex: 1 1 140px; } }
+
+/* ---- customers on a phone: a compact row — person, subscription, then paid · last seen in one quiet line ---- */
+@media (max-width: 720px) {
+  .admin .t.stack-sm tr { background: var(--panel); border-color: var(--hair); }
+  .t.stack-sm.cust-table tr { grid-template-columns: auto 1fr auto; gap: 6px 10px; padding: 12px 14px; }
+  .cust-table td.wide { grid-column: 1 / -1; }
+  .t.stack-sm.cust-table td[data-label]::before { display: none; }
+  .cust-table td.sub-cell { grid-column: 1 / -1; padding-left: 46px; }
+  .cust-table td[data-label="Рефералы"], .cust-table td[data-label="Создан"] { display: none; }
+  .cust-table td[data-label="Оплачено"] { grid-column: 1 / 3; padding-left: 46px; font-size: .84rem; }
+  .cust-table td[data-label="Активность"] { grid-column: 3; text-align: right; font-size: .8rem; }
+}
+@media (max-width: 720px) { .admin .filters.toolbar > select { flex: 1 1 96px; min-width: 0; } }
+@media (max-width: 720px) { .admin .filters.toolbar > .input:not(.grow):not([type="search"]) { flex: 1 1 96px; min-width: 0; } }

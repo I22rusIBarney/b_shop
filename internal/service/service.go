@@ -92,7 +92,9 @@ type Service struct {
 	Channels ChannelChecker
 	// Files sends backups to the administrators; nil without a bot.
 	Files FileSender
-	Log   *slog.Logger
+	// Photos fetches Telegram profile photos for admin avatars; nil without a bot.
+	Photos PhotoFetcher
+	Log    *slog.Logger
 	// BotUsername is the Telegram bot's username (without @), for deep links.
 	BotUsername string
 

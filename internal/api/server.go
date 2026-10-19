@@ -152,6 +152,7 @@ func (s *Server) admin(h http.HandlerFunc) http.HandlerFunc {
 			writeJSON(w, http.StatusForbidden, map[string]string{"error": "нет доступа"})
 			return
 		}
+		s.setAvatarCookie(w, r, customer(r).ID)
 		h(w, r)
 	})
 }

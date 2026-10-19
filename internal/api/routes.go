@@ -67,6 +67,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	s.stage4Routes(mux)
 	s.stage5Routes(mux)
 	s.fileRoutes(mux)
+	s.avatarRoutes(mux)
 
 	// frontend
 	mux.HandleFunc("/", s.spa)

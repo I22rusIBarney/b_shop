@@ -69,17 +69,35 @@ export function InfoRow({ icon: Icon, label, children }: { icon?: Ico; label: Re
 const avatarHues = [28, 200, 150, 280, 340, 45, 175]
 
 /** Initials avatar; the hue is stable per person so the same customer is recognisable across lists. */
-export function Avatar({ name, seed, size = 36 }: { name: string; seed: number | string; size?: number }) {
+export function Avatar({ name, seed, size = 36, photo = true }: { name: string; seed: number | string; size?: number; photo?: boolean }) {
   const parts = name.replace(/^@/, '').trim().split(/\s+/).filter(Boolean)
   const initials = ((parts[0]?.[0] || '?') + (parts[1]?.[0] || '')).toUpperCase()
   const n = typeof seed === 'number' ? seed : [...String(seed)].reduce((a, ch) => a + ch.charCodeAt(0), 0)
   const hue = avatarHues[Math.abs(n) % avatarHues.length]
+  // Numeric seed = customer id: try the Telegram profile photo, keep the initials underneath until it loads.
+  const [state, setState] = useState<'load' | 'ok' | 'none'>(photo && typeof seed === 'number' && seed > 0 ? (noPhoto.has(seed) ? 'none' : 'load') : 'none')
   return (
-    <span className="avatar" style={{ width: size, height: size, fontSize: size * 0.38, ['--h' as string]: hue }} aria-hidden="true">
+    <span className={state === 'ok' ? 'avatar has-photo' : 'avatar'} style={{ width: size, height: size, fontSize: size * 0.38, ['--h' as string]: hue }} aria-hidden="true">
       {initials}
+      {state !== 'none' && (
+        <img
+          src={`/api/avatars/${seed}`}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          onLoad={() => setState('ok')}
+          onError={() => {
+            noPhoto.add(seed as number)
+            setState('none')
+          }}
+        />
+      )}
     </span>
   )
 }
+
+// Customers without a photo, remembered for the session so lists do not ask again on every render.
+const noPhoto = new Set<number>()
 
 export type SwitchOption = { value: string; label: string; short?: string; count?: number }
 

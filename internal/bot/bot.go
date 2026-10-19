@@ -434,3 +434,38 @@ func (b *Bot) SendFile(ctx context.Context, chatID int64, name string, data []by
 	})
 	return err
 }
+
+// UserPhoto implements service.PhotoFetcher: the user's current profile photo, about 160×160.
+func (b *Bot) UserPhoto(ctx context.Context, userID int64) ([]byte, error) {
+	ph, err := b.tg.GetUserProfilePhotos(ctx, &tg.GetUserProfilePhotosParams{UserID: userID, Limit: 1})
+	if err != nil {
+		return nil, err
+	}
+	if len(ph.Photos) == 0 || len(ph.Photos[0]) == 0 {
+		return nil, nil
+	}
+	sizes := ph.Photos[0]
+	pick := sizes[len(sizes)-1]
+	for _, s := range sizes { // smallest that is still sharp on a retina screen at 40–56 px
+		if s.Width >= 150 && s.Width < pick.Width {
+			pick = s
+		}
+	}
+	f, err := b.tg.GetFile(ctx, &tg.GetFileParams{FileID: pick.FileID})
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, b.tg.FileDownloadLink(f), nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := (&http.Client{Timeout: 15 * time.Second}).Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("telegram file: %s", resp.Status)
+	}
+	return io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+}

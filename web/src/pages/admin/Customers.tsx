@@ -116,7 +116,7 @@ export default function Customers() {
       ) : (
         <>
           <div className="table-wrap stack-sm">
-            <table className="t stack-sm">
+            <table className="t stack-sm cust-table">
               <thead>
                 <tr>
                   <th>Клиент</th>
