@@ -453,7 +453,7 @@ func (s *Server) myPayments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for i := range rows {
-		rows[i].ConfirmationURL = "" // only exposed on creation
+		rows[i].Payment = rows[i].Payment.Public()
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": rows, "total": total})
 }

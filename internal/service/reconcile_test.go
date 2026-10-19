@@ -154,3 +154,70 @@ func TestRecheckCanceledPayment(t *testing.T) {
 		t.Fatalf("paid recheck: %s applied=%v", p.Status, p.AppliedAt)
 	}
 }
+
+func TestRefundedMoneyNeverGrantsUnappliedOrder(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	plan := createPlan(t, e, store.Plan{Name: "Бобр", IsActive: true, Periods: []store.Period{{Unit: "month", Amount: 1, Price: 30000}}})
+	c := login(t, e, 4005, "")
+	expired := func() *store.Payment {
+		t.Helper()
+		res, err := e.svc.Buy(ctx, c, service.BuyRequest{PlanID: plan.ID, PeriodID: plan.Periods[0].ID, Method: "sbp"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		p, _ := store.GetPayment(ctx, e.pool, res.PaymentID)
+		e.gw.succeed(*p.ProviderRef, "sbp")
+		if _, err := e.pool.Exec(ctx, `UPDATE payments SET status='canceled', cancel_reason='expired' WHERE id=$1`, p.ID); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	window := func() *service.ReconcileReport {
+		t.Helper()
+		rep, err := e.svc.ReconcileYooKassa(ctx, time.Now().Add(-time.Hour), time.Now().Add(time.Minute))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return rep
+	}
+
+	// Paid, then partly refunded at YooKassa while the order was still unapplied: what is left does not cover it.
+	partial := expired()
+	half := yookassa.Kopecks(10000)
+	e.gw.payments[*partial.ProviderRef].RefundedAmount = &half
+	if rep := window(); len(rep.Recovered) != 0 || len(rep.Problems) != 1 {
+		t.Fatalf("partly refunded order: %+v", rep)
+	}
+
+	// Fully refunded: the refund notification closes the order as refunded, and nothing can grant it afterwards.
+	full := expired()
+	ref := *full.ProviderRef
+	all := yookassa.Kopecks(30000)
+	e.gw.payments[ref].RefundedAmount = &all
+	e.gw.refunds["rf-x"] = &yookassa.Refund{ID: "rf-x", PaymentID: ref, Status: "succeeded", Amount: all}
+	var n yookassa.Notification
+	n.Event, n.Object.ID = "refund.succeeded", "rf-x"
+	if err := e.svc.HandleYooKassaNotification(ctx, n); err != nil {
+		t.Fatal(err)
+	}
+	full, _ = store.GetPayment(ctx, e.pool, full.ID)
+	if full.Status != "refunded" {
+		t.Fatalf("unapplied refunded order status %s", full.Status)
+	}
+	window()
+	notify(t, e, ref) // a late payment.succeeded
+	if _, err := e.svc.RecheckPayment(ctx, full.ID); err != nil {
+		t.Fatal(err)
+	}
+	full, _ = store.GetPayment(ctx, e.pool, full.ID)
+	partial, _ = store.GetPayment(ctx, e.pool, partial.ID)
+	subs, _ := store.ListSubscriptions(ctx, e.pool, c.ID)
+	if full.Status != "refunded" || full.AppliedAt != nil || partial.AppliedAt != nil || len(subs) != 0 {
+		t.Fatalf("refunded money granted access: full %s applied=%v, partial applied=%v, subs %d",
+			full.Status, full.AppliedAt, partial.AppliedAt, len(subs))
+	}
+	if !hasAdmin(e, "refund") {
+		t.Fatal("no refund event")
+	}
+}

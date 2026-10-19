@@ -2,10 +2,12 @@ package store
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 type Payment struct {
@@ -50,6 +52,14 @@ type Payment struct {
 	MarkupPercent int `db:"markup_percent" json:"markup_percent"`
 	// CommissionAmount is the cashier commission added on top (included in Amount).
 	CommissionAmount int64 `db:"commission_amount" json:"commission_amount"`
+}
+
+// Public is the payment as its customer may see it: no payment link (only shown on creation),
+// no personal markup and no cashier commission breakdown — those stay in the admin panel.
+func (p Payment) Public() Payment {
+	p.ConfirmationURL = ""
+	p.MarkupPercent, p.CommissionAmount = 0, 0
+	return p
 }
 
 func SetPaymentMethodID(ctx context.Context, db DB, id uuid.UUID, methodID int64) error {
@@ -114,10 +124,17 @@ func MarkCanceled(ctx context.Context, db DB, id uuid.UUID, reason string) error
 	return err
 }
 
-// MarkRefunded reports whether the payment was succeeded and is now refunded.
-func MarkRefunded(ctx context.Context, db DB, id uuid.UUID) (bool, error) {
-	tag, err := db.Exec(ctx, `UPDATE payments SET status='refunded' WHERE id=$1 AND status='succeeded'`, id)
-	return tag.RowsAffected() == 1, err
+// MarkRefunded closes a fully refunded payment and returns its previous status ("" if it was already refunded).
+// Pending and canceled orders are closed too: their money came back, so they must never be applied later
+// (MarkPaid only accepts pending/canceled, ApplyPayment only succeeded).
+func MarkRefunded(ctx context.Context, db DB, id uuid.UUID) (string, error) {
+	var prev string
+	err := db.QueryRow(ctx, `UPDATE payments p SET status='refunded' FROM (SELECT id, status FROM payments WHERE id=$1 FOR UPDATE) o
+		WHERE p.id=o.id AND o.status IN ('succeeded','pending','canceled') RETURNING o.status`, id).Scan(&prev)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	return prev, err
 }
 
 // RefundSeen: this YooKassa refund is already recorded in the customer timeline.

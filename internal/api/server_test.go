@@ -56,3 +56,15 @@ func TestCustomerPublicHidesAdminFields(t *testing.T) {
 		t.Fatal("Public must not modify the original")
 	}
 }
+
+func TestPaymentPublicHidesPricingInternals(t *testing.T) {
+	p := store.Payment{Amount: 37080, BaseAmount: 36000, DiscountPercent: 10, MarkupPercent: 20, CommissionAmount: 1080,
+		ConfirmationURL: "https://yoomoney.example/pay"}
+	pub := p.Public()
+	if pub.MarkupPercent != 0 || pub.CommissionAmount != 0 || pub.ConfirmationURL != "" {
+		t.Fatalf("public payment leaks internals: %+v", pub)
+	}
+	if pub.Amount != 37080 || pub.BaseAmount != 36000 || pub.DiscountPercent != 10 || p.MarkupPercent != 20 {
+		t.Fatalf("public payment lost fields or changed the original: %+v / %+v", pub, p)
+	}
+}

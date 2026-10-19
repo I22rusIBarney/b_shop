@@ -391,13 +391,17 @@ func (s *Service) HandleYooKassaNotification(ctx context.Context, n yookassa.Not
 		if r.Status != "succeeded" {
 			return nil
 		}
-		p, err := store.GetPaymentByProviderRef(ctx, s.Store.Pool, "yookassa", r.PaymentID)
+		yp, err := gw.GetPayment(ctx, r.PaymentID)
+		if err != nil {
+			return err
+		}
+		p, err := s.localPayment(ctx, yp)
 		if err != nil {
 			return nil
 		}
 		// Several partial refunds may add up to the whole amount: take the total from the payment.
 		total := r.Amount.ToKopecks()
-		if yp, err := gw.GetPayment(ctx, r.PaymentID); err == nil && yp.RefundedAmount != nil {
+		if yp.RefundedAmount != nil {
 			total = yp.RefundedAmount.ToKopecks()
 		}
 		return s.onRefund(ctx, p, r.ID, r.Amount.ToKopecks(), total)
@@ -745,17 +749,24 @@ func (s *Service) onRefund(ctx context.Context, p *store.Payment, refundID strin
 		s.eventByID(ctx, "refund", p.CustomerID, map[string]any{"amount": rub(amount) + " (частичный, всего " + rub(total) + " из " + rub(p.Amount) + ")", "payment": p.ID.String()})
 		return nil
 	}
-	changed, err := store.MarkRefunded(ctx, s.Store.Pool, p.ID)
+	// An order that was never applied (expired locally, webhook lost) is closed as refunded too,
+	// so a later webhook or reconciliation cannot grant it.
+	prev, err := store.MarkRefunded(ctx, s.Store.Pool, p.ID)
 	if err != nil {
 		return err
 	}
-	if changed {
+	if prev == "succeeded" {
 		if err := store.QueueReceiptCancel(ctx, s.Store.Pool, p.ID); err != nil {
 			return err
 		}
 	}
+	shown := rub(amount)
+	if prev == "pending" || prev == "canceled" {
+		data["unapplied"] = true
+		shown += " (заказ не был выдан)"
+	}
 	_ = store.AddEvent(ctx, s.Store.Pool, p.CustomerID, "refund", data, nil)
-	s.eventByID(ctx, "refund", p.CustomerID, map[string]any{"amount": rub(amount), "payment": p.ID.String()})
+	s.eventByID(ctx, "refund", p.CustomerID, map[string]any{"amount": shown, "payment": p.ID.String()})
 	return nil
 }
 

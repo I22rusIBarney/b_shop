@@ -106,8 +106,14 @@ func (s *Service) reconcileOne(ctx context.Context, yp *yookassa.Payment, rep *R
 }
 
 // amountCovers: the provider took at least the order amount, in rubles.
+// Money already returned does not count: YooKassa keeps a refunded payment "succeeded" and only fills
+// refunded_amount, so a late webhook or a reconciliation must not grant the order for it.
 func amountCovers(yp *yookassa.Payment, p *store.Payment) bool {
-	return yp.Amount.Currency == "RUB" && yp.Amount.ToKopecks() >= p.Amount
+	got := yp.Amount.ToKopecks()
+	if yp.RefundedAmount != nil {
+		got -= yp.RefundedAmount.ToKopecks()
+	}
+	return yp.Amount.Currency == "RUB" && got >= p.Amount
 }
 
 // localPayment finds the order a YooKassa payment belongs to: by its id, or by our id in metadata
