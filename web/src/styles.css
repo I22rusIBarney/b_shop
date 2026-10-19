@@ -98,6 +98,8 @@ p { margin: 0; }
 @media (min-width: 900px) {
   .backdrop .desktop { display: block; }
   .backdrop .desktop + .mobile { display: none; }
+  /* The portrait default needs a lower crop on wide screens; custom backgrounds keep their own framing. */
+  .backdrop .mobile[src="/bg-default.webp"] { object-position: 50% 65%; }
 }
 
 /* ---------- client shell ---------- */
@@ -107,6 +109,7 @@ p { margin: 0; }
   max-width: 560px; margin: 0 auto; padding: var(--pad-top) 16px var(--pad-bottom);
 }
 /* Home fits one screen: picker on top, the card pinned above the tab bar (Telegram gives its own viewport height). */
+html:has(.app > .home), body:has(.app > .home) { overscroll-behavior-y: none; }
 .app:has(> .home) { display: flex; flex-direction: column; min-height: var(--tg-viewport-stable-height, 100svh); --pad-top: calc(10px + max(var(--safe-top), var(--tg-safe-area-inset-top, 0px)) + var(--tg-content-safe-area-inset-top, 0px)); --pad-bottom: calc(70px + var(--safe-bottom)); }
 .hero-space { pointer-events: none; }
 .brand { display: flex; align-items: center; gap: 12px; margin: 4px 0 20px; }
@@ -359,7 +362,7 @@ table.t { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 }
 .sub-picker svg { width: 16px; height: 16px; color: var(--muted); }
 .carousel-wrap { position: relative; margin: 0 24px; }
-.carousel { touch-action: pan-y; }
+.carousel { touch-action: pinch-zoom; }
 .slide { min-width: 0; animation: slide-in .22s ease-out; }
 @keyframes slide-in { from { opacity: .4; transform: translateX(var(--from, 0)); } to { opacity: 1; transform: none; } }
 .sub-card { padding: 18px 16px 16px; min-width: 0; }
@@ -1026,10 +1029,10 @@ button.am-item { background: none; border: 1px solid transparent; color: var(--t
 .panel-count { flex: none; min-width: 24px; height: 22px; padding: 0 8px; display: inline-grid; place-items: center; border-radius: 999px; font-size: .74rem; font-weight: 700; color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); }
 .panel-body { padding: 14px 16px 16px; display: grid; gap: 12px; align-content: start; }
 
-.tile { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); }
-.tile svg { width: 17px; height: 17px; }
-.tile.amber { --c: var(--accent); } .tile.green { --c: #4fcf8a; } .tile.blue { --c: #5aa7ff; } .tile.violet { --c: #a98bff; }
-.tile.rose { --c: #ff7a8a; } .tile.teal { --c: #3fc7c0; } .tile.slate { --c: #a8b3c4; }
+.panel-tile { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); }
+.panel-tile svg { width: 17px; height: 17px; }
+.panel-tile.amber { --c: var(--accent); } .panel-tile.green { --c: #4fcf8a; } .panel-tile.blue { --c: #5aa7ff; } .panel-tile.violet { --c: #a98bff; }
+.panel-tile.rose { --c: #ff7a8a; } .panel-tile.teal { --c: #3fc7c0; } .panel-tile.slate { --c: #a8b3c4; }
 
 .panel-empty { display: grid; justify-items: center; gap: 10px; padding: 20px 8px 10px; text-align: center; }
 .panel-empty span { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; color: var(--muted); background: color-mix(in srgb, var(--text) 6%, transparent); }

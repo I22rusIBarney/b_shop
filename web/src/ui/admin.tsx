@@ -29,7 +29,7 @@ export function Panel({
   return (
     <section className={['panel', wide && 'wide', className].filter(Boolean).join(' ')}>
       <header className="panel-head">
-        <span className={`tile ${tone}`} aria-hidden="true">
+        <span className={`panel-tile ${tone}`} aria-hidden="true">
           <Icon />
         </span>
         <h3>{title}</h3>

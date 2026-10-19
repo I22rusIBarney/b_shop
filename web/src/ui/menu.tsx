@@ -2,7 +2,7 @@ import { useState, type ComponentType } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../lib/app'
 import { useBadges } from '../lib/badges'
-import { inTelegram, openLink } from '../lib/tg'
+import { inTelegram, inTelegramClient, openLink } from '../lib/tg'
 import { BuyForSheet } from '../pages/Gifts'
 import { AutopaySheet, LoginsSheet, PaymentsSheet, PromoSheet } from '../pages/Profile'
 import { Card, Chat, Exit, Fingerprint, Gift, Globe, Help, Home, News, Send, Tag, User, Users, Wallet } from './icons'
@@ -68,7 +68,7 @@ export function useClientMenu() {
         { key: 'logins', label: 'Вход в систему', icon: Fingerprint, onClick: open('logins') },
         { key: 'payments', label: 'Платежи', icon: Card, onClick: open('payments') },
         { key: 'cards', label: 'Автопродление', icon: Wallet, onClick: open('cards') },
-        {
+        ...(!inTelegramClient() ? [{
           key: 'exit',
           label: 'Выйти',
           icon: Exit,
@@ -76,7 +76,7 @@ export function useClientMenu() {
             await signOut()
             nav('/login')
           },
-        },
+        }] : []),
       ],
     })
   }
