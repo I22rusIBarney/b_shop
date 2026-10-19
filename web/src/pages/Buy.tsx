@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useApp } from '../lib/app'
 import { get, post, type BuyResult, type CatalogPlan, type RedeemResult } from '../lib/api'
-import { periodLabel, rub, rubRound } from '../lib/format'
+import { periodLabel, plural, rub, rubRound } from '../lib/format'
 import { Back, Check, Chevron, Gift, Info, Minus, Plus, Tag, User, Warn } from '../ui/icons'
 import { ErrorBox, PageLoader, Sheet, useAction, useLoad, useToast } from '../ui/kit'
 import { MethodPicker, followPayment, usePayMethod } from '../ui/pay'
@@ -14,7 +14,7 @@ function limitsLine(p: CatalogPlan) {
 }
 
 export default function Buy() {
-  const { config } = useApp()
+  const { config, me } = useApp()
   const toast = useToast()
   const [params] = useSearchParams()
   const nav = useNavigate()
@@ -117,6 +117,21 @@ export default function Buy() {
         </button>
         <h1>{title}</h1>
       </header>
+
+      {/* The invitee bonus comes with the customer's own first purchase, not with gifts. */}
+      {me?.invitation && !gift && !forOther && (
+        <div className="callout">
+          <span className="callout-ico">
+            <Gift />
+          </span>
+          <div>
+            <b>
+              {me.invitation.from} дарит вам +{me.invitation.days} {plural(me.invitation.days, 'день', 'дня', 'дней')}
+            </b>
+            <p>Вы пришли по приглашению — добавим дни к подписке сразу после первой оплаты.</p>
+          </div>
+        </div>
+      )}
 
       {(gift || forOther) && (
         <div className="callout">

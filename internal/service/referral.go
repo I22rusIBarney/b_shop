@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+	"time"
 
 	"bshop/internal/settings"
 	"bshop/internal/store"
@@ -194,6 +196,83 @@ func (s *Service) notifyBonus(ctx context.Context, payer *store.Customer, cb cre
 	s.event(ctx, "referral_bonus", cb.recipient, map[string]any{"kind": kind, "days": d, "referral": whoLine(payer)})
 }
 
+// revokeReferral takes back the inviter's bonus days for a fully refunded payment, once per bonus.
+// Days come off the subscription they went to (never below now) or off the bonus balance; whatever the
+// balance no longer holds (already used by a purchase) comes off the inviter's active subscription.
+// The invitee's own bonus stays with the purchase it belongs to.
+func (s *Service) revokeReferral(ctx context.Context, payID uuid.UUID) error {
+	type taken struct {
+		to   *store.Customer
+		days int
+	}
+	var done []taken
+	err := s.Store.Tx(ctx, func(tx pgx.Tx) error {
+		list, err := store.RevokableReferralBonuses(ctx, tx, payID)
+		if err != nil {
+			return err
+		}
+		for _, b := range list {
+			to, err := store.GetCustomerForUpdate(ctx, tx, b.RecipientID)
+			if err != nil {
+				return err
+			}
+			rest := b.Days
+			if b.Pending {
+				take := min(rest, to.BonusDays)
+				if err := store.AddBonusDays(ctx, tx, to.ID, -take); err != nil {
+					return err
+				}
+				rest -= take
+			}
+			if rest > 0 {
+				if sub, err := s.revokeTarget(ctx, tx, to.ID, b.SubscriptionID); err != nil {
+					return err
+				} else if sub != nil {
+					if err := s.addDays(ctx, tx, sub, -rest); err != nil {
+						return err
+					}
+				}
+			}
+			if err := store.MarkReferralBonusRevoked(ctx, tx, b.ID); err != nil {
+				return err
+			}
+			if err := store.AddEvent(ctx, tx, to.ID, "referral_revoked", map[string]any{"days": b.Days, "payment": payID}, nil); err != nil {
+				return err
+			}
+			done = append(done, taken{to, b.Days})
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	for _, d := range done {
+		s.Notify.Customer(ctx, d.to, Message{Text: fmt.Sprintf("↩️ Друг вернул оплату, поэтому бонус за неё отменён: <b>−%s</b>.",
+			plural(d.days, "день", "дня", "дней")), ButtonText: "Открыть кабинет", ButtonURL: s.Cfg.PublicURL + "/referral",
+			EmailSubject: "Бонус за друга отменён"})
+	}
+	return nil
+}
+
+// revokeTarget is the subscription to take bonus days from: the one they were added to, else an active one.
+func (s *Service) revokeTarget(ctx context.Context, tx pgx.Tx, customerID int64, subID *int64) (*store.Subscription, error) {
+	if subID != nil {
+		if sub, err := store.GetSubscriptionForUpdate(ctx, tx, *subID); err == nil && sub.CustomerID == customerID {
+			return sub, nil
+		}
+	}
+	subs, err := store.ListSubscriptions(ctx, tx, customerID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range subs {
+		if subs[i].Active() && subs[i].RWUserID != nil {
+			return store.GetSubscriptionForUpdate(ctx, tx, subs[i].ID)
+		}
+	}
+	return nil, nil
+}
+
 // AdminReferralBonus credits manual bonus days to a customer.
 func (s *Service) AdminReferralBonus(ctx context.Context, admin *store.Customer, customerID int64, days int) error {
 	if days < 1 || days > 3650 {
@@ -227,6 +306,57 @@ type ReferralInfo struct {
 	NextTier    *settings.ReferralTier  `json:"next_tier,omitempty"`
 	CurrentDays int                     `json:"current_days"` // bonus for the next referral's first purchase
 	BonusDays   int                     `json:"bonus_days"`   // waiting on the balance
+	Friends     []ReferralFriend        `json:"friends"`
+}
+
+// ReferralFriend is an invited customer as the inviter sees them: a short name, never contacts or ids.
+type ReferralFriend struct {
+	Name   string    `json:"name"`
+	Since  time.Time `json:"since"`
+	Status string    `json:"status"` // joined | paid | active
+	Days   int       `json:"days"`   // bonus days the inviter got from this friend (not taken back)
+}
+
+// Invitation tells an invited customer, until their first paid purchase, who invited them and the days
+// that purchase will add. nil when there is nothing to show.
+type Invitation struct {
+	From string `json:"from"`
+	Days int    `json:"days"`
+}
+
+func (s *Service) Invitation(ctx context.Context, c *store.Customer) *Invitation {
+	cfg := s.set().Referral
+	if !cfg.Enabled || !cfg.BaseEnabled || cfg.InviteeDays <= 0 || c.ReferrerID == nil {
+		return nil
+	}
+	if n, err := store.PaidPurchasesBefore(ctx, s.Store.Pool, c.ID, uuid.Nil); err != nil || n > 0 {
+		return nil
+	}
+	from, err := store.GetCustomer(ctx, s.Store.Pool, *c.ReferrerID)
+	if err != nil {
+		return nil
+	}
+	return &Invitation{From: shortName(from.FirstName, from.LastName), Days: cfg.InviteeDays}
+}
+
+// shortName is "Мария К." — first name and the last name's initial; "Друг" when there is no name.
+func shortName(first, last *string) string {
+	name := ""
+	if first != nil {
+		name = strings.TrimSpace(*first)
+	}
+	if name == "" {
+		return "Друг"
+	}
+	if r := []rune(name); len(r) > 24 {
+		name = string(r[:24]) + "…"
+	}
+	if last != nil {
+		if r := []rune(strings.TrimSpace(*last)); len(r) > 0 {
+			name += " " + strings.ToUpper(string(r[0])) + "."
+		}
+	}
+	return name
 }
 
 func (s *Service) Referral(ctx context.Context, c *store.Customer, tgLink string) (*ReferralInfo, error) {
@@ -248,6 +378,34 @@ func (s *Service) Referral(ctx context.Context, c *store.Customer, tgLink string
 	}
 	if info.Bonuses, err = store.ListReferralBonuses(ctx, s.Store.Pool, c.ID, 50); err != nil {
 		return nil, err
+	}
+	friends, err := store.ListReferralFriends(ctx, s.Store.Pool, c.ID, 100)
+	if err != nil {
+		return nil, err
+	}
+	names := map[int64]string{}
+	info.Friends = make([]ReferralFriend, 0, len(friends))
+	for _, f := range friends {
+		st := "joined"
+		if f.Active {
+			st = "active"
+		} else if f.Paid {
+			st = "paid"
+		}
+		names[f.ID] = shortName(f.FirstName, f.LastName)
+		info.Friends = append(info.Friends, ReferralFriend{Name: names[f.ID], Since: f.CreatedAt, Status: st, Days: f.Days})
+	}
+	// The history shows the same short names: no usernames, no ids of other customers.
+	for i := range info.Bonuses {
+		b := &info.Bonuses[i]
+		b.ReferralName = "Друг"
+		if b.ReferralID != nil {
+			if n, ok := names[*b.ReferralID]; ok {
+				b.ReferralName = n
+			}
+			b.ReferralID = nil
+		}
+		b.PaymentID, b.SubscriptionID = nil, nil
 	}
 	if cfg.TiersEnabled {
 		info.Tiers = cfg.Tiers

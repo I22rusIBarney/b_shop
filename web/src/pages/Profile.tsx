@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { openExternal, useClientMenu } from '../ui/menu'
-import { del, get, myAvatar, post, put, type AutopayInfo, type Paged, type Payment, type PaymentMethodInfo, type RedeemResult, type Redemption, type Session, type Subscription } from '../lib/api'
+import { del, get, myAvatar, post, put, type AutopayInfo, type Paged, type Payment, type PaymentMethodInfo, type RedeemResult, type Redemption, type ReferralInfo, type Session, type Subscription } from '../lib/api'
 import { useApp } from '../lib/app'
 import { date, dateTime, operationName, paymentStatus, plural, providerName, rub } from '../lib/format'
 import { haptic } from '../lib/tg'
 import { Card, Chevron, Tag, Trash } from '../ui/icons'
 import { Field, Sheet, Toggle, useAction, useLoad } from '../ui/kit'
+import { ReferralCard } from '../ui/referral'
 
 /** Phone "Профиль" tab (reference 3555–3556): the cabinet sections as grouped row cards. */
 export default function Profile() {
@@ -14,6 +15,8 @@ export default function Profile() {
   const { groups, sheets } = useClientMenu()
   const [photo, setPhoto] = useState<string | null>(null)
   const meID = me?.customer.id
+  const refOn = !!me?.referral_enabled
+  const ref = useLoad(() => (refOn ? get<ReferralInfo>('/api/referral') : Promise.resolve(undefined)), [refOn])
   useEffect(() => {
     let live = true
     if (meID) myAvatar().then((u) => live && setPhoto(u))
@@ -39,6 +42,7 @@ export default function Profile() {
           </p>
         </div>
       </header>
+      {ref.data?.enabled && <ReferralCard r={ref.data} />}
       {c.personal_discount > 0 && (
         <div className="callout">
           <span className="callout-ico">

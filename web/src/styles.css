@@ -1816,3 +1816,59 @@ button.group-row:active, .group-row.pick:active { background: var(--fill); }
 .pay-calc .total { padding-top: 6px; border-top: 1px solid var(--line); font-weight: 600; }
 .recon-list { display: grid; gap: 6px; }
 .recon-list .item { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+
+/* ---- referral: profile card (earned days first, two actions) and the /referral page ---- */
+.ref-card { position: relative; overflow: hidden; display: grid; gap: 12px; margin-bottom: 22px; padding: 16px;
+  border-radius: var(--r-card); border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--line));
+  background:
+    radial-gradient(90% 120% at 100% 0%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 60%),
+    color-mix(in srgb, var(--surface) calc(var(--card-alpha, .9) * 100%), transparent);
+  backdrop-filter: blur(var(--card-blur, 0px)); -webkit-backdrop-filter: blur(var(--card-blur, 0px)); }
+.ref-card a { color: inherit; text-decoration: none; }
+.ref-card-head { display: flex; align-items: center; gap: 12px; }
+.ref-card-head .grow { min-width: 0; display: grid; gap: 2px; }
+.ref-card-head b { font-size: 1rem; }
+.ref-card-head .grow > span { font-size: .84rem; color: var(--label-2, var(--muted)); }
+.ref-card-head .chev { width: 18px; height: 18px; color: var(--muted); flex: none; }
+.ref-card-ico { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent); box-shadow: inset 0 0 0 .5px color-mix(in srgb, var(--accent) 22%, transparent); }
+.ref-card-ico svg { width: 22px; height: 22px; }
+.ref-card-sum { display: grid; gap: 2px; }
+.ref-card-sum b { font-family: var(--display, inherit); font-size: 2rem; line-height: 1.05; letter-spacing: -.02em; color: var(--accent); }
+.ref-card-sum span { font-size: .88rem; color: var(--text); }
+.ref-card-progress { display: grid; gap: 6px; }
+.ref-card-progress span { font-size: .8rem; color: var(--label-2, var(--muted)); }
+.ref-card-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ref-card-actions .pill-btn { min-height: 44px; gap: 8px; padding: 0 12px; font-size: .95rem; }
+.ref-card-actions .pill-btn svg { width: 18px; height: 18px; }
+
+.ref-earned { display: grid; gap: 2px; }
+.ref-earned b { font-family: var(--display, inherit); font-size: 2.1rem; line-height: 1.05; color: var(--accent); }
+.ref-earned span { font-size: .9rem; }
+.ref-sides { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+.ref-sides > div { display: grid; gap: 2px; padding: 12px 14px; border-radius: var(--r-ctl); background: var(--fill); }
+.ref-sides span { font-size: .8rem; color: var(--label-2, var(--muted)); }
+.ref-sides b { font-size: 1.35rem; color: var(--text); }
+.ref-sides small { font-size: .78rem; color: var(--label-2, var(--muted)); }
+.ref-steps { margin: 0; padding: 0; list-style: none; counter-reset: step; display: grid; gap: 12px; }
+.ref-steps li { counter-increment: step; display: grid; grid-template-columns: 28px 1fr; column-gap: 12px; row-gap: 2px; }
+.ref-steps li::before { content: counter(step); grid-row: span 2; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%;
+  font-weight: 700; font-size: .85rem; color: var(--accent-ink); background: var(--accent); }
+.ref-steps span { font-size: .85rem; color: var(--label-2, var(--muted)); }
+.ref-ava { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; font-weight: 700; color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.ref-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 3px; }
+.ref-page .list .item { align-items: center; gap: 12px; }
+.ref-terms summary { cursor: pointer; font-weight: 600; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+.ref-terms summary::-webkit-details-marker { display: none; }
+.ref-terms summary::after { content: '›'; font-size: 1.3rem; color: var(--muted); transition: transform .2s var(--ease-out, ease); }
+.ref-terms[open] summary::after { transform: rotate(90deg); }
+.ref-terms ul { margin: 12px 0 0; padding-left: 18px; display: grid; gap: 6px; }
+@media (max-width: 360px) {
+  .ref-card-actions { grid-template-columns: 1fr; }
+}
+/* own names: the admin's global .tile/.panel rules would otherwise restyle these counters */
+.ref-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.ref-tile { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 14px 6px; text-align: center; border-radius: var(--r-card); }
+.ref-tile b { font-size: 1.5rem; font-family: var(--display, inherit); }
+.ref-tile span { font-size: .75rem; color: var(--muted); }

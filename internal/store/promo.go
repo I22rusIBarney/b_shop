@@ -202,6 +202,8 @@ type ReferralBonus struct {
 	ActorID        *int64     `db:"actor_id" json:"-"`
 	CreatedAt      time.Time  `db:"created_at" json:"created_at"`
 	ReferralName   string     `db:"referral_name" json:"referral_name"`
+	// RevokedAt: the friend's payment was fully refunded and the days were taken back.
+	RevokedAt *time.Time `db:"revoked_at" json:"revoked_at"`
 }
 
 // InsertReferralBonus records a bonus; returns false if this payment already produced it.
@@ -222,6 +224,8 @@ type ReferralStats struct {
 	Invited int `json:"invited"`
 	Paid    int `json:"paid"`
 	Days    int `json:"days"`
+	// Active friends have a paid subscription running now.
+	Active int `json:"active"`
 }
 
 func GetReferralStats(ctx context.Context, db DB, customerID int64) (ReferralStats, error) {
@@ -230,16 +234,54 @@ func GetReferralStats(ctx context.Context, db DB, customerID int64) (ReferralSta
 		(SELECT count(*) FROM customers WHERE referrer_id=$1)::int,
 		(SELECT count(DISTINCT c.id) FROM customers c JOIN payments p ON p.customer_id=c.id
 			WHERE c.referrer_id=$1 AND p.status='succeeded' AND p.provider<>'free' AND p.applied_at IS NOT NULL)::int,
-		(SELECT COALESCE(sum(days),0) FROM referral_bonuses WHERE recipient_id=$1 AND kind<>'invitee')::int`,
-		customerID).Scan(&s.Invited, &s.Paid, &s.Days)
+		(SELECT COALESCE(sum(days),0) FROM referral_bonuses WHERE recipient_id=$1 AND kind<>'invitee' AND revoked_at IS NULL)::int,
+		(SELECT count(*) FROM customers c WHERE c.referrer_id=$1 AND EXISTS (SELECT 1 FROM subscriptions s
+			WHERE s.customer_id=c.id AND s.kind='paid' AND s.status='active' AND s.expires_at > now()))::int`,
+		customerID).Scan(&s.Invited, &s.Paid, &s.Days, &s.Active)
 	return s, err
 }
 
-// PaidPurchasesBefore counts the customer's applied paid purchases other than the given payment.
+// ReferralFriend is one invited customer as the inviter sees them (names only — the service shortens them).
+type ReferralFriend struct {
+	ID        int64     `db:"id"`
+	FirstName *string   `db:"first_name"`
+	LastName  *string   `db:"last_name"`
+	CreatedAt time.Time `db:"created_at"`
+	Paid      bool      `db:"paid"`
+	Active    bool      `db:"active"`
+	Days      int       `db:"days"`
+}
+
+func ListReferralFriends(ctx context.Context, db DB, inviterID int64, limit int) ([]ReferralFriend, error) {
+	return many[ReferralFriend](db.Query(ctx, `SELECT c.id, c.first_name, c.last_name, c.created_at,
+		EXISTS (SELECT 1 FROM payments p WHERE p.customer_id=c.id AND p.status='succeeded' AND p.provider<>'free'
+			AND p.applied_at IS NOT NULL) AS paid,
+		EXISTS (SELECT 1 FROM subscriptions s WHERE s.customer_id=c.id AND s.kind='paid' AND s.status='active'
+			AND s.expires_at > now()) AS active,
+		COALESCE((SELECT sum(b.days) FROM referral_bonuses b WHERE b.recipient_id=$1 AND b.referral_id=c.id
+			AND b.revoked_at IS NULL), 0)::int AS days
+		FROM customers c WHERE c.referrer_id=$1 ORDER BY c.created_at DESC LIMIT $2`, inviterID, limit))
+}
+
+// RevokableReferralBonuses locks the inviter's bonuses that came from a payment and are not taken back yet.
+func RevokableReferralBonuses(ctx context.Context, db DB, paymentID uuid.UUID) ([]ReferralBonus, error) {
+	return many[ReferralBonus](db.Query(ctx, `SELECT b.*, '' AS referral_name FROM referral_bonuses b
+		WHERE b.payment_id=$1 AND b.kind IN ('first','recurring') AND b.revoked_at IS NULL FOR UPDATE`, paymentID))
+}
+
+func MarkReferralBonusRevoked(ctx context.Context, db DB, id int64) error {
+	_, err := db.Exec(ctx, `UPDATE referral_bonuses SET revoked_at=now() WHERE id=$1`, id)
+	return err
+}
+
+// PaidPurchasesBefore counts the customer's paid purchases applied before the given payment (all of them for uuid.Nil).
 func PaidPurchasesBefore(ctx context.Context, db DB, customerID int64, except uuid.UUID) (int, error) {
 	var n int
+	// Only purchases applied earlier than this one: a later renewal must not turn a first purchase whose
+	// bonus is being retried into a "recurring" one.
 	err := db.QueryRow(ctx, `SELECT count(*) FROM payments WHERE customer_id=$1 AND id<>$2 AND status IN ('succeeded','refunded')
-		AND provider<>'free' AND applied_at IS NOT NULL AND operation IN ('buy','renew','autopay')`, customerID, except).Scan(&n)
+		AND provider<>'free' AND applied_at IS NOT NULL AND operation IN ('buy','renew','autopay')
+		AND applied_at < COALESCE((SELECT applied_at FROM payments WHERE id=$2), 'infinity')`, customerID, except).Scan(&n)
 	return n, err
 }
 

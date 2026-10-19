@@ -760,6 +760,10 @@ func (s *Service) onRefund(ctx context.Context, p *store.Payment, refundID strin
 			return err
 		}
 	}
+	// Idempotent; on error the refund is not recorded yet, so YooKassa's repeated notification finishes it.
+	if err := s.revokeReferral(ctx, p.ID); err != nil {
+		return fmt.Errorf("revoke referral bonus: %w", err)
+	}
 	shown := rub(amount)
 	if prev == "pending" || prev == "canceled" {
 		data["unapplied"] = true

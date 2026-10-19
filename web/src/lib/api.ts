@@ -172,6 +172,8 @@ export interface Me {
   buy_for_other: boolean
   locations: boolean
   missing_channels: { chat_id: string; title: string; url: string }[]
+  /** set until the invited customer's first paid purchase */
+  invitation?: { from: string; days: number } | null
 }
 
 export interface Session {
@@ -464,13 +466,15 @@ export interface ReferralBonus {
   pending: boolean
   created_at: string
   referral_name: string
+  /** the friend's payment was fully refunded and the days were taken back */
+  revoked_at: string | null
 }
 
 export interface ReferralInfo {
   enabled: boolean
   link: string
   web_link: string
-  stats: { invited: number; paid: number; days: number }
+  stats: { invited: number; paid: number; days: number; active: number }
   bonuses: ReferralBonus[]
   description: string
   inviter_days: number
@@ -480,6 +484,14 @@ export interface ReferralInfo {
   next_tier?: { min_invited: number; days: number }
   current_days: number
   bonus_days: number
+  friends: ReferralFriend[]
+}
+
+export interface ReferralFriend {
+  name: string
+  since: string
+  status: 'joined' | 'paid' | 'active'
+  days: number
 }
 
 export interface Promo {
