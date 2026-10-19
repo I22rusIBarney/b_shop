@@ -63,6 +63,7 @@ type Customer struct {
 	IsBlocked        bool       `db:"is_blocked" json:"is_blocked"`
 	BotBlocked       bool       `db:"bot_blocked" json:"bot_blocked"`
 	PersonalDiscount int        `db:"personal_discount" json:"personal_discount"`
+	PersonalMarkup   int        `db:"personal_markup" json:"personal_markup"`
 	Tag              string     `db:"tag" json:"tag"`
 	Notes            string     `db:"notes" json:"notes"`
 	RefCode          *string    `db:"ref_code" json:"ref_code"`
@@ -84,6 +85,7 @@ func (c *Customer) Public() *Customer {
 	}
 	p := *c
 	p.Tag, p.Notes = "", ""
+	p.PersonalMarkup = 0
 	return &p
 }
 
@@ -108,7 +110,7 @@ func (c *Customer) DisplayName() string {
 }
 
 const customerCols = `id, telegram_id, email, username, first_name, last_name, language, is_admin, is_blocked,
-	bot_blocked, personal_discount, tag, notes, ref_code, referrer_id, trial_used, source, created_at, last_seen_at, bonus_days,
+	bot_blocked, personal_discount, personal_markup, tag, notes, ref_code, referrer_id, trial_used, source, created_at, last_seen_at, bonus_days,
 	news_seen_at, lead_temperature`
 
 func GetCustomer(ctx context.Context, db DB, id int64) (*Customer, error) {
@@ -198,6 +200,7 @@ type CustomerAdminPatch struct {
 	Tag              *string `json:"tag"`
 	Notes            *string `json:"notes"`
 	PersonalDiscount *int    `json:"personal_discount"`
+	PersonalMarkup   *int    `json:"personal_markup"`
 	IsBlocked        *bool   `json:"is_blocked"`
 	IsAdmin          *bool   `json:"is_admin"`
 }
@@ -205,8 +208,8 @@ type CustomerAdminPatch struct {
 func PatchCustomer(ctx context.Context, db DB, id int64, p CustomerAdminPatch) error {
 	_, err := db.Exec(ctx, `UPDATE customers SET
 		tag=COALESCE($2, tag), notes=COALESCE($3, notes), personal_discount=COALESCE($4, personal_discount),
-		is_blocked=COALESCE($5, is_blocked), is_admin=COALESCE($6, is_admin) WHERE id=$1`,
-		id, p.Tag, p.Notes, p.PersonalDiscount, p.IsBlocked, p.IsAdmin)
+		is_blocked=COALESCE($5, is_blocked), is_admin=COALESCE($6, is_admin), personal_markup=COALESCE($7, personal_markup) WHERE id=$1`,
+		id, p.Tag, p.Notes, p.PersonalDiscount, p.IsBlocked, p.IsAdmin, p.PersonalMarkup)
 	return err
 }
 

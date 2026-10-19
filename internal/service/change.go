@@ -176,7 +176,7 @@ func (s *Service) ChangeOptions(ctx context.Context, c *store.Customer, subID in
 	}
 	days := daysLeft(sub.ExpiresAt)
 	info := &ChangeInfo{SubscriptionID: sub.ID, PlanID: cur.ID, PlanName: cur.Name, TrafficLimitGB: cur.TrafficLimitGB,
-		DeviceLimit: cur.DeviceLimit, PricePerMonth: cur.MonthlyPrice(dim), DaysLeft: days,
+		DeviceLimit: cur.DeviceLimit, PricePerMonth: personalPlan(cur, c).MonthlyPrice(dim), DaysLeft: days,
 		DiscountPercent: c.PersonalDiscount, Penalty: s.set().General.PlanChangePenalty, Targets: []ChangeTarget{}}
 	if info.Blocked, err = s.changeLimitReached(ctx, s.Store.Pool, c.ID); err != nil {
 		return nil, err
@@ -189,9 +189,9 @@ func (s *Service) ChangeOptions(ctx context.Context, c *store.Customer, subID in
 		}
 		t := ChangeTarget{PlanID: p.ID, Name: p.Name, Description: p.Description, Features: p.Features,
 			TrafficLimitGB: p.TrafficLimitGB, DeviceLimit: p.DeviceLimit,
-			PricePerMonth: applyDiscount(p.MonthlyPrice(dim), c.PersonalDiscount), Unavailable: problem}
+			PricePerMonth: applyDiscount(personalPlan(p, c).MonthlyPrice(dim), c.PersonalDiscount), Unavailable: problem}
 		if problem == "" {
-			t.Quotes = changeQuotes(cur, p, days, dim, c.PersonalDiscount, s.set().General.PlanChangePenalty)
+			t.Quotes = changeQuotes(personalPlan(cur, c), personalPlan(p, c), days, dim, c.PersonalDiscount, s.set().General.PlanChangePenalty)
 			if len(t.Quotes) == 0 {
 				continue
 			}
@@ -232,7 +232,7 @@ func (s *Service) ChangePlan(ctx context.Context, c *store.Customer, subID int64
 	}
 	dim := s.set().General.DaysInMonth
 	var q *ChangeQuote
-	for _, x := range changeQuotes(cur, target, daysLeft(sub.ExpiresAt), dim, c.PersonalDiscount, s.set().General.PlanChangePenalty) {
+	for _, x := range changeQuotes(personalPlan(cur, c), personalPlan(target, c), daysLeft(sub.ExpiresAt), dim, c.PersonalDiscount, s.set().General.PlanChangePenalty) {
 		if x.Mode == req.Mode {
 			x := x
 			q = &x
@@ -244,7 +244,7 @@ func (s *Service) ChangePlan(ctx context.Context, c *store.Customer, subID int64
 	if q.Mode == "upgrade" {
 		p := &store.Payment{CustomerID: c.ID, SubscriptionID: &sub.ID, PlanID: &target.ID, FromPlanID: &cur.ID,
 			Operation: "change", Title: target.Name, Days: q.DaysAfter, Months: (q.DaysAfter + dim/2) / dim,
-			Amount: q.Amount, BaseAmount: q.BaseAmount, DiscountPercent: c.PersonalDiscount,
+			Amount: q.Amount, BaseAmount: q.BaseAmount, DiscountPercent: c.PersonalDiscount, MarkupPercent: c.PersonalMarkup,
 			Provider: "yookassa", Method: req.Method, SaveMethod: req.SaveCard && s.set().YooKassa.SaveCard}
 		return s.startPayment(ctx, c, p, req.ReturnURL)
 	}
@@ -272,7 +272,7 @@ func (s *Service) ChangePlan(ctx context.Context, c *store.Customer, subID int64
 		// Recalculate under the lock with fresh data.
 		days := daysLeft(locked.ExpiresAt)
 		var fresh *ChangeQuote
-		for _, x := range changeQuotes(cur, target, days, dim, cust.PersonalDiscount, s.set().General.PlanChangePenalty) {
+		for _, x := range changeQuotes(personalPlan(cur, cust), personalPlan(target, cust), days, dim, cust.PersonalDiscount, s.set().General.PlanChangePenalty) {
 			if x.Mode == req.Mode {
 				x := x
 				fresh = &x
@@ -366,6 +366,7 @@ func (s *Service) devicesOffer(ctx context.Context, c *store.Customer, subID int
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	plan = personalPlan(plan, c)
 	o.PricePerMonth = plan.ExtraDevicePrice
 	switch {
 	case sub.Kind != "paid":
@@ -421,7 +422,7 @@ func (s *Service) BuyDevices(ctx context.Context, c *store.Customer, subID int64
 	amount := ceilRub(applyDiscount(base, c.PersonalDiscount))
 	p := &store.Payment{CustomerID: c.ID, SubscriptionID: &sub.ID, PlanID: &plan.ID, Operation: "devices",
 		Title: plan.Name, Days: o.DaysLeft, Months: (o.DaysLeft + dim/2) / dim, ExtraDevices: req.Count,
-		Amount: amount, BaseAmount: base, DiscountPercent: c.PersonalDiscount,
+		Amount: amount, BaseAmount: base, DiscountPercent: c.PersonalDiscount, MarkupPercent: c.PersonalMarkup,
 		Provider: "yookassa", Method: req.Method, SaveMethod: req.SaveCard && s.set().YooKassa.SaveCard}
 	return s.startPayment(ctx, c, p, req.ReturnURL)
 }

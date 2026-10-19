@@ -49,6 +49,7 @@ type PaymentGateway interface {
 	CreatePayment(ctx context.Context, idemKey string, in yookassa.CreatePayment) (*yookassa.Payment, error)
 	GetPayment(ctx context.Context, id string) (*yookassa.Payment, error)
 	GetRefund(ctx context.Context, id string) (*yookassa.Refund, error)
+	ListPayments(ctx context.Context, status string, from, to time.Time, cursor string) (*yookassa.PaymentList, error)
 }
 
 // Receipts is the subset of the Moy Nalog client the service uses.

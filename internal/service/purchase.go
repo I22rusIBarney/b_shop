@@ -83,7 +83,7 @@ func (s *Service) Catalog(ctx context.Context, c *store.Customer) ([]CatalogPlan
 			continue
 		}
 		disc, code := s.discountFor(ctx, s.Store.Pool, c, p.ID)
-		cp := s.catalogPlan(p, disc, dim)
+		cp := s.catalogPlan(*personalPlan(&p, c), disc, dim)
 		cp.PromoCode = code
 		out = append(out, cp)
 	}
@@ -179,6 +179,9 @@ func (s *Service) Buy(ctx context.Context, c *store.Customer, req BuyRequest) (*
 
 	dim := s.set().General.DaysInMonth
 	disc, code := s.discountFor(ctx, s.Store.Pool, c, plan.ID)
+	// Prices below are the customer's own: the personal markup is in the plan copy, then the discount.
+	plan = personalPlan(plan, c)
+	per = plan.Period(per.ID)
 	days := per.Days(dim)
 	base := per.Price
 	// Extra device slots already bought stay on renewal and are paid for the new period too.
@@ -201,7 +204,7 @@ func (s *Service) Buy(ctx context.Context, c *store.Customer, req BuyRequest) (*
 		CustomerID: c.ID, PlanID: &plan.ID, PeriodID: &per.ID, Operation: op,
 		Title: plan.Name, Days: days, Months: per.Months(dim), ExtraDevices: extra,
 		Amount: applyDiscount(base, disc), BaseAmount: base, DiscountPercent: disc, PromoCode: code,
-		Provider: "yookassa", Method: req.Method,
+		MarkupPercent: c.PersonalMarkup, Provider: "yookassa", Method: req.Method,
 		SaveMethod: req.SaveCard && s.set().YooKassa.SaveCard,
 	}
 	if sub != nil {
@@ -285,7 +288,8 @@ func (s *Service) startPayment(ctx context.Context, c *store.Customer, p *store.
 		return nil, userErr("выберите способ оплаты")
 	}
 	if y.CommissionPercent > 0 {
-		p.Amount += (p.Amount*int64(y.CommissionPercent*100) + 9999) / 10000
+		p.CommissionAmount = (p.Amount*int64(y.CommissionPercent*100) + 9999) / 10000
+		p.Amount += p.CommissionAmount
 	}
 	if err := store.InsertPayment(ctx, s.Store.Pool, p); err != nil {
 		return nil, err
@@ -391,25 +395,28 @@ func (s *Service) HandleYooKassaNotification(ctx context.Context, n yookassa.Not
 		if err != nil {
 			return nil
 		}
-		return s.onRefund(ctx, p, r.Amount.ToKopecks())
+		// Several partial refunds may add up to the whole amount: take the total from the payment.
+		total := r.Amount.ToKopecks()
+		if yp, err := gw.GetPayment(ctx, r.PaymentID); err == nil && yp.RefundedAmount != nil {
+			total = yp.RefundedAmount.ToKopecks()
+		}
+		return s.onRefund(ctx, p, r.ID, r.Amount.ToKopecks(), total)
 	}
 	return nil
 }
 
 func (s *Service) syncProviderPayment(ctx context.Context, yp *yookassa.Payment) error {
-	p, err := store.GetPaymentByProviderRef(ctx, s.Store.Pool, "yookassa", yp.ID)
-	if errors.Is(err, store.ErrNotFound) {
-		if id, perr := uuid.Parse(yp.Metadata["payment_id"]); perr == nil {
-			p, err = store.GetPayment(ctx, s.Store.Pool, id)
-		}
-	}
+	p, err := s.localPayment(ctx, yp)
 	if err != nil {
 		return fmt.Errorf("payment for %s: %w", yp.ID, err)
 	}
 	switch yp.Status {
 	case "succeeded":
-		if got := yp.Amount.ToKopecks(); got < p.Amount {
-			s.eventByID(ctx, "payment_error", p.CustomerID, map[string]any{"error": fmt.Sprintf("Сумма платежа %s меньше ожидаемой: %d < %d", yp.ID, got, p.Amount)})
+		if !amountCovers(yp, p) {
+			if p.Status != "succeeded" && p.Status != "refunded" {
+				s.eventByID(ctx, "payment_error", p.CustomerID, map[string]any{"error": fmt.Sprintf("Оплата %s не принята: получено %s %s, ожидалось %s",
+					yp.ID, yp.Amount.Value, yp.Amount.Currency, rub(p.Amount))})
+			}
 			return nil
 		}
 		method := p.Method
@@ -723,14 +730,31 @@ func (s *Service) planName(ctx context.Context, id *int64) string {
 	return p.Name
 }
 
-func (s *Service) onRefund(ctx context.Context, p *store.Payment, amount int64) error {
-	if err := store.MarkRefunded(ctx, s.Store.Pool, p.ID); err != nil {
+// onRefund records a YooKassa refund once per refund id (notifications repeat). Only a refund that
+// brings the total up to the paid amount marks the payment refunded and cancels its receipt; a partial
+// one is logged and reported, and the receipt stays.
+func (s *Service) onRefund(ctx context.Context, p *store.Payment, refundID string, amount, total int64) error {
+	unlock := s.lock("refund:" + refundID)
+	defer unlock()
+	if seen, err := store.RefundSeen(ctx, s.Store.Pool, refundID); err != nil || seen {
 		return err
 	}
-	if err := store.QueueReceiptCancel(ctx, s.Store.Pool, p.ID); err != nil {
+	data := map[string]any{"payment": p.ID, "refund": refundID, "amount": amount, "total": total}
+	if total < p.Amount {
+		_ = store.AddEvent(ctx, s.Store.Pool, p.CustomerID, "refund_partial", data, nil)
+		s.eventByID(ctx, "refund", p.CustomerID, map[string]any{"amount": rub(amount) + " (частичный, всего " + rub(total) + " из " + rub(p.Amount) + ")", "payment": p.ID.String()})
+		return nil
+	}
+	changed, err := store.MarkRefunded(ctx, s.Store.Pool, p.ID)
+	if err != nil {
 		return err
 	}
-	_ = store.AddEvent(ctx, s.Store.Pool, p.CustomerID, "refund", map[string]any{"payment": p.ID, "amount": amount}, nil)
+	if changed {
+		if err := store.QueueReceiptCancel(ctx, s.Store.Pool, p.ID); err != nil {
+			return err
+		}
+	}
+	_ = store.AddEvent(ctx, s.Store.Pool, p.CustomerID, "refund", data, nil)
 	s.eventByID(ctx, "refund", p.CustomerID, map[string]any{"amount": rub(amount), "payment": p.ID.String()})
 	return nil
 }

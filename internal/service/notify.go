@@ -44,6 +44,7 @@ var AdminEvents = []EventInfo{
 	{"autopay_error", "Автопродление: ошибка", "Оплаты", "⚠️ <b>Ошибка автоплатежа</b>\n\n👤 Пользователь: {user}\n📦 Тариф: {plan}\n💰 Сумма: {amount}\n❌ Причина: {error}\n🕐 Время события: {time}", []string{"plan", "amount", "error"}},
 	{"plan_change", "Смена тарифа", "Оплаты", "🔄 <b>Смена тарифа</b>\n\n👤 {user}\n📦 {from} → {to}\n📊 {days}\n💰 {amount}\n🔄 {mode}\n🕐 Время события: {time}", []string{"mode", "from", "to", "days", "amount"}},
 	{"refund", "Возврат", "Оплаты", "↩️ <b>Возврат</b>\n\n👤 Пользователь: {user}\n💰 Сумма: {amount}\n🧾 Платёж: {payment}\n🕐 Время события: {time}", []string{"amount", "payment"}},
+	{"payment_recovered", "Сверка: выдана необработанная оплата", "Оплаты", "🩹 <b>Сверка ЮKassa: оплата обработана</b>\n\n👤 Пользователь: {user}\n📦 Тариф: {plan}\n💰 Сумма: {amount}\n🧾 Платёж: {payment}\n🕐 Время события: {time}", []string{"plan", "amount", "payment"}},
 	{"payment_error", "Ошибки оплаты", "Оплаты", "⚠️ <b>Ошибка оплаты</b>\n\n👤 Пользователь: {user}\n❌ {error}\n🕐 Время события: {time}", []string{"error"}},
 	{"receipt_error", "Ошибки «Мой налог»", "Оплаты", "🧾 <b>Чек не отправлен в «Мой налог»</b>\n\n💳 Платёж: {payment} · {amount}\n❌ {error}\n🔁 Повторю автоматически\n🕐 Время события: {time}", []string{"payment", "amount", "error"}},
 	{"promo", "Использован промокод", "Маркетинг", "🏷 <b>Использован промокод</b>\n\n👤 Пользователь: {user}\n🏷 Код: {code}\n🔓 Тип: {what}\n🕐 Время события: {time}", []string{"code", "what"}},

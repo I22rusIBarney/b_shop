@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { get, type Paged, type Payment } from '../../lib/api'
+import { get, post, type Paged, type Payment, type ReconcileItem, type ReconcileReport } from '../../lib/api'
 import { dateTime, operationName, paymentStatus, rub } from '../../lib/format'
-import { ErrorBox, Sheet, Spinner, useLoad, pressable } from '../../ui/kit'
+import { ErrorBox, Field, Sheet, Spinner, useAction, useLoad, pressable } from '../../ui/kit'
 import { Avatar, Pager } from '../../ui/admin'
 
 const PAGE = 50
@@ -13,6 +13,13 @@ export default function Payments() {
   const nav = useNavigate()
   const [q, setQ] = useState(params.get('q') || '')
   const [open, setOpen] = useState<Payment | null>(null)
+  const [recon, setRecon] = useState(false)
+  const { busy, run } = useAction()
+  const check = (p: Payment) =>
+    run(async () => {
+      setOpen(await post<Payment>(`/api/admin/payments/${p.id}/check`))
+      data.refresh()
+    })
   const offset = Number(params.get('offset')) || 0
   const qs = new URLSearchParams({ q: params.get('q') || '', status: params.get('status') || '', from: params.get('from') || '', to: params.get('to') || '', limit: String(PAGE), offset: String(offset) })
   const data = useLoad(() => get<Paged<Payment>>(`/api/admin/payments?${qs}`), [qs.toString()])
@@ -47,6 +54,9 @@ export default function Payments() {
             {data.data.total} шт. · на странице оплачено {rub(sum)}
           </span>
         )}
+        <button className="btn small secondary" style={{ marginLeft: 'auto' }} onClick={() => setRecon(true)}>
+          Сверка ЮKassa
+        </button>
       </div>
       <div className="filters toolbar">
         <input className="input grow" placeholder="ID ЮKassa, @username, почта, Telegram ID" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -120,9 +130,9 @@ export default function Payments() {
       <Sheet open={!!open} onClose={() => setOpen(null)} title="Платёж">
         {open && (
           <div className="stack">
+            <PayCalc p={open} />
             <div className="list small">
               {[
-                ['Сумма', rub(open.amount) + (open.discount_percent ? ` (скидка ${open.discount_percent}%, без скидки ${rub(open.base_amount)})` : '')],
                 ['Статус', paymentStatus[open.status]],
                 ['Операция', `${operationName[open.operation] || open.operation}: ${open.title}, ${open.days} дн.`],
                 ['Способ', open.method || '—'],
@@ -146,6 +156,11 @@ export default function Payments() {
                 </div>
               )}
             </div>
+            {open.provider_ref && open.provider === 'yookassa' && (open.status === 'pending' || open.status === 'canceled') && (
+              <button className="btn" disabled={busy} onClick={() => check(open)}>
+                Проверить в ЮKassa
+              </button>
+            )}
             <button className="btn secondary" onClick={() => nav(`/admin/customers/${open.customer_id}`)}>
               Открыть клиента
             </button>
@@ -157,6 +172,108 @@ export default function Payments() {
           </div>
         )}
       </Sheet>
+      <Reconcile open={recon} onClose={() => setRecon(false)} onDone={() => data.refresh()} />
     </>
+  )
+}
+
+// PayCalc shows how the amount was built, in the order the server applies it.
+function PayCalc({ p }: { p: Payment }) {
+  const afterDiscount = p.amount - (p.commission_amount || 0)
+  const rows: [string, string][] = [[p.markup_percent ? `Цена с наценкой +${p.markup_percent}%` : 'Цена', rub(p.base_amount)]]
+  if (p.discount_percent) rows.push([`Скидка −${p.discount_percent}%${p.promo_code ? ` (${p.promo_code})` : ''}`, rub(afterDiscount)])
+  else if (afterDiscount !== p.base_amount) rows.push(['С округлением', rub(afterDiscount)])
+  if (p.commission_amount) rows.push(['Комиссия кассы', '+' + rub(p.commission_amount)])
+  return (
+    <div className="pay-calc small">
+      {rows.map(([k, v]) => (
+        <div key={k} style={{ display: 'contents' }}>
+          <span className="muted">{k}</span>
+          <span className="num">{v}</span>
+        </div>
+      ))}
+      <span className="total">Итого</span>
+      <span className="total num">{rub(p.amount)}</span>
+    </div>
+  )
+}
+
+const isoDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+function Reconcile({ open, onClose, onDone }: { open: boolean; onClose: () => void; onDone: () => void }) {
+  const nav = useNavigate()
+  const [from, setFrom] = useState(() => isoDay(new Date(Date.now() - 6 * 86400e3)))
+  const [to, setTo] = useState(() => isoDay(new Date()))
+  const [rep, setRep] = useState<ReconcileReport | null>(null)
+  const [fail, setFail] = useState('')
+  const [busy, setBusy] = useState(false)
+  const start = async () => {
+    setBusy(true)
+    setFail('')
+    setRep(null)
+    try {
+      setRep(await post<ReconcileReport>('/api/admin/payments/reconcile', { from, to }))
+      onDone()
+    } catch (e: any) {
+      setFail(e?.message || 'Сверка не удалась')
+    } finally {
+      setBusy(false)
+    }
+  }
+  const list = (title: string, items: ReconcileItem[], tone?: string) =>
+    items.length > 0 && (
+      <div className="stack" key={title}>
+        <b className={tone}>{title}: {items.length}</b>
+        <div className="recon-list small">
+          {items.map((it) => (
+            <div className="item" key={it.provider_id}>
+              <span>
+                {it.customer_id ? (
+                  <a href={`/admin/customers/${it.customer_id}`} onClick={(e) => (e.preventDefault(), nav(`/admin/customers/${it.customer_id}`))}>
+                    клиент #{it.customer_id}
+                  </a>
+                ) : (
+                  <span className="muted">{it.provider_id}</span>
+                )}
+                <div className="tiny muted">{it.note}</div>
+              </span>
+              <span className="num">{rub(it.amount)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  return (
+    <Sheet open={open} onClose={onClose} title="Сверка ЮKassa">
+      <div className="stack">
+        <p className="muted small" style={{ margin: 0 }}>
+          Ищет в ЮKassa успешные оплаты за период и выдаёт покупки, которые магазин не обработал (потерянное уведомление, оплата после
+          отмены заказа). Уже выданные и возвращённые не трогает — запускать повторно безопасно. Сама сверка идёт каждый час за двое суток.
+        </p>
+        <div className="form-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
+          <Field label="С">
+            <input className="input" type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} />
+          </Field>
+          <Field label="По">
+            <input className="input" type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} />
+          </Field>
+        </div>
+        <button className="btn" disabled={busy || !from || !to} onClick={start}>
+          {busy ? 'Сверяю…' : 'Запустить сверку'}
+        </button>
+        {fail && <div className="err">{fail}</div>}
+        {rep && (
+          <div className="stack">
+            <div className="muted small">
+              Успешных оплат в ЮKassa: <b className="num">{rep.checked}</b>
+              {rep.recovered.length + rep.problems.length + rep.unknown.length === 0 && ' — расхождений нет'}
+            </div>
+            {list('Выдано сейчас', rep.recovered, 'ok-text')}
+            {list('Требуют внимания', rep.problems, 'err')}
+            {list('Нет заказа в магазине', rep.unknown)}
+          </div>
+        )}
+      </div>
+    </Sheet>
   )
 }

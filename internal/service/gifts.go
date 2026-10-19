@@ -85,11 +85,13 @@ func (s *Service) giftPlan(ctx context.Context, c *store.Customer, planID, perio
 func (s *Service) giftPayment(ctx context.Context, c *store.Customer, plan *store.Plan, per *store.Period, op, method string) *store.Payment {
 	dim := s.set().General.DaysInMonth
 	disc, code := s.discountFor(ctx, s.Store.Pool, c, plan.ID)
+	// The payer's own prices: their markup and discount, not the recipient's.
+	per = personalPlan(plan, c).Period(per.ID)
 	return &store.Payment{
 		CustomerID: c.ID, PlanID: &plan.ID, PeriodID: &per.ID, Operation: op,
 		Title: plan.Name, Days: per.Days(dim), Months: per.Months(dim),
 		Amount: applyDiscount(per.Price, disc), BaseAmount: per.Price, DiscountPercent: disc, PromoCode: code,
-		Provider: "yookassa", Method: method,
+		MarkupPercent: c.PersonalMarkup, Provider: "yookassa", Method: method,
 	}
 }
 

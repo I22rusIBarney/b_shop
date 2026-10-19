@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"bshop/internal/settings"
 	"bshop/internal/store"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -42,6 +44,28 @@ func (s *Server) adminRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/admin/customers/{id}", s.admin(s.adminCustomer))
 	mux.HandleFunc("PATCH /api/admin/customers/{id}", s.admin(s.adminCustomerPatch))
 	mux.HandleFunc("GET /api/admin/payments", s.admin(s.adminPayments))
+	mux.HandleFunc("POST /api/admin/payments/reconcile", s.admin(s.handle(func(r *http.Request) (any, error) {
+		var in struct {
+			From string `json:"from"`
+			To   string `json:"to"`
+		}
+		if err := decode(r, &in); err != nil {
+			return nil, err
+		}
+		from, err1 := time.ParseInLocation("2006-01-02", in.From, s.svc.Settings.Get().General.Location())
+		to, err2 := time.ParseInLocation("2006-01-02", in.To, s.svc.Settings.Get().General.Location())
+		if err1 != nil || err2 != nil {
+			return nil, &service.UserError{Msg: "укажите даты периода"}
+		}
+		return s.svc.ReconcileYooKassa(r.Context(), from, to.AddDate(0, 0, 1))
+	})))
+	mux.HandleFunc("POST /api/admin/payments/{id}/check", s.admin(s.handle(func(r *http.Request) (any, error) {
+		id, err := uuid.Parse(r.PathValue("id"))
+		if err != nil {
+			return nil, &service.UserError{Msg: "платёж не найден"}
+		}
+		return s.svc.RecheckPayment(r.Context(), id)
+	})))
 	mux.HandleFunc("POST /api/admin/customers/{id}/subscriptions", s.admin(s.adminGrant))
 	mux.HandleFunc("POST /api/admin/subscriptions/{id}/days", s.admin(s.adminDays))
 	mux.HandleFunc("POST /api/admin/subscriptions/{id}/reset-traffic", s.admin(s.adminResetTraffic))
@@ -363,12 +387,38 @@ func (s *Server) adminCustomerPatch(w http.ResponseWriter, r *http.Request) {
 		bad(w, "скидка должна быть от 0 до 100%")
 		return
 	}
+	if p.PersonalMarkup != nil && (*p.PersonalMarkup < 0 || *p.PersonalMarkup > service.MaxPersonalMarkup) {
+		bad(w, fmt.Sprintf("наценка должна быть от 0 до %d%%", service.MaxPersonalMarkup))
+		return
+	}
+	before, err := store.GetCustomer(r.Context(), s.svc.Store.Pool, id)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	disc, markup := before.PersonalDiscount, before.PersonalMarkup
+	if p.PersonalDiscount != nil {
+		disc = *p.PersonalDiscount
+	}
+	if p.PersonalMarkup != nil {
+		markup = *p.PersonalMarkup
+	}
+	if disc > 0 && markup > 0 {
+		bad(w, "у клиента может быть либо персональная скидка, либо наценка — обнулите одно из полей")
+		return
+	}
 	if err := store.PatchCustomer(r.Context(), s.svc.Store.Pool, id, p); err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	admin := customer(r).ID
 	_ = store.AddEvent(r.Context(), s.svc.Store.Pool, id, "admin_update", p, &admin)
+	// Pricing rules get their own history entry with the old and new values.
+	if disc != before.PersonalDiscount || markup != before.PersonalMarkup {
+		_ = store.AddEvent(r.Context(), s.svc.Store.Pool, id, "pricing_changed", map[string]any{
+			"discount_from": before.PersonalDiscount, "discount_to": disc,
+			"markup_from": before.PersonalMarkup, "markup_to": markup}, &admin)
+	}
 	s.adminCustomer(w, r)
 }
 

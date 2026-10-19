@@ -33,6 +33,10 @@ func (s *Service) autopayQuote(ctx context.Context, c *store.Customer, sub *stor
 		}
 	}
 	dim := s.set().General.DaysInMonth
+	plan = personalPlan(plan, c)
+	if per != nil {
+		per = plan.Period(per.ID)
+	}
 	if per == nil {
 		per = &plan.Periods[0]
 		for i := range plan.Periods {
@@ -215,7 +219,7 @@ func (s *Service) chargeAutopay(ctx context.Context, sub *store.Subscription) er
 	dim := s.set().General.DaysInMonth
 	p := &store.Payment{CustomerID: c.ID, SubscriptionID: &sub.ID, PlanID: &plan.ID, PeriodID: &per.ID, Operation: "autopay",
 		Title: plan.Name, Days: per.Days(dim), Months: per.Months(dim), Amount: amount, BaseAmount: base,
-		DiscountPercent: c.PersonalDiscount, Provider: "yookassa", Method: method.Provider, Autopay: true}
+		DiscountPercent: c.PersonalDiscount, MarkupPercent: c.PersonalMarkup, Provider: "yookassa", Method: method.Provider, Autopay: true}
 	if amount == 0 {
 		return s.applyFree(ctx, p)
 	}

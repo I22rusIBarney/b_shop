@@ -46,6 +46,10 @@ type Payment struct {
 	RecipientID *int64 `db:"recipient_id" json:"recipient_id,omitempty"`
 	// TrafficGB is the extra traffic bought (operation traffic).
 	TrafficGB int `db:"traffic_gb" json:"traffic_gb"`
+	// MarkupPercent is the customer's personal markup already included in BaseAmount.
+	MarkupPercent int `db:"markup_percent" json:"markup_percent"`
+	// CommissionAmount is the cashier commission added on top (included in Amount).
+	CommissionAmount int64 `db:"commission_amount" json:"commission_amount"`
 }
 
 func SetPaymentMethodID(ctx context.Context, db DB, id uuid.UUID, methodID int64) error {
@@ -66,10 +70,12 @@ func LastPaidPeriod(ctx context.Context, db DB, subID int64) (*int64, error) {
 
 func InsertPayment(ctx context.Context, db DB, p *Payment) error {
 	return db.QueryRow(ctx, `INSERT INTO payments (customer_id, subscription_id, plan_id, period_id, operation, title, days,
-		months, extra_devices, amount, base_amount, discount_percent, promo_code, provider, method, save_method, from_plan_id, autopay, recipient_id, traffic_gb)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) RETURNING id, status, created_at`,
+		months, extra_devices, amount, base_amount, discount_percent, promo_code, provider, method, save_method, from_plan_id, autopay, recipient_id, traffic_gb,
+		markup_percent, commission_amount)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22) RETURNING id, status, created_at`,
 		p.CustomerID, p.SubscriptionID, p.PlanID, p.PeriodID, p.Operation, p.Title, p.Days, p.Months, p.ExtraDevices,
-		p.Amount, p.BaseAmount, p.DiscountPercent, p.PromoCode, p.Provider, p.Method, p.SaveMethod, p.FromPlanID, p.Autopay, p.RecipientID, p.TrafficGB).
+		p.Amount, p.BaseAmount, p.DiscountPercent, p.PromoCode, p.Provider, p.Method, p.SaveMethod, p.FromPlanID, p.Autopay, p.RecipientID, p.TrafficGB,
+		p.MarkupPercent, p.CommissionAmount).
 		Scan(&p.ID, &p.Status, &p.CreatedAt)
 }
 
@@ -108,9 +114,18 @@ func MarkCanceled(ctx context.Context, db DB, id uuid.UUID, reason string) error
 	return err
 }
 
-func MarkRefunded(ctx context.Context, db DB, id uuid.UUID) error {
-	_, err := db.Exec(ctx, `UPDATE payments SET status='refunded' WHERE id=$1 AND status='succeeded'`, id)
-	return err
+// MarkRefunded reports whether the payment was succeeded and is now refunded.
+func MarkRefunded(ctx context.Context, db DB, id uuid.UUID) (bool, error) {
+	tag, err := db.Exec(ctx, `UPDATE payments SET status='refunded' WHERE id=$1 AND status='succeeded'`, id)
+	return tag.RowsAffected() == 1, err
+}
+
+// RefundSeen: this YooKassa refund is already recorded in the customer timeline.
+func RefundSeen(ctx context.Context, db DB, refundID string) (bool, error) {
+	var ok bool
+	err := db.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM customer_events
+		WHERE kind IN ('refund', 'refund_partial') AND data->>'refund' = $1)`, refundID).Scan(&ok)
+	return ok, err
 }
 
 // ExpireStalePayments cancels pending payments older than the given age.

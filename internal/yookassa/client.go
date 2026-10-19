@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -90,6 +91,7 @@ type Payment struct {
 	Confirmation        *Confirmation     `json:"confirmation"`
 	Metadata            map[string]string `json:"metadata"`
 	PaymentMethod       *PaymentMethod    `json:"payment_method"`
+	RefundedAmount      *Amount           `json:"refunded_amount"`
 	CreatedAt           time.Time         `json:"created_at"`
 	CapturedAt          *time.Time        `json:"captured_at"`
 	CancellationDetails *struct {
@@ -173,6 +175,31 @@ func (c *Client) GetPayment(ctx context.Context, id string) (*Payment, error) {
 		return nil, err
 	}
 	return &p, nil
+}
+
+// PaymentList is one page of GET /payments.
+type PaymentList struct {
+	Items      []Payment `json:"items"`
+	NextCursor string    `json:"next_cursor"`
+}
+
+// ListPayments returns one page of payments with the given status created in [from, to); cursor "" = first page.
+func (c *Client) ListPayments(ctx context.Context, status string, from, to time.Time, cursor string) (*PaymentList, error) {
+	q := url.Values{}
+	q.Set("limit", "100")
+	q.Set("created_at.gte", from.UTC().Format(time.RFC3339))
+	q.Set("created_at.lt", to.UTC().Format(time.RFC3339))
+	if status != "" {
+		q.Set("status", status)
+	}
+	if cursor != "" {
+		q.Set("cursor", cursor)
+	}
+	var l PaymentList
+	if err := c.do(ctx, http.MethodGet, "/payments?"+q.Encode(), "", nil, &l); err != nil {
+		return nil, err
+	}
+	return &l, nil
 }
 
 func (c *Client) GetRefund(ctx context.Context, id string) (*Refund, error) {

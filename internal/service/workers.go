@@ -155,6 +155,7 @@ func (s *Service) RunWorkers(ctx context.Context) {
 	}
 	every(time.Minute, "payments", s.ReconcilePayments)
 	every(30*time.Second, "receipts", s.ProcessReceipts)
+	every(time.Hour, "reconcile", s.AutoReconcile)
 	every(10*time.Minute, "autopay", s.RunAutopay)
 	every(time.Hour, "purge", func(ctx context.Context) {
 		_ = store.PurgeExpired(ctx, s.Store.Pool)

@@ -1802,3 +1802,17 @@ button.group-row:active, .group-row.pick:active { background: var(--fill); }
 .geomap .maplibregl-ctrl-attrib a { color: var(--label-2, var(--muted)); }
 .geomap .maplibregl-ctrl-attrib-button { filter: invert(1) opacity(.6); background-color: transparent; }
 .geomap-sel .link-btn { margin-left: 4px; }
+
+/* personal price rule (customer card) and payment breakdown */
+.price-rule { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.price-rule > :first-child { flex: 1 1 220px; min-width: 0; }
+.pct-field { display: inline-flex; align-items: center; gap: 4px; width: 104px; flex: none; color: var(--muted); cursor: text; }
+.pct-field input { width: 100%; min-width: 0; border: 0; padding: 0; background: none; color: var(--text); font: inherit; font-variant-numeric: tabular-nums; outline: none; text-align: right; }
+.pct-field:focus-within { border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+.price-sample { margin-top: 8px; }
+.price-sample s { text-decoration-thickness: 1px; }
+.pay-calc { display: grid; grid-template-columns: 1fr auto; gap: 6px 0; padding: 12px 14px; border-radius: var(--r-ctl); background: var(--fill); }
+.pay-calc .num { text-align: right; padding-left: 12px; }
+.pay-calc .total { padding-top: 6px; border-top: 1px solid var(--line); font-weight: 600; }
+.recon-list { display: grid; gap: 6px; }
+.recon-list .item { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }

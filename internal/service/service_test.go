@@ -206,7 +206,7 @@ func (g *fakeGateway) CreatePayment(_ context.Context, _ string, in yookassa.Cre
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.n++
-	p := &yookassa.Payment{ID: fmt.Sprintf("yk-%d", g.n), Status: "pending", Amount: in.Amount, Metadata: in.Metadata,
+	p := &yookassa.Payment{ID: fmt.Sprintf("yk-%d", g.n), Status: "pending", Amount: in.Amount, Metadata: in.Metadata, CreatedAt: time.Now(),
 		Confirmation: &yookassa.Confirmation{Type: "redirect", ConfirmationURL: fmt.Sprintf("https://yoomoney.example/%d", g.n)}}
 	if in.PaymentMethodID != "" {
 		p.Confirmation = nil
@@ -256,6 +256,18 @@ func (g *fakeGateway) GetRefund(_ context.Context, id string) (*yookassa.Refund,
 		return nil, errors.New("not found")
 	}
 	return r, nil
+}
+
+func (g *fakeGateway) ListPayments(_ context.Context, status string, from, to time.Time, _ string) (*yookassa.PaymentList, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	l := &yookassa.PaymentList{}
+	for _, p := range g.payments {
+		if (status == "" || p.Status == status) && !p.CreatedAt.Before(from) && p.CreatedAt.Before(to) {
+			l.Items = append(l.Items, *p)
+		}
+	}
+	return l, nil
 }
 
 func (g *fakeGateway) succeed(id, method string) {

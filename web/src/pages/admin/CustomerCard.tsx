@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { del, get, patch, post, type Customer, type Device, type Identity, type Payment, type Plan, type PlanChange, type Redemption, type ReferralBonus, type Subscription } from '../../lib/api'
 import { bytes, date, dateTime, operationName, paymentStatus, providerName, relative, rub } from '../../lib/format'
-import { Avatar, Empty, InfoRow, Panel } from '../../ui/admin'
+import { Avatar, Empty, InfoRow, Panel, Switcher } from '../../ui/admin'
 import { Back, Calendar, Card, Clock, Coin, Copy, Gift, Key, Mail, Note, Plus, Send, Swap, Tag, Trash, Trend, Trial, Users, User } from '../../ui/icons'
 import { ErrorBox, Field, Sheet, Spinner, Toggle, copy, useAction, useLoad, useToast } from '../../ui/kit'
 
@@ -42,6 +42,8 @@ const eventName: Record<string, string> = {
   trial: 'Пробный период',
   refund: 'Возврат',
   admin_update: 'Изменён администратором',
+  pricing_changed: 'Персональная цена',
+  refund_partial: 'Частичный возврат',
   admin_days: 'Изменён срок',
   admin_grant: 'Выдана подписка',
   device_deleted: 'Удалено устройство',
@@ -63,6 +65,14 @@ const eventName: Record<string, string> = {
   panel_sync: 'Подписка из панели',
 }
 
+function priceRule(discount: number, markup: number) {
+  if (markup > 0) return `наценка +${markup}%`
+  if (discount > 0) return `скидка −${discount}%`
+  return 'обычная цена'
+}
+
+type PriceMode = 'none' | 'discount' | 'markup'
+
 function eventText(e: Event) {
   const d = e.data || {}
   switch (e.kind) {
@@ -83,6 +93,11 @@ function eventText(e: Event) {
       return `${d.from} → ${d.to}, ${modeLabel[d.mode] || d.mode}, ${d.days_before} → ${d.days_after} дн.`
     case 'admin_plan_change':
       return d.to
+    case 'pricing_changed':
+      return `${priceRule(d.discount_from, d.markup_from)} → ${priceRule(d.discount_to, d.markup_to)}`
+    case 'refund':
+    case 'refund_partial':
+      return d.total && d.total !== d.amount ? `${rub(d.amount)}, всего ${rub(d.total)}` : rub(d.amount)
     case 'autopay_failed':
       return d.reason
     case 'device_added':
@@ -99,6 +114,85 @@ function eventText(e: Event) {
   }
 }
 
+// samplePrice picks the cheapest active plan period to show what the rule does to a real price.
+function samplePrice(plans: Plan[] | null | undefined) {
+  let best: { plan: string; price: number } | null = null
+  for (const pl of plans || []) {
+    if (!pl.is_active || pl.is_trial) continue
+    for (const per of pl.periods || []) {
+      if (per.price > 0 && (!best || per.price < best.price)) best = { plan: pl.name, price: per.price }
+    }
+  }
+  return best
+}
+
+// Same rounding as the server: markup rounds up to the kopeck, discount rounds down.
+const withMarkup = (k: number, pct: number) => (pct > 0 ? Math.floor((k * (100 + pct) + 99) / 100) : k)
+const withDiscount = (k: number, pct: number) => (pct >= 100 ? 0 : pct > 0 ? Math.floor((k * (100 - pct)) / 100) : k)
+
+function PersonalPrice({
+  mode,
+  onMode,
+  percent,
+  onPercent,
+  sample,
+}: {
+  mode: PriceMode
+  onMode: (m: PriceMode) => void
+  percent: number
+  onPercent: (v: number) => void
+  sample: { plan: string; price: number } | null
+}) {
+  const max = mode === 'markup' ? 300 : 100
+  const after = sample ? (mode === 'markup' ? withMarkup(sample.price, percent) : mode === 'discount' ? withDiscount(sample.price, percent) : sample.price) : 0
+  return (
+    <Field
+      label="Персональная цена"
+      hint={
+        mode === 'markup'
+          ? 'Наценка ложится на тарифы, продление, автопродление, смену тарифа, доп. устройства и подарки от этого клиента. Промокод даёт скидку уже от цены с наценкой. Трафик — по обычной цене. Уже созданные платежи не меняются.'
+          : mode === 'discount'
+            ? 'Скидка на те же покупки. Если у клиента промокод с большей скидкой — действует промокод, они не складываются.'
+            : 'Клиент платит по прайсу тарифов.'
+      }
+    >
+      <div className="price-rule">
+        <Switcher
+          label="Персональная цена"
+          value={mode}
+          onChange={(v) => onMode(v as PriceMode)}
+          options={[
+            { value: 'none', label: 'Обычная' },
+            { value: 'discount', label: 'Скидка' },
+            { value: 'markup', label: 'Наценка' },
+          ]}
+        />
+        {mode !== 'none' && (
+          <label className="input pct-field">
+            <span>{mode === 'markup' ? '+' : '−'}</span>
+            <input
+              type="number"
+              inputMode="numeric"
+              min={0}
+              max={max}
+              value={percent}
+              aria-label={mode === 'markup' ? 'Наценка, %' : 'Скидка, %'}
+              onChange={(e) => onPercent(Math.max(0, Math.min(max, Math.round(Number(e.target.value) || 0))))}
+            />
+            <span>%</span>
+          </label>
+        )}
+      </div>
+      {sample && mode !== 'none' && percent > 0 && (
+        <div className="price-sample small">
+          <span className="muted">{sample.plan}:</span> <s className="muted num">{rub(sample.price)}</s> → <b className="num">{rub(after)}</b>
+          <span className="muted"> · без комиссии кассы</span>
+        </div>
+      )}
+    </Field>
+  )
+}
+
 export default function CustomerCard() {
   const { id } = useParams()
   const nav = useNavigate()
@@ -106,7 +200,8 @@ export default function CustomerCard() {
   const data = useLoad(() => get<Detail>(`/api/admin/customers/${id}`), [id])
   const plans = useLoad(() => get<Plan[]>('/api/admin/plans'))
   const { busy, run } = useAction()
-  const [notes, setNotes] = useState({ tag: '', notes: '', personal_discount: 0 })
+  const [notes, setNotes] = useState({ tag: '', notes: '', personal_discount: 0, personal_markup: 0 })
+  const [priceMode, setPriceMode] = useState<PriceMode>('none')
   const [grantOpen, setGrantOpen] = useState(false)
   const [devicesFor, setDevicesFor] = useState<Subscription | null>(null)
   const [changeFor, setChangeFor] = useState<Subscription | null>(null)
@@ -116,7 +211,8 @@ export default function CustomerCard() {
   useEffect(() => {
     if (data.data) {
       const c = data.data.customer
-      setNotes({ tag: c.tag, notes: c.notes, personal_discount: c.personal_discount })
+      setNotes({ tag: c.tag, notes: c.notes, personal_discount: c.personal_discount, personal_markup: c.personal_markup })
+      setPriceMode(c.personal_markup > 0 ? 'markup' : c.personal_discount > 0 ? 'discount' : 'none')
     }
   }, [data.data])
 
@@ -135,7 +231,13 @@ export default function CustomerCard() {
 
   const saveNotes = () =>
     run(async () => {
-      const d = await patch<Detail>(`/api/admin/customers/${c.id}`, notes)
+      // Only one rule at a time: the other percent is sent as 0.
+      const body = {
+        ...notes,
+        personal_discount: priceMode === 'discount' ? notes.personal_discount : 0,
+        personal_markup: priceMode === 'markup' ? notes.personal_markup : 0,
+      }
+      const d = await patch<Detail>(`/api/admin/customers/${c.id}`, body)
       data.setData(d)
     }, 'Сохранено')
 
@@ -224,14 +326,16 @@ export default function CustomerCard() {
         </Panel>
 
         <Panel icon={Note} tone="violet" title="Заметки администратора">
-          <div className="form-grid" style={{ gridTemplateColumns: 'minmax(0, 1fr) 140px' }}>
-            <Field label="Тег">
-              <input className="input" value={notes.tag} placeholder="VIP, проблемный, тест…" onChange={(e) => setNotes({ ...notes, tag: e.target.value })} />
-            </Field>
-            <Field label="Скидка, %">
-              <input className="input num" type="number" min={0} max={100} value={notes.personal_discount} onChange={(e) => setNotes({ ...notes, personal_discount: Number(e.target.value) })} />
-            </Field>
-          </div>
+          <Field label="Тег">
+            <input className="input" value={notes.tag} placeholder="VIP, проблемный, тест…" onChange={(e) => setNotes({ ...notes, tag: e.target.value })} />
+          </Field>
+          <PersonalPrice
+            mode={priceMode}
+            onMode={setPriceMode}
+            percent={priceMode === 'markup' ? notes.personal_markup : notes.personal_discount}
+            onPercent={(v) => setNotes(priceMode === 'markup' ? { ...notes, personal_markup: v } : { ...notes, personal_discount: v })}
+            sample={samplePrice(plans.data)}
+          />
           <Field label="Заметки">
             <textarea className="input" value={notes.notes} placeholder="Любые заметки о клиенте…" onChange={(e) => setNotes({ ...notes, notes: e.target.value })} />
           </Field>

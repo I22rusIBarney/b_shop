@@ -47,9 +47,9 @@ func TestLimiterSurvivesKeyFlood(t *testing.T) {
 
 // The admin's tag and notes about a customer are not part of what the customer sees (/api/me, login).
 func TestCustomerPublicHidesAdminFields(t *testing.T) {
-	c := &store.Customer{ID: 7, Tag: "проблемный", Notes: "внутренняя заметка", PersonalDiscount: 10}
+	c := &store.Customer{ID: 7, Tag: "проблемный", Notes: "внутренняя заметка", PersonalDiscount: 10, PersonalMarkup: 25}
 	p := c.Public()
-	if p.Tag != "" || p.Notes != "" || p.PersonalDiscount != 10 || p.ID != 7 {
+	if p.Tag != "" || p.Notes != "" || p.PersonalMarkup != 0 || p.PersonalDiscount != 10 || p.ID != 7 {
 		t.Fatalf("public view %+v", p)
 	}
 	if c.Tag == "" || c.Notes == "" {

@@ -141,6 +141,8 @@ export interface Customer {
   is_blocked: boolean
   bot_blocked: boolean
   personal_discount: number
+  /** admin only: personal markup, %; the cabinet always gets 0 */
+  personal_markup: number
   tag: string
   notes: string
   ref_code: string | null
@@ -303,6 +305,8 @@ export interface Payment {
   amount: number
   base_amount: number
   discount_percent: number
+  markup_percent: number
+  commission_amount: number
   promo_code: string
   provider: string
   provider_ref: string | null
@@ -316,6 +320,23 @@ export interface Payment {
   receipt_error: string
   customer_name?: string | null
   plan_name?: string | null
+}
+
+export interface ReconcileItem {
+  provider_id: string
+  payment_id?: string
+  customer_id?: number
+  amount: number
+  note: string
+}
+
+export interface ReconcileReport {
+  from: string
+  to: string
+  checked: number
+  recovered: ReconcileItem[]
+  problems: ReconcileItem[]
+  unknown: ReconcileItem[]
 }
 
 export interface BuyResult {
