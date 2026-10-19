@@ -77,6 +77,16 @@ type Customer struct {
 }
 
 // DisplayName is the best human-readable name for notifications and the admin UI.
+// Public is the customer as the customer may see it: the admin's tag and notes stay in the admin panel.
+func (c *Customer) Public() *Customer {
+	if c == nil {
+		return nil
+	}
+	p := *c
+	p.Tag, p.Notes = "", ""
+	return &p
+}
+
 func (c *Customer) DisplayName() string {
 	var parts []string
 	if c.FirstName != nil && *c.FirstName != "" {

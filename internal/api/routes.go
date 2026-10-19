@@ -151,6 +151,7 @@ func (s *Server) loginWebApp(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	sess.Customer = sess.Customer.Public()
 	writeJSON(w, http.StatusOK, sess)
 }
 
@@ -177,6 +178,7 @@ func (s *Server) loginWidget(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	sess.Customer = sess.Customer.Public()
 	writeJSON(w, http.StatusOK, sess)
 }
 
@@ -210,6 +212,7 @@ func (s *Server) emailVerify(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	sess.Customer = sess.Customer.Public()
 	writeJSON(w, http.StatusOK, sess)
 }
 
@@ -293,7 +296,7 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 	st := s.svc.Settings.Get()
 	n, _ := store.CountSubscriptions(r.Context(), s.svc.Store.Pool, c.ID, nil)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"customer":         c,
+		"customer":         c.Public(),
 		"identities":       ids,
 		"trial_available":  st.Trial.Enabled && !c.TrialUsed && n == 0,
 		"ref_link":         refLink(c),

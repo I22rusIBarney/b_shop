@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bshop/internal/store"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -41,5 +42,17 @@ func TestLimiterSurvivesKeyFlood(t *testing.T) {
 	}
 	if l.allow("otp|victim", 5, time.Minute) {
 		t.Fatal("limit was reset by a flood of other keys")
+	}
+}
+
+// The admin's tag and notes about a customer are not part of what the customer sees (/api/me, login).
+func TestCustomerPublicHidesAdminFields(t *testing.T) {
+	c := &store.Customer{ID: 7, Tag: "проблемный", Notes: "внутренняя заметка", PersonalDiscount: 10}
+	p := c.Public()
+	if p.Tag != "" || p.Notes != "" || p.PersonalDiscount != 10 || p.ID != 7 {
+		t.Fatalf("public view %+v", p)
+	}
+	if c.Tag == "" || c.Notes == "" {
+		t.Fatal("Public must not modify the original")
 	}
 }
