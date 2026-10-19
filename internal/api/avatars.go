@@ -45,7 +45,7 @@ func (s *Server) avatarAdmin(r *http.Request) bool {
 		return false
 	}
 	admin, err := store.GetCustomer(r.Context(), s.svc.Store.Pool, id)
-	return err == nil && admin.IsAdmin && !admin.IsBlocked
+	return err == nil && admin.IsAdmin && !s.svc.Banned(admin)
 }
 
 func (s *Server) avatarRoutes(mux *http.ServeMux) {
