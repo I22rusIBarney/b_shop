@@ -139,6 +139,18 @@ export function ready() {
   }
 }
 
+/** Use Telegram's native back control on a detail page; the app menu remains available in browsers. */
+export function showBackButton(onBack: () => void): () => void {
+  const back = inTelegramClient() ? webApp()?.BackButton : undefined
+  if (!back?.onClick || !back?.offClick || !back?.show || !back?.hide) return () => {}
+  back.onClick(onBack)
+  back.show()
+  return () => {
+    back.offClick(onBack)
+    back.hide()
+  }
+}
+
 /** Opens an external link: in Telegram via the client, otherwise in the same tab. */
 export function openLink(url: string) {
   const w = webApp()

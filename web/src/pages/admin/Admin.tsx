@@ -23,6 +23,7 @@ import Webhooks from './Webhooks'
 import Banners from './Banners'
 import ImportRWP from './ImportRWP'
 import { useBadges } from '../../lib/badges'
+import { Backdrop } from '../../ui/shell'
 
 type Item = { to: string; label: string; icon: ComponentType<{ className?: string }>; badge?: 'tickets' }
 type Group = { title: string; items: Item[]; stats?: boolean }
@@ -179,6 +180,7 @@ export default function Admin() {
 
   return (
     <div className={collapsed ? 'admin collapsed' : 'admin'}>
+      <Backdrop b={config.branding} dim />
       <header className="admin-top">
         <button className="icon-btn" onClick={() => setOpen(true)} aria-label="Меню">
           <Menu />

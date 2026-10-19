@@ -61,9 +61,9 @@ export default function GeoMap({ countries, points, compact }: { countries: Reco
   useEffect(() => {
     const el = box.current
     if (!el) return
-    const ro = new ResizeObserver(() => setWidth(Math.max(240, Math.round(el.clientWidth))))
+    const ro = new ResizeObserver(() => setWidth(Math.max(1, Math.round(el.clientWidth))))
     ro.observe(el)
-    setWidth(Math.max(240, Math.round(el.clientWidth)))
+    setWidth(Math.max(1, Math.round(el.clientWidth)))
     return () => ro.disconnect()
   }, [])
 

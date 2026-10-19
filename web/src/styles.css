@@ -88,8 +88,8 @@ p { margin: 0; }
 .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---------- background ---------- */
-/* The picture scrolls with the page: a tall card goes below the logo instead of over it. */
-.backdrop { position: absolute; top: 0; left: 0; right: 0; height: var(--tg-viewport-stable-height, 100svh); z-index: -1; overflow: hidden; background: var(--bg); }
+/* A separate fixed layer stays put in mobile browsers and Telegram WebViews without background-attachment. */
+.backdrop { position: fixed; top: 0; left: 0; right: 0; height: var(--tg-viewport-stable-height, 100svh); z-index: -1; overflow: hidden; background: var(--bg); }
 /* Inner pages put text right over the picture: darken it so it reads as a background. */
 .backdrop.dim::after { background: linear-gradient(180deg, color-mix(in srgb, var(--bg) 72%, transparent) 0%, color-mix(in srgb, var(--bg) 80%, transparent) 50%, var(--bg) 100%); }
 .backdrop img, .backdrop video { width: 100%; height: 100%; object-fit: var(--bg-fit, cover); }
@@ -303,7 +303,7 @@ textarea.input { min-height: 96px; resize: vertical; line-height: 1.45; }
 @media (prefers-reduced-motion: reduce) { .fx { display: none; } * { animation-duration: 0s !important; transition: none !important; } }
 
 /* ---------- admin ---------- */
-.admin { display: grid; grid-template-columns: 270px 1fr; min-height: 100dvh; background: var(--bg); }
+.admin { display: grid; grid-template-columns: 270px 1fr; min-height: 100dvh; isolation: isolate; }
 .admin-scrim { display: none; }
 .admin-main { min-width: 0; padding: 22px 28px 60px; }
 .admin-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
@@ -655,6 +655,7 @@ html { touch-action: pan-x pan-y; } /* no pinch-zoom: the layout fits the screen
   .t.stack-sm td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 2px; font-size: 0.72rem; color: var(--muted); font-weight: 500; }
   .t.stack-sm .cell-title { font-weight: 600; }
   .t.stack-sm .ellipsis { white-space: normal; }
+  .t.stack-sm.ref-events td[data-label="Тип"] { grid-column: span 2; }
 }
 
 
@@ -736,13 +737,13 @@ html { touch-action: pan-x pan-y; } /* no pinch-zoom: the layout fits the screen
 .preview-tabbar { height: 52px; flex: none; }
 
 /* ---------- geography: globe / map ---------- */
-.geomap { position: relative; margin: 4px 0 6px; }
+.geomap { position: relative; width: 100%; min-width: 0; max-width: 100%; margin: 4px 0 6px; }
 .geomap-bar { display: flex; justify-content: flex-end; margin-bottom: 8px; }
 .seg { display: inline-flex; padding: 3px; border-radius: 12px; border: 1px solid var(--line-strong); background: var(--surface); }
 .seg button { border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 0.9rem; font-weight: 600; padding: 6px 14px; border-radius: 9px; cursor: pointer; }
 .seg button.on { background: color-mix(in srgb, var(--accent) 38%, var(--surface-solid)); color: var(--text); }
-.geomap-stage { position: relative; border-radius: 16px; overflow: hidden; background: color-mix(in srgb, var(--bg) 70%, var(--surface-solid)); }
-.geomap-stage svg { display: block; user-select: none; -webkit-user-select: none; }
+.geomap-stage { position: relative; width: 100%; min-width: 0; max-width: 100%; border-radius: 16px; overflow: hidden; background: color-mix(in srgb, var(--bg) 70%, var(--surface-solid)); }
+.geomap-stage svg { display: block; max-width: 100%; user-select: none; -webkit-user-select: none; }
 .geo-sea { fill: color-mix(in srgb, var(--accent) 7%, var(--bg)); }
 .geo-grat { fill: none; stroke: color-mix(in srgb, var(--text) 7%, transparent); stroke-width: .5; }
 .geo-land { stroke: color-mix(in srgb, var(--text) 24%, transparent); stroke-width: .5; }
@@ -1188,14 +1189,23 @@ button.am-item { background: none; border: 1px solid transparent; color: var(--t
 /* ---- customer card ---- */
 .cc-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .cc-head .id-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 4px; font-size: .82rem; color: var(--muted); }
-.cc-head > div:nth-child(3) { flex: 1 1 200px; min-width: 0; }
+.cc-head .cc-identity { flex: 1 1 0; min-width: 0; }
 .cc-head .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+/* The menu toggle lives at the opposite edge, leaving the avatar at the page margin. */
+.admin-main:has(> .cc-page) .admin-bar { justify-content: flex-end; }
+.admin-main:has(> .cc-page) .admin-bar .grow { flex: none; }
+.admin-bar + .cc-page > .cc-head { padding: 0 88px 0 0; }
+@media (max-width: 899px) {
+  .admin-main:has(> .cc-page) .admin-bar { left: auto; right: 12px; }
+  .admin-bar + .cc-page > .cc-head { padding-right: 48px; }
+}
 @media (max-width: 720px) { .cc-head .chips { margin-left: 0; flex-basis: 100%; } .cc-head .avatar { width: 44px !important; height: 44px !important; } }
 .presence { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 999px; font-size: .76rem; font-weight: 600; color: var(--muted); border: 1px solid var(--hair); }
 .presence::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
 .presence.on { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 35%, transparent); }
 .presence.on::before { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent); }
 .cc-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.cc-grid > .wide { min-width: 0; }
 @media (max-width: 900px) { .cc-grid { grid-template-columns: minmax(0, 1fr); } }
 
 .sub-item { display: grid; gap: 14px; padding: 14px; border-radius: 14px; border: 1px solid var(--hair); background: color-mix(in srgb, var(--bg) 35%, transparent); }

@@ -5,7 +5,8 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { del, get, patch, post, type Customer, type Device, type Identity, type Payment, type Plan, type PlanChange, type Redemption, type ReferralBonus, type Subscription } from '../../lib/api'
 import { bytes, date, dateTime, operationName, paymentStatus, providerName, relative, rub } from '../../lib/format'
 import { Avatar, Empty, InfoRow, Panel, Switcher } from '../../ui/admin'
-import { Back, Calendar, Card, Clock, Coin, Copy, Gift, Key, Mail, Note, Plus, Send, Swap, Tag, Trash, Trend, Trial, Users, User } from '../../ui/icons'
+import { Calendar, Card, Clock, Coin, Copy, Gift, Key, Mail, Note, Plus, Send, Swap, Tag, Trash, Trend, Trial, Users, User } from '../../ui/icons'
+import { showBackButton } from '../../lib/tg'
 import { ErrorBox, Field, Sheet, Spinner, Toggle, copy, useAction, useLoad, useToast } from '../../ui/kit'
 
 interface Event {
@@ -196,6 +197,7 @@ function PersonalPrice({
 export default function CustomerCard() {
   const { id } = useParams()
   const nav = useNavigate()
+  useEffect(() => showBackButton(() => nav('/admin/customers')), [nav])
   const toast = useToast()
   const data = useLoad(() => get<Detail>(`/api/admin/customers/${id}`), [id])
   const plans = useLoad(() => get<Plan[]>('/api/admin/plans'))
@@ -265,13 +267,10 @@ export default function CustomerCard() {
   const copyText = async (v: string, what: string) => (await copy(v)) && toast(`${what} скопирован`)
 
   return (
-    <div className="stack lg">
+    <div className="stack lg cc-page">
       <div className="cc-head admin-head" style={{ marginBottom: 0 }}>
-        <button className="icon-btn" onClick={() => nav(-1)} aria-label="Назад">
-          <Back />
-        </button>
         <Avatar name={name} seed={c.id} size={52} />
-        <div style={{ minWidth: 0 }}>
+        <div className="cc-identity">
           <h1 className="ellipsis">{name}</h1>
           <div className="id-line">
             <span className="num">#{c.id}</span>

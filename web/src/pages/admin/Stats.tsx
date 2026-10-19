@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { get, post } from '../../lib/api'
 import { relative, rubRound, shortDate } from '../../lib/format'
-import { HBars, Kpi, Kpis, TimeChart, bucketLabel, type Point } from '../../ui/charts'
+import { HBars, Kpi, Kpis, SERIES, TimeChart, bucketLabel, type Point } from '../../ui/charts'
 import { Switcher, type SwitchOption } from '../../ui/admin'
 import { ErrorBox, Spinner, useAction, useLoad, pressable } from '../../ui/kit'
 import { GeoSettings, GeoView, type GeoReport } from './Geo'
@@ -138,7 +138,7 @@ interface Overview {
   new_users: Point[]
   income: Point[]
   methods: Named[]
-  referrals: { Referred: number; ActiveReferrers: number; BonusDays: number; Paid: number }
+  referrals: { Referred: number; ActiveReferrers: number; BonusDays: number; Paid: number; RevokedDays: number; UnrevokedDays: number }
   promos: { Total: number; Active: number; Uses: number; BonusDays: number }
   by_plan: Named[]
   by_months: Named[]
@@ -251,15 +251,20 @@ function Overview() {
                   <div className="mini-list">
                     <span>Приглашено</span>
                     <span>{n(o.referrals.Referred)}</span>
-                    <span>Из них оплатили</span>
+                    <span>С успешными платежами</span>
                     <span>{n(o.referrals.Paid)}</span>
-                    <span>Активных пригласивших</span>
+                    <span>Пригласивших с платежами</span>
                     <span>{n(o.referrals.ActiveReferrers)}</span>
-                    <span>Выдано бонусных дней</span>
+                    <span>Начислено всего</span>
                     <span>{n(o.referrals.BonusDays)}</span>
+                    <span>Отозвано</span>
+                    <span>{n(o.referrals.RevokedDays)}</span>
+                    <span>Не отозвано</span>
+                    <span>{n(o.referrals.UnrevokedDays)}</span>
                     <span>Конверсия</span>
                     <span>{pctOf(o.referrals.Paid, o.referrals.Referred)}</span>
                   </div>
+                  <p className="muted small">Неотозванные начисления — не остаток дней подписок.</p>
                 </Card>
                 <Card title="Промокоды">
                   <div className="mini-list">
@@ -564,23 +569,41 @@ function PaymentsTab() {
 
 // ---------------------------------------------------------------------------------------------
 
+interface RefEvent {
+  at: string
+  kind: string
+  days: number
+  recipient: string
+  recipient_id: number
+  referral: string
+  revoked_at?: string
+}
+
 interface RefStats {
   range: Range
   invited: number
   paid: number
   bonus_days: number
+  revoked_days: number
+  unrevoked_days: number
   revenue: number
   bonus_cost: number
+  unrevoked_cost: number
   day_price: number
   roi: number
+  unrevoked_roi: number
   series: Point[]
   bonuses: Point[]
+  unrevoked: Point[]
+  revocations: Point[]
   by_kind: Named[]
+  by_kind_unrevoked: Named[]
   funnel: { Invited: number; Started: number; Paid: number; Repeat: number }
   ltv_invited: number
   ltv_regular: number
-  top: { id: number; name: string; invited: number; paid: number; bonus_days: number; revenue: number }[] | null
-  recent: { at: string; kind: string; days: number; recipient: string; recipient_id: number; referral: string }[] | null
+  top: { id: number; name: string; invited: number; paid: number; bonus_days: number; unrevoked_days: number; revoked_days: number; revenue: number }[] | null
+  recent: RefEvent[] | null
+  recent_revocations: RefEvent[] | null
 }
 
 function GeoTab() {
@@ -620,22 +643,37 @@ function Referrals() {
           <>
             <Kpis>
               <Kpi label="Приглашено" value={n(s.invited)} />
-              <Kpi label="Оплатили" value={n(s.paid)} hint="приглашённых с оплатой за период" />
-              <Kpi label="Выдано дней" value={n(s.bonus_days)} />
-              <Kpi label="Выручка от приглашённых" value={rubRound(s.revenue)} />
-              <Kpi label="Стоимость бонусов" value={rubRound(s.bonus_cost)} hint={`день ≈ ${rubRound(s.day_price)}`} />
-              <Kpi label="ROI" value={s.bonus_cost ? `${s.roi}%` : '—'} />
+              <Kpi label="С успешным платежом" value={n(s.paid)} hint="любая операция, включая бесплатные; без полностью возвращённых" />
+              <Kpi label="Начислено за период" value={n(s.bonus_days)} />
+              <Kpi label="Отозвано за период" value={n(s.revoked_days)} hint="в том числе начисленное ранее" />
+              <Kpi label="Из начислений периода не отозвано" value={n(s.unrevoked_days)} />
+              <Kpi label="Сумма платежей приглашённых" value={rubRound(s.revenue)} hint="успешные; частичные возвраты не вычтены" />
+              <Kpi label="Оценка стоимости начислений" value={rubRound(s.bonus_cost)} hint={`день ≈ ${rubRound(s.day_price)}`} />
+              <Kpi label="Оценка стоимости неотозванных" value={rubRound(s.unrevoked_cost)} hint="из начислений выбранного периода" />
+              <Kpi label="ROI по начислениям · оценка" value={s.bonus_cost ? `${s.roi}%` : '—'} />
+              <Kpi label="ROI по неотозванным · оценка" value={s.unrevoked_cost ? `${s.unrevoked_roi}%` : '—'} />
             </Kpis>
+            <p className="muted small">Отзывы учитываются по дате отзыва. Неотозванные начисления — не остаток дней подписок. Стоимость и ROI рассчитаны по текущей оценке цены дня; последующие возвраты меняют оценку прошлых периодов. Счётчики платежей включают все операции, в том числе бесплатные, а частичные возвраты из сумм не вычтены.</p>
             <div className="stats-grid">
               <Card title="Приглашённые и их оплаты" wide>
-                <TimeChart points={s.series} series={[{ name: 'Новые приглашённые' }, { name: 'Оплаты приглашённых' }]} group={s.range.Group} kind="line" />
+                <TimeChart points={s.series} series={[{ name: 'Новые приглашённые' }, { name: 'Успешные платежи приглашённых' }]} group={s.range.Group} kind="line" />
               </Card>
-              <Card title="Бонусные дни по типам" wide>
+              <Card title="Исторические начисления по типам" wide>
                 <TimeChart
                   points={s.bonuses}
                   series={[{ name: 'За первую оплату' }, { name: 'За повторную' }, { name: 'Приглашённому' }, { name: 'Вручную' }]}
                   group={s.range.Group}
                 />
+              </Card>
+              <Card title="Из начислений периода не отозвано · по типам" wide>
+                <TimeChart
+                  points={s.unrevoked}
+                  series={[{ name: 'За первую оплату' }, { name: 'За повторную' }, { name: 'Приглашённому' }, { name: 'Вручную' }]}
+                  group={s.range.Group}
+                />
+              </Card>
+              <Card title="Отозвано по дате отзыва" wide>
+                <TimeChart points={s.revocations} series={[{ name: 'Отозвано', color: SERIES[1] }]} group={s.range.Group} />
               </Card>
               <Card title="Воронка приглашённых">
                 <HBars
@@ -643,12 +681,12 @@ function Referrals() {
                   items={[
                     { key: 'i', label: 'Пришли по ссылке', value: s.funnel.Invited },
                     { key: 's', label: 'Начали оформление', value: s.funnel.Started, note: pctOf(s.funnel.Started, s.funnel.Invited) },
-                    { key: 'p', label: 'Оплатили', value: s.funnel.Paid, note: pctOf(s.funnel.Paid, s.funnel.Invited) },
-                    { key: 'r', label: 'Оплатили повторно', value: s.funnel.Repeat, note: pctOf(s.funnel.Repeat, s.funnel.Invited) },
+                    { key: 'p', label: 'Есть успешный платёж', value: s.funnel.Paid, note: pctOf(s.funnel.Paid, s.funnel.Invited) },
+                    { key: 'r', label: 'От 2 успешных платежей', value: s.funnel.Repeat, note: pctOf(s.funnel.Repeat, s.funnel.Invited) },
                   ]}
                 />
               </Card>
-              <Card title="LTV: приглашённый и обычный">
+              <Card title="LTV по успешным платежам · без частичных возвратов">
                 <HBars
                   items={[
                     { key: 'inv', label: 'Приглашённый', value: s.ltv_invited },
@@ -657,32 +695,86 @@ function Referrals() {
                   format={rubRound}
                 />
               </Card>
-              <Card title="Типы бонусов">
-                <HBars items={s.by_kind.map((x) => ({ key: x.key, label: x.label, value: x.sum, note: `${n(x.count)} раз` }))} format={(v) => `${n(v)} дн.`} />
+              <Card title="Начисления по типам">
+                <div className="table-wrap stack-sm">
+                  <table className="t stack-sm">
+                    <thead><tr><th>Тип</th><th>Начислено</th><th>Не отозвано</th></tr></thead>
+                    <tbody>
+                      {s.by_kind.map((x) => {
+                        const unrevoked = s.by_kind_unrevoked.find((v) => v.key === x.key)?.sum ?? 0
+                        return (
+                          <tr key={x.key}>
+                            <td className="lead wide">{x.label} · {n(x.count)} раз</td>
+                            <td className="num" data-label="Начислено">{n(x.sum)} дн.</td>
+                            <td className="num" data-label="Не отозвано">{n(unrevoked)} дн.</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="muted small">Не отозвано — из начислений выбранного периода, не остаток дней.</p>
               </Card>
-              <Card title="Лучшие пригласившие" wide>
+              <Card title="Лучшие пригласившие · за всё время" wide>
                 {!s.top?.length ? (
                   <p className="muted small">Пока никто никого не пригласил</p>
                 ) : (
-                  <div className="table-wrap">
-                    <table className="t">
+                  <div className="table-wrap stack-sm">
+                    <table className="t stack-sm">
                       <thead>
                         <tr>
                           <th>Клиент</th>
                           <th>Пригласил</th>
-                          <th>Оплатили</th>
-                          <th>Получил дней</th>
-                          <th>Принесли</th>
+                          <th>С платежами</th>
+                          <th>Начислено всего</th>
+                          <th>Отозвано</th>
+                          <th>Не отозвано</th>
+                          <th>Сумма платежей</th>
                         </tr>
                       </thead>
                       <tbody>
                         {s.top.map((t) => (
                           <tr key={t.id} className="click" {...pressable(() => nav(`/admin/customers/${t.id}`))}>
-                            <td>{t.name}</td>
-                            <td className="num">{n(t.invited)}</td>
-                            <td className="num">{n(t.paid)}</td>
-                            <td className="num">{n(t.bonus_days)}</td>
-                            <td className="num">{rubRound(t.revenue)}</td>
+                            <td className="lead wide">{t.name}</td>
+                            <td className="num" data-label="Пригласил">{n(t.invited)}</td>
+                            <td className="num" data-label="С платежами">{n(t.paid)}</td>
+                            <td className="num" data-label="Начислено">{n(t.bonus_days)}</td>
+                            <td className="num" data-label="Отозвано">{n(t.revoked_days)}</td>
+                            <td className="num" data-label="Не отозвано">{n(t.unrevoked_days)}</td>
+                            <td className="num" data-label="Сумма платежей">{rubRound(t.revenue)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                <p className="muted small">Дни — за всё время, включая ручные начисления. Неотозванные начисления не равны остатку подписок; платежи не учитывают частичные возвраты.</p>
+              </Card>
+              <Card title="Последние начисления · за всё время" wide>
+                {!s.recent?.length ? (
+                  <p className="muted small">Начислений ещё не было</p>
+                ) : (
+                  <div className="table-wrap stack-sm">
+                    <table className="t stack-sm ref-events">
+                      <thead>
+                        <tr>
+                          <th>Начислено</th>
+                          <th>Тип</th>
+                          <th>Дней</th>
+                          <th>Получил</th>
+                          <th>За кого</th>
+                          <th>Статус</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {s.recent.map((r, i) => (
+                          <tr key={i} className="click" {...pressable(() => nav(`/admin/customers/${r.recipient_id}`))}>
+                            <td data-label="Начислено">{relative(r.at)}</td>
+                            <td data-label="Тип">{r.kind}</td>
+                            <td className="num" data-label="Дней">+{n(r.days)}</td>
+                            <td className="lead wide">{r.recipient}</td>
+                            <td data-label="За кого">{r.referral || '—'}</td>
+                            <td data-label="Статус">{r.revoked_at ? `Отозвано ${relative(r.revoked_at)}` : 'Не отозвано'}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -690,29 +782,23 @@ function Referrals() {
                   </div>
                 )}
               </Card>
-              <Card title="Последние бонусы" wide>
-                {!s.recent?.length ? (
-                  <p className="muted small">Бонусов ещё не было</p>
+              <Card title="Последние отзывы · за всё время" wide>
+                {!s.recent_revocations?.length ? (
+                  <p className="muted small">Отзывов бонусов ещё не было</p>
                 ) : (
-                  <div className="table-wrap">
-                    <table className="t">
+                  <div className="table-wrap stack-sm">
+                    <table className="t stack-sm ref-events">
                       <thead>
-                        <tr>
-                          <th>Когда</th>
-                          <th>Тип</th>
-                          <th>Дней</th>
-                          <th>Получил</th>
-                          <th>За кого</th>
-                        </tr>
+                        <tr><th>Отозвано</th><th>Тип</th><th>Дней</th><th>Получил</th><th>За кого</th></tr>
                       </thead>
                       <tbody>
-                        {s.recent.map((r, i) => (
+                        {s.recent_revocations.map((r, i) => (
                           <tr key={i} className="click" {...pressable(() => nav(`/admin/customers/${r.recipient_id}`))}>
-                            <td>{relative(r.at)}</td>
-                            <td>{r.kind}</td>
-                            <td className="num">{n(r.days)}</td>
-                            <td>{r.recipient}</td>
-                            <td>{r.referral || '—'}</td>
+                            <td data-label="Отозвано">{relative(r.at)}</td>
+                            <td data-label="Тип">{r.kind}</td>
+                            <td className="num" data-label="Дней">−{n(r.days)}</td>
+                            <td className="lead wide">{r.recipient}</td>
+                            <td data-label="За кого">{r.referral || '—'}</td>
                           </tr>
                         ))}
                       </tbody>

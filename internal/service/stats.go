@@ -202,6 +202,7 @@ type OverviewStats struct {
 	Methods   []Named `json:"methods"`
 	Referrals struct {
 		Referred, ActiveReferrers, BonusDays, Paid int64
+		RevokedDays, UnrevokedDays                 int64
 	} `json:"referrals"`
 	Promos struct {
 		Total, Active, Uses, BonusDays int64
@@ -343,8 +344,11 @@ func (s *Service) StatsOverview(ctx context.Context, period, group string) (*Ove
 				AND EXISTS (SELECT 1 FROM payments p WHERE p.customer_id=c.id AND p.status='succeeded')),
 			(SELECT COALESCE(sum(days),0) FROM referral_bonuses),
 			(SELECT count(*) FROM customers c WHERE c.referrer_id IS NOT NULL
-				AND EXISTS (SELECT 1 FROM payments p WHERE p.customer_id=c.id AND p.status='succeeded'))`, nil,
-		&o.Referrals.Referred, &o.Referrals.ActiveReferrers, &o.Referrals.BonusDays, &o.Referrals.Paid); err != nil {
+				AND EXISTS (SELECT 1 FROM payments p WHERE p.customer_id=c.id AND p.status='succeeded')),
+			(SELECT COALESCE(sum(days),0) FROM referral_bonuses WHERE revoked_at IS NOT NULL),
+			(SELECT COALESCE(sum(days),0) FROM referral_bonuses WHERE revoked_at IS NULL)`, nil,
+		&o.Referrals.Referred, &o.Referrals.ActiveReferrers, &o.Referrals.BonusDays, &o.Referrals.Paid,
+		&o.Referrals.RevokedDays, &o.Referrals.UnrevokedDays); err != nil {
 		return nil, err
 	}
 	if err := s.scan(ctx, `SELECT count(*) FILTER (WHERE customer_id IS NULL),
@@ -875,44 +879,59 @@ func pct(a, b int64) float64 {
 // ---------------------------------------------------------------------------------------------
 // Referrals
 
+type ReferralStatEvent struct {
+	At        time.Time  `json:"at"`
+	Kind      string     `json:"kind"`
+	Days      int64      `json:"days"`
+	Recipient string     `json:"recipient"`
+	RecipID   int64      `json:"recipient_id"`
+	Referral  string     `json:"referral"`
+	RevokedAt *time.Time `json:"revoked_at,omitempty"`
+}
+
 type ReferralStats struct {
-	Range     StatsRange `json:"range"`
-	Invited   int64      `json:"invited"`
-	Paid      int64      `json:"paid"`
-	BonusDays int64      `json:"bonus_days"`
-	Revenue   int64      `json:"revenue"`    // paid by invited customers in the period
-	BonusCost int64      `json:"bonus_cost"` // bonus days × average price of a paid day
-	DayPrice  int64      `json:"day_price"`
-	ROI       float64    `json:"roi"`
-	Series    []Point    `json:"series"`  // v: [invited, paid payments by invited]
-	Bonuses   []Point    `json:"bonuses"` // v: [first, recurring, invitee, manual] days
-	ByKind    []Named    `json:"by_kind"`
-	Funnel    struct {
+	Range           StatsRange `json:"range"`
+	Invited         int64      `json:"invited"`
+	Paid            int64      `json:"paid"`
+	BonusDays       int64      `json:"bonus_days"`     // all grants created in the selected period
+	RevokedDays     int64      `json:"revoked_days"`   // grants revoked in the period, including older grants
+	UnrevokedDays   int64      `json:"unrevoked_days"` // grants created in the period, not revoked now
+	Revenue         int64      `json:"revenue"`        // succeeded payments by invited customers
+	BonusCost       int64      `json:"bonus_cost"`     // historic grants × current estimate of a paid day's price
+	UnrevokedCost   int64      `json:"unrevoked_cost"` // unrevoked grants × the same estimated day price
+	DayPrice        int64      `json:"day_price"`
+	ROI             float64    `json:"roi"`
+	UnrevokedROI    float64    `json:"unrevoked_roi"`
+	Series          []Point    `json:"series"`      // v: [invited, succeeded payments by invited]
+	Bonuses         []Point    `json:"bonuses"`     // v: [first, recurring, invitee, manual] granted days
+	Unrevoked       []Point    `json:"unrevoked"`   // v: grants in the period that are not revoked now, by kind
+	Revocations     []Point    `json:"revocations"` // v: [days revoked on this date]
+	ByKind          []Named    `json:"by_kind"`
+	ByKindUnrevoked []Named    `json:"by_kind_unrevoked"`
+	Funnel          struct {
 		Invited, Started, Paid, Repeat int64
 	} `json:"funnel"`
 	LTVInvited int64 `json:"ltv_invited"`
 	LTVRegular int64 `json:"ltv_regular"`
 	Top        []struct {
-		ID        int64  `json:"id"`
-		Name      string `json:"name"`
-		Invited   int64  `json:"invited"`
-		Paid      int64  `json:"paid"`
-		BonusDays int64  `json:"bonus_days"`
-		Revenue   int64  `json:"revenue"`
+		ID            int64  `json:"id"`
+		Name          string `json:"name"`
+		Invited       int64  `json:"invited"`
+		Paid          int64  `json:"paid"`
+		BonusDays     int64  `json:"bonus_days"`
+		UnrevokedDays int64  `json:"unrevoked_days"`
+		RevokedDays   int64  `json:"revoked_days"`
+		Revenue       int64  `json:"revenue"`
 	} `json:"top"`
-	Recent []struct {
-		At        time.Time `json:"at"`
-		Kind      string    `json:"kind"`
-		Days      int64     `json:"days"`
-		Recipient string    `json:"recipient"`
-		RecipID   int64     `json:"recipient_id"`
-		Referral  string    `json:"referral"`
-	} `json:"recent"`
+	Recent            []ReferralStatEvent `json:"recent"`
+	RecentRevocations []ReferralStatEvent `json:"recent_revocations"`
 }
 
 var bonusKinds = map[string]string{"first": "За первую оплату", "recurring": "За повторную оплату", "invitee": "Приглашённому", "manual": "Вручную"}
 
 const custName = `COALESCE(NULLIF('@' || c.username, '@'), NULLIF(trim(COALESCE(c.first_name,'') || ' ' || COALESCE(c.last_name,'')), ''), c.email::text, '#' || c.id)`
+
+var referralName = `COALESCE((SELECT ` + strings.ReplaceAll(custName, "c.", "r.") + ` FROM customers r WHERE r.id=b.referral_id), '')`
 
 func (s *Service) StatsReferrals(ctx context.Context, period, group string) (*ReferralStats, error) {
 	r := s.statsRange(period, group)
@@ -923,9 +942,11 @@ func (s *Service) StatsReferrals(ctx context.Context, period, group string) (*Re
 			(SELECT count(DISTINCT p.customer_id) FROM payments p JOIN customers c ON c.id=p.customer_id
 				WHERE c.referrer_id IS NOT NULL AND p.status='succeeded' AND p.paid_at >= $1 AND p.paid_at < $2),
 			(SELECT COALESCE(sum(days),0) FROM referral_bonuses WHERE created_at >= $1 AND created_at < $2),
+			(SELECT COALESCE(sum(days),0) FROM referral_bonuses WHERE revoked_at >= $1 AND revoked_at < $2),
+			(SELECT COALESCE(sum(days),0) FROM referral_bonuses WHERE created_at >= $1 AND created_at < $2 AND revoked_at IS NULL),
 			(SELECT COALESCE(sum(p.amount),0) FROM payments p JOIN customers c ON c.id=p.customer_id
 				WHERE c.referrer_id IS NOT NULL AND p.status='succeeded' AND p.paid_at >= $1 AND p.paid_at < $2)`, args,
-		&o.Invited, &o.Paid, &o.BonusDays, &o.Revenue); err != nil {
+		&o.Invited, &o.Paid, &o.BonusDays, &o.RevokedDays, &o.UnrevokedDays, &o.Revenue); err != nil {
 		return nil, err
 	}
 	// Price of one paid day: what customers paid per day of subscription over the last 90 days.
@@ -934,8 +955,12 @@ func (s *Service) StatsReferrals(ctx context.Context, period, group string) (*Re
 		return nil, err
 	}
 	o.BonusCost = o.BonusDays * o.DayPrice
+	o.UnrevokedCost = o.UnrevokedDays * o.DayPrice
 	if o.BonusCost > 0 {
 		o.ROI = math.Round(float64(o.Revenue-o.BonusCost)/float64(o.BonusCost)*1000) / 10
+	}
+	if o.UnrevokedCost > 0 {
+		o.UnrevokedROI = math.Round(float64(o.Revenue-o.UnrevokedCost)/float64(o.UnrevokedCost)*1000) / 10
 	}
 	var err error
 	if o.Series, err = s.series(ctx, r, 2, `SELECT t, sum(a) AS c0, sum(b) AS c1 FROM (
@@ -952,12 +977,29 @@ func (s *Service) StatsReferrals(ctx context.Context, period, group string) (*Re
 		FROM referral_bonuses WHERE created_at >= $1 AND created_at < $2 GROUP BY 1`); err != nil {
 		return nil, err
 	}
+	if o.Unrevoked, err = s.series(ctx, r, 4, `SELECT date_trunc($3, created_at AT TIME ZONE $4) AS t,
+			sum(days) FILTER (WHERE kind='first') AS c0, sum(days) FILTER (WHERE kind='recurring') AS c1,
+			sum(days) FILTER (WHERE kind='invitee') AS c2, sum(days) FILTER (WHERE kind='manual') AS c3
+		FROM referral_bonuses WHERE created_at >= $1 AND created_at < $2 AND revoked_at IS NULL GROUP BY 1`); err != nil {
+		return nil, err
+	}
+	if o.Revocations, err = s.series(ctx, r, 1, `SELECT date_trunc($3, revoked_at AT TIME ZONE $4) AS t,
+			sum(days) AS c0 FROM referral_bonuses WHERE revoked_at >= $1 AND revoked_at < $2 GROUP BY 1`); err != nil {
+		return nil, err
+	}
 	if o.ByKind, err = s.named(ctx, `SELECT kind, '', count(*), sum(days) FROM referral_bonuses
 		WHERE created_at >= $1 AND created_at < $2 GROUP BY 1 ORDER BY 4 DESC`, r.From, r.To); err != nil {
 		return nil, err
 	}
 	for i := range o.ByKind {
 		o.ByKind[i].Label = label(bonusKinds, o.ByKind[i].Key)
+	}
+	if o.ByKindUnrevoked, err = s.named(ctx, `SELECT kind, '', count(*), sum(days) FROM referral_bonuses
+		WHERE created_at >= $1 AND created_at < $2 AND revoked_at IS NULL GROUP BY 1 ORDER BY 4 DESC`, r.From, r.To); err != nil {
+		return nil, err
+	}
+	for i := range o.ByKindUnrevoked {
+		o.ByKindUnrevoked[i].Label = label(bonusKinds, o.ByKindUnrevoked[i].Key)
 	}
 	if err := s.scan(ctx, `SELECT count(*),
 			count(*) FILTER (WHERE EXISTS (SELECT 1 FROM payments p WHERE p.customer_id=c.id)),
@@ -977,6 +1019,8 @@ func (s *Service) StatsReferrals(ctx context.Context, period, group string) (*Re
 			(SELECT count(*) FROM customers r WHERE r.referrer_id=c.id),
 			(SELECT count(*) FROM customers r WHERE r.referrer_id=c.id AND EXISTS (SELECT 1 FROM payments p WHERE p.customer_id=r.id AND p.status='succeeded')),
 			(SELECT COALESCE(sum(days),0) FROM referral_bonuses b WHERE b.recipient_id=c.id AND b.kind <> 'invitee'),
+			(SELECT COALESCE(sum(days),0) FROM referral_bonuses b WHERE b.recipient_id=c.id AND b.kind <> 'invitee' AND b.revoked_at IS NULL),
+			(SELECT COALESCE(sum(days),0) FROM referral_bonuses b WHERE b.recipient_id=c.id AND b.kind <> 'invitee' AND b.revoked_at IS NOT NULL),
 			(SELECT COALESCE(sum(p.amount),0) FROM payments p JOIN customers r ON r.id=p.customer_id WHERE r.referrer_id=c.id AND p.status='succeeded')
 		FROM customers c WHERE EXISTS (SELECT 1 FROM customers r WHERE r.referrer_id=c.id)
 		ORDER BY 4 DESC, 3 DESC LIMIT 10`)
@@ -985,41 +1029,59 @@ func (s *Service) StatsReferrals(ctx context.Context, period, group string) (*Re
 	}
 	for rows.Next() {
 		var t struct {
-			ID        int64  `json:"id"`
-			Name      string `json:"name"`
-			Invited   int64  `json:"invited"`
-			Paid      int64  `json:"paid"`
-			BonusDays int64  `json:"bonus_days"`
-			Revenue   int64  `json:"revenue"`
+			ID            int64  `json:"id"`
+			Name          string `json:"name"`
+			Invited       int64  `json:"invited"`
+			Paid          int64  `json:"paid"`
+			BonusDays     int64  `json:"bonus_days"`
+			UnrevokedDays int64  `json:"unrevoked_days"`
+			RevokedDays   int64  `json:"revoked_days"`
+			Revenue       int64  `json:"revenue"`
 		}
-		if err := rows.Scan(&t.ID, &t.Name, &t.Invited, &t.Paid, &t.BonusDays, &t.Revenue); err != nil {
+		if err := rows.Scan(&t.ID, &t.Name, &t.Invited, &t.Paid, &t.BonusDays, &t.UnrevokedDays, &t.RevokedDays, &t.Revenue); err != nil {
 			rows.Close()
 			return nil, err
 		}
 		o.Top = append(o.Top, t)
 	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
 	rows.Close()
-	rows, err = s.Store.Pool.Query(ctx, `SELECT b.created_at, b.kind, b.days, `+custName+`, c.id,
-			COALESCE((SELECT `+strings.ReplaceAll(custName, "c.", "r.")+` FROM customers r WHERE r.id=b.referral_id), '')
+	rows, err = s.Store.Pool.Query(ctx, `SELECT b.created_at, b.kind, b.days, `+custName+`, c.id, `+referralName+`, b.revoked_at
 		FROM referral_bonuses b JOIN customers c ON c.id=b.recipient_id ORDER BY b.created_at DESC LIMIT 20`)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var t ReferralStatEvent
+		if err := rows.Scan(&t.At, &t.Kind, &t.Days, &t.Recipient, &t.RecipID, &t.Referral, &t.RevokedAt); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		t.Kind = label(bonusKinds, t.Kind)
+		o.Recent = append(o.Recent, t)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	rows.Close()
+	rows, err = s.Store.Pool.Query(ctx, `SELECT b.revoked_at, b.kind, b.days, `+custName+`, c.id, `+referralName+`
+		FROM referral_bonuses b JOIN customers c ON c.id=b.recipient_id
+		WHERE b.revoked_at IS NOT NULL ORDER BY b.revoked_at DESC LIMIT 20`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var t struct {
-			At        time.Time `json:"at"`
-			Kind      string    `json:"kind"`
-			Days      int64     `json:"days"`
-			Recipient string    `json:"recipient"`
-			RecipID   int64     `json:"recipient_id"`
-			Referral  string    `json:"referral"`
-		}
+		var t ReferralStatEvent
 		if err := rows.Scan(&t.At, &t.Kind, &t.Days, &t.Recipient, &t.RecipID, &t.Referral); err != nil {
 			return nil, err
 		}
 		t.Kind = label(bonusKinds, t.Kind)
-		o.Recent = append(o.Recent, t)
+		o.RecentRevocations = append(o.RecentRevocations, t)
 	}
 	return o, rows.Err()
 }

@@ -115,7 +115,7 @@ func MarkPaid(ctx context.Context, db DB, id uuid.UUID, method string) (bool, er
 
 // subID is nil for gifts: the subscription appears only when the code is activated.
 func MarkApplied(ctx context.Context, db DB, id uuid.UUID, subID *int64) error {
-	_, err := db.Exec(ctx, `UPDATE payments SET applied_at=now(), subscription_id=$2 WHERE id=$1`, id, subID)
+	_, err := db.Exec(ctx, `UPDATE payments SET applied_at=clock_timestamp(), subscription_id=$2 WHERE id=$1`, id, subID)
 	return err
 }
 

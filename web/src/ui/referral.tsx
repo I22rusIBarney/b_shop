@@ -96,10 +96,12 @@ export function ReferralCard({ r }: { r: ReferralInfo }) {
             <Send />
             Пригласить
           </button>
-          <button type="button" className="pill-btn" onClick={() => doCopy(link)}>
-            <Copy />
-            Скопировать
-          </button>
+          {r.web_link && (
+            <button type="button" className="pill-btn" onClick={() => doCopy(r.web_link, 'Веб-ссылка скопирована')} aria-label="Скопировать веб-ссылку">
+              <Copy />
+              Веб-ссылка
+            </button>
+          )}
         </div>
       )}
     </section>

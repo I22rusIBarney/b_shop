@@ -93,11 +93,11 @@ func (s *Service) ProcessReferral(ctx context.Context, id uuid.UUID) error {
 		}
 		if before == 0 {
 			if cfg.BaseEnabled {
-				stats, err := store.GetReferralStats(ctx, tx, inviter.ID)
+				paid, err := store.PaidReferralsThrough(ctx, tx, inviter.ID, pay.ID)
 				if err != nil {
 					return err
 				}
-				if err := credit(inviter, "first", inviterDays(cfg, stats.Paid), nil); err != nil {
+				if err := credit(inviter, "first", inviterDays(cfg, paid), nil); err != nil {
 					return err
 				}
 				if err := credit(payer, "invitee", cfg.InviteeDays, pay.SubscriptionID); err != nil {

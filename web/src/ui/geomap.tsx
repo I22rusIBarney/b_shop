@@ -97,6 +97,16 @@ function GlMap({ countries, points, compact }: { countries: Record<string, numbe
   const [failed, setFailed] = useState(false)
   const [mode, setMode] = useState<'globe' | 'map'>('globe')
   const [sel, setSel] = useState<GeoPoint | null>(null)
+  const [width, setWidth] = useState(0)
+
+  useEffect(() => {
+    const el = box.current
+    if (!el) return
+    const ro = new ResizeObserver(() => setWidth(Math.max(1, Math.round(el.clientWidth))))
+    ro.observe(el)
+    setWidth(Math.max(1, Math.round(el.clientWidth)))
+    return () => ro.disconnect()
+  }, [])
 
   const top = useMemo(() => points.reduce<GeoPoint | null>((b, p) => (!b || p.count > b.count ? p : b), null), [points])
   const home = () => {
@@ -256,7 +266,7 @@ function GlMap({ countries, points, compact }: { countries: Record<string, numbe
           </button>
         </div>
       </div>
-      <div className="geomap-stage gl" style={{ height: compact ? 300 : 'min(460px, 62vh)' }}>
+      <div className="geomap-stage gl" style={{ height: compact ? Math.min(width || 300, 300) : `min(${Math.min(width || 460, 460)}px, 62vh)` }}>
         <div ref={stage} className="geomap-gl" role="img" aria-label="Карта запросов подписки: приближайте до улиц пальцами или колесом" />
         {!ready && <div className="geomap-loading small muted">Загружаем карту…</div>}
         <div className="geomap-zoom">

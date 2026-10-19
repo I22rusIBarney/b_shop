@@ -96,6 +96,24 @@ func TestReferralBonusRevokedOnFullRefund(t *testing.T) {
 	// The inviter has no subscription: the first bonus waits on the balance.
 	inviter := login(t, e, 6101, "")
 	friend := login(t, e, 6102, "ref_"+*inviter.RefCode)
+	checkRevoked := func(want int) {
+		t.Helper()
+		var events int
+		if err := e.pool.QueryRow(ctx, `SELECT count(*) FROM customer_events WHERE customer_id=$1 AND kind='referral_revoked'`, inviter.ID).Scan(&events); err != nil {
+			t.Fatal(err)
+		}
+		e.notes.mu.Lock()
+		messages := 0
+		for _, msg := range e.notes.customer {
+			if strings.Contains(msg, "бонус за неё отменён") {
+				messages++
+			}
+		}
+		e.notes.mu.Unlock()
+		if events != want || messages != want {
+			t.Fatalf("refund processed %d times in events, %d times in messages; want %d", events, messages, want)
+		}
+	}
 	first := buy(friend, 0)
 	inviter, _ = store.GetCustomer(ctx, e.pool, inviter.ID)
 	if inviter.BonusDays != 3 {
@@ -104,6 +122,7 @@ func TestReferralBonusRevokedOnFullRefund(t *testing.T) {
 	// A full refund takes it back once, even if YooKassa repeats the notification.
 	refund(first, "rf-1")
 	refund(first, "rf-1")
+	checkRevoked(1)
 	inviter, _ = store.GetCustomer(ctx, e.pool, inviter.ID)
 	info, _ := e.svc.Referral(ctx, inviter, "")
 	if inviter.BonusDays != 0 || info.Stats.Days != 0 || info.Bonuses[0].RevokedAt == nil {
@@ -125,6 +144,8 @@ func TestReferralBonusRevokedOnFullRefund(t *testing.T) {
 		t.Fatalf("renewal bonus added %v", got)
 	}
 	refund(renewal, "rf-2")
+	refund(renewal, "rf-2")
+	checkRevoked(2)
 	after, _ := store.GetSubscription(ctx, e.pool, sub.ID)
 	if d := after.ExpiresAt.Sub(sub.ExpiresAt); d < -time.Minute || d > time.Minute {
 		t.Fatalf("expiry after revoke differs by %v", d)

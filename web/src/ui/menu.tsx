@@ -52,7 +52,7 @@ export function useClientMenu() {
         ...(me.gifts_enabled ? [{ key: 'gifts', label: 'Мои подарки', icon: Gift, to: '/gifts' }] : []),
       ],
     })
-    if (me.referral_enabled) groups.push({ title: 'Программы', items: [{ key: 'ref', label: 'Реферальная система', icon: Users, to: '/referral' }] })
+    if (me.referral_enabled) groups.push({ title: 'Программы', items: [{ key: 'ref', label: 'Реферальная система', icon: Users, to: '/referral', only: 'desktop' }] })
     groups.push({
       title: 'Помощь',
       items: [

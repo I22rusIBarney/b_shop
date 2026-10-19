@@ -277,11 +277,25 @@ func MarkReferralBonusRevoked(ctx context.Context, db DB, id int64) error {
 // PaidPurchasesBefore counts the customer's paid purchases applied before the given payment (all of them for uuid.Nil).
 func PaidPurchasesBefore(ctx context.Context, db DB, customerID int64, except uuid.UUID) (int, error) {
 	var n int
-	// Only purchases applied earlier than this one: a later renewal must not turn a first purchase whose
-	// bonus is being retried into a "recurring" one.
-	err := db.QueryRow(ctx, `SELECT count(*) FROM payments WHERE customer_id=$1 AND id<>$2 AND status IN ('succeeded','refunded')
-		AND provider<>'free' AND applied_at IS NOT NULL AND operation IN ('buy','renew','autopay')
-		AND applied_at < COALESCE((SELECT applied_at FROM payments WHERE id=$2), 'infinity')`, customerID, except).Scan(&n)
+	// A later renewal must not turn a first purchase whose bonus is being retried into a recurring one.
+	// The id breaks ties for payments applied in the same microsecond.
+	err := db.QueryRow(ctx, `SELECT count(*) FROM payments p LEFT JOIN payments current ON current.id=$2
+		WHERE p.customer_id=$1 AND p.id<>$2 AND p.status IN ('succeeded','refunded')
+		AND p.provider<>'free' AND p.applied_at IS NOT NULL AND p.operation IN ('buy','renew','autopay')
+		AND (current.id IS NULL OR (p.applied_at, p.id) < (current.applied_at, current.id))`, customerID, except).Scan(&n)
+	return n, err
+}
+
+// PaidReferralsThrough counts qualifying paying friends as of this first payment, including its payer.
+// Using the same payment order as PaidPurchasesBefore keeps tier thresholds stable when bonuses are retried.
+func PaidReferralsThrough(ctx context.Context, db DB, inviterID int64, paymentID uuid.UUID) (int, error) {
+	var n int
+	err := db.QueryRow(ctx, `SELECT count(DISTINCT c.id) FROM payments current
+		JOIN customers c ON c.referrer_id=$1
+		JOIN payments p ON p.customer_id=c.id
+		WHERE current.id=$2 AND p.status='succeeded' AND p.provider<>'free'
+		AND p.applied_at IS NOT NULL AND p.operation IN ('buy','renew','autopay')
+		AND (p.applied_at, p.id) <= (current.applied_at, current.id)`, inviterID, paymentID).Scan(&n)
 	return n, err
 }
 
